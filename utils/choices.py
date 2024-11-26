@@ -1,0 +1,38 @@
+from django.db.models import TextChoices
+
+
+class GenderChoices(TextChoices):
+    MALE = "MALE", "Male"
+    FEMALE = "FEMALE", "Female" 
+
+
+class ZodiacSignChoices(TextChoices):
+    ARIES = "ARIES", "Aries"
+    TAURUS = "TAURUS", "Taurus"
+    GEMINI = "GEMINI", "Gemini"
+    CANCER = "CANCER", "Cancer"
+    LEO = "LEO", "Leo"
+    VIRGO = "VIRGO", "Virgo"
+    LIBRA = "LIBRA", "Libra"
+    SCORPIO = "SCORPIO", "Scorpio"
+    SAGITTARIUS = "SAGITTARIUS", "Sagittarius"
+    CAPRICORN = "CAPRICORN", "Capricorn"
+    AQUARIUS = "AQUARIUS", "Aquarius"
+    PISCES = "PISCES", "Pisces"
+
+from django.db.models import TextChoices
+
+
+class MoodChoices(TextChoices):
+    HAPPY = "HAPPY", "Happy"
+    ROMANTIC = "ROMANTIC", "Romantic"
+    EXCITED = "EXCITED", "Excited"
+    CALM = "CALM", "Calm"
+    ADVENTUROUS = "ADVENTUROUS", "Adventurous"
+    PLAYFUL = "PLAYFUL", "Playful"
+    GRATEFUL = "GRATEFUL", "Grateful"
+    THOUGHTFUL = "THOUGHTFUL", "Thoughtful"
+    SUPPORTIVE = "SUPPORTIVE", "Supportive"
+    IN_LOVE = "IN_LOVE", "In Love"
+    MISSING = "MISSING", "Missing"
+    CELEBRATORY = "CELEBRATORY", "Celebratory"

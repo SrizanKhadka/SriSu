@@ -8,6 +8,8 @@ djangorestframework = "*"
 psycopg2 = "*"
 psycopg2-binary = "*"
 python-decouple = "*"
+twilio = "*"
+pillow = "*"
 
 [dev-packages]
 

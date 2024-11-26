@@ -17,7 +17,7 @@ services:
       - DB_NAME=srisudb      # Database name
       - DB_USER=srisu_admin  # Database user
       - DB_PASSWORD=srisuDB@123 # Database password
-      - DB_HOST=db          # Database hostname (service name of PostgreSQL container)
+      - DB_HOST=srisu_db          # Database hostname (service name of PostgreSQL container)
       - DB_PORT=5432        # Database port
 
   # Database service (PostgreSQL)
