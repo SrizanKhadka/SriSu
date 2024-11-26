@@ -1,0 +1,39 @@
+# Define the services (containers) to be created
+services:
+  # Web service (Django application)
+  web:
+    build:
+      context: .            # Use the current directory as the build context
+      dockerfile: Dockerfile # Specify the Dockerfile to use
+    command: python manage.py runserver 0.0.0.0:8000 # Command to start the Django development server
+    volumes:
+      - .:/app              # Mount the current directory into the container for live updates
+    ports:
+      - "8000:8000"         # Map port 8000 on the host to port 8000 in the container
+    depends_on:
+      - srisu_db                  # Ensure the 'db' service starts before 'web'
+    environment:            # Environment variables for Django
+      - DEBUG=1             # Set DEBUG mode to true (useful for development)
+      - DB_NAME=srisudb      # Database name
+      - DB_USER=srisu_admin  # Database user
+      - DB_PASSWORD=srisuDB@123 # Database password
+      - DB_HOST=db          # Database hostname (service name of PostgreSQL container)
+      - DB_PORT=5432        # Database port
+
+  # Database service (PostgreSQL)
+  srisu_db:
+    image: postgres:17      # Use the official PostgreSQL image, version 17
+    container_name: srisuDB
+    restart: always          # Automatically restart the container if it crashes
+    environment:             # Environment variables for PostgreSQL
+      POSTGRES_USER: ${POSTGRES_USER} # PostgreSQL username
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # PostgreSQL password
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5433:5432"         # Map port 5432 on the host to port 5432 in the container
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persist database data to a Docker volume
+
+# Define named volumes for persistent data storage
+volumes:
+  postgres_data:              # Volume for storing PostgreSQL data
