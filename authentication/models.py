@@ -22,7 +22,7 @@ class UserModel(AbstractUser):
         return self.full_name or self.phone_number
 
 class OtpModel(models.Model):
-    phone_number = models.CharField(max_length=15,unique=True)
+    phone_number = models.CharField(max_length=15)
     otp_code = models.CharField(max_length=6)
     created_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
