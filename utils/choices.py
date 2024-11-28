@@ -3,7 +3,7 @@ from django.db.models import TextChoices
 
 class GenderChoices(TextChoices):
     MALE = "MALE", "Male"
-    FEMALE = "FEMALE", "Female" 
+    FEMALE = "FEMALE", "Female"
 
 
 class ZodiacSignChoices(TextChoices):
@@ -19,6 +19,7 @@ class ZodiacSignChoices(TextChoices):
     CAPRICORN = "CAPRICORN", "Capricorn"
     AQUARIUS = "AQUARIUS", "Aquarius"
     PISCES = "PISCES", "Pisces"
+
 
 from django.db.models import TextChoices
 
@@ -36,3 +37,9 @@ class MoodChoices(TextChoices):
     IN_LOVE = "IN_LOVE", "In Love"
     MISSING = "MISSING", "Missing"
     CELEBRATORY = "CELEBRATORY", "Celebratory"
+
+
+class OtpStatusChoices(TextChoices):
+    NOTHING = "NOTHING", "nothing"
+    NEW = "NEW", "new"
+    EXPIRED = "EXPIRED", "expired"
