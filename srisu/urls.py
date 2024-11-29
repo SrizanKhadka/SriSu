@@ -18,14 +18,15 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from authentication.api.views import SendOTPAPIView
+from authentication.api.views import *
 
 routers = DefaultRouter()
-
-routers.register("sendOtpCode", SendOTPAPIView, basename="SendOTPAPIView")
+routers.register("setup-profile", SetUpProfileAPIView, basename="setUpProfileAPIView")
 
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/send-otp/", SendOTPAPIView.as_view(), name="send-otp"),
+    path("api/verify-otp/", VerifyOTPAPIView.as_view(), name="verify-otp"),
     path("api/", include(routers.urls))
 ]

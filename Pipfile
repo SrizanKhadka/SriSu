@@ -10,6 +10,7 @@ psycopg2-binary = "*"
 python-decouple = "*"
 twilio = "*"
 pillow = "*"
+djangorestframework-simplejwt = "*"
 
 [dev-packages]
 
