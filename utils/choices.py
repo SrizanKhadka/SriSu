@@ -21,9 +21,6 @@ class ZodiacSignChoices(TextChoices):
     PISCES = "PISCES", "Pisces"
 
 
-from django.db.models import TextChoices
-
-
 class MoodChoices(TextChoices):
     HAPPY = "HAPPY", "Happy"
     ROMANTIC = "ROMANTIC", "Romantic"
