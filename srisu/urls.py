@@ -21,12 +21,13 @@ from rest_framework.routers import DefaultRouter
 from authentication.api.views import *
 
 routers = DefaultRouter()
-routers.register("setup-profile", SetUpProfileAPIView, basename="setUpProfileAPIView")
+# routers.register("setup-profile", SetUpProfileAPIView, basename="setUpProfileAPIView")
 
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/send-otp/", SendOTPAPIView.as_view(), name="send-otp"),
     path("api/verify-otp/", VerifyOTPAPIView.as_view(), name="verify-otp"),
+    path("api/setup-profile/", SetUpProfileAPIView.as_view(), name="setup-oprofile"),
     path("api/", include(routers.urls))
 ]

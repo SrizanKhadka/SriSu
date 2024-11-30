@@ -6,7 +6,6 @@ from rest_framework.views import APIView
 import random
 from django.conf import settings
 from twilio.rest import Client
-from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
@@ -82,31 +81,23 @@ class VerifyOTPAPIView(APIView):
         )
 
 
-class SetUpProfileAPIView(ModelViewSet):
-    queryset = UserModel.objects.all()
-    serializer_class = SetUpProfileSerializer
+class SetUpProfileAPIView(APIView):
 
-    http_method_names = ["post"]
-
-    def get_queryset(self):
-        phone_number = self.request.data.get("phone_number")
-        if phone_number:
-            return self.queryset.filter(phone_number=phone_number)
-        return self.queryset.none()
-
-    def perform_update(self, serializer):
-        serializer.save(is_profile_complete=True)
+    def get_object(self, phone_number):
+        try:
+            return UserModel.objects.get(phone_number=phone_number)
+        except UserModel.DoesNotExist:
+            return None
 
     def generate_tokens(self, user):
-        from rest_framework_simplejwt.tokens import RefreshToken
-
         refresh = RefreshToken.for_user(user)
         return {
             "refresh": str(refresh),
             "access": str(refresh.access_token),
         }
 
-    def update(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
+
         phone_number = request.data.get("phone_number")
         if not phone_number:
             return Response(
@@ -114,25 +105,29 @@ class SetUpProfileAPIView(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if the user exists
-        try:
-            user = UserModel.objects.get(phone_number=phone_number)
-        except UserModel.DoesNotExist:
+        user = self.get_object(phone_number)
+        if not user:
             return Response(
                 {"error": "User with this phone number does not exist."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        elif not user.is_phone_verified:
+            return Response(
+                {"error": "Phone number is not verified yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        # Ensure the current object matches the requested phone number
-        self.kwargs["pk"] = user.id
-
-        # Perform the profile update
-        response = super().update(request, *args, **kwargs)
-
-        # Generate tokens after profile setup
-        tokens = self.generate_tokens(user)
-        response.data = {
-            "user": self.get_serializer(user).data,
-            "tokens": tokens,
-        }
-        return response
+        serializer = SetUpProfileSerializer(
+            user, data=request.data, partial=True
+        )  # Partial update to allow updates only for provided fields
+        if serializer.is_valid():
+            serializer.save(is_profile_complete=True)
+            tokens = self.generate_tokens(user)
+            return Response(
+                {
+                    "user": serializer.data,
+                    "tokens": tokens,
+                },
+                status=status.HTTP_200_OK,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

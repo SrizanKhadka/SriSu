@@ -53,7 +53,6 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserModel
         fields = [
-            "id",
             "phone_number",
             "profile_photo",
             "full_name",
@@ -64,12 +63,10 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "is_profile_complete",
         ]
         read_only_fields = ["phone_number", "is_profile_complete"]
-        exclude = ["username", "password"]
 
     def validate(self, data):
         validated_data = super().validate(data)
 
-        # Check if all required fields are present and not null
         required_fields = [
             "profile_photo",
             "full_name",
@@ -78,6 +75,8 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "dob",
             "mood",
         ]
+
+        print(f"PHONE NUMBER = {data.get("phone_number")}")
 
         for field in required_fields:
             if not data.get(field):
