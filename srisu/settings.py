@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -40,7 +41,9 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "psycopg2",
-    "authentication"
+    "authentication",
+    "rest_framework_simplejwt",
+    "rest_framework.authtoken",
 ]
 
 MIDDLEWARE = [
@@ -138,7 +141,16 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
-    "EXCEPTION_HANDLER": "srisu.custom.exception_handlers.customExceptionHandler"
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "EXCEPTION_HANDLER": "srisu.custom.exception_handlers.customExceptionHandler",
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=365 * 10), #For 10 years.
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=365 * 10),
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 
