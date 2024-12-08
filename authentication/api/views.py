@@ -8,6 +8,7 @@ from rest_framework import permissions
 from django.conf import settings
 from twilio.rest import Client
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt import tokens
 
 
 class SendOTPAPIView(APIView):
@@ -78,6 +79,17 @@ class VerifyOTPAPIView(APIView):
             "access": str(refresh.access_token),
         }
 
+    def revoke_existing_tokens(self, user):
+
+        try:
+            # Find all outstanding tokens for the user
+            is_deleted = tokens.objects.filter(user=user).delete()
+            
+            print(f'IS TOKEN DELETED = {is_deleted}')
+
+        except Exception as e:
+            print(f"Error finding outstanding tokens: {e}")
+
     def post(self, request, *args, **kwargs):
         serializer = VerifyOtpSerializer(data=request.data)
 
@@ -92,6 +104,9 @@ class VerifyOTPAPIView(APIView):
             defaults={"is_phone_verified": True},
         )
 
+        self.revoke_existing_tokens(user=user)
+
+        # Update the otp model as otp expired as after the otp is used, it is expired.
         OtpModel.objects.filter(phone_number=phone_number).update(
             otp_status=OtpStatusChoices.EXPIRED
         )
