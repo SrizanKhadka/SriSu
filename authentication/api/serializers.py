@@ -10,8 +10,6 @@ class SendOtpSerializer(serializers.Serializer):
 
     phone_number = serializers.CharField(max_length=15)
     
-    password = None
-
     def validate_phone_number(self, value):
         if not value.startswith("+") or len(value) < 10:
             raise serializers.ValidationError("Invalid phone number format.")

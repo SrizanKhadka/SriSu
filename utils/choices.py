@@ -40,3 +40,10 @@ class OtpStatusChoices(TextChoices):
     NOTHING = "NOTHING", "nothing"
     NEW = "NEW", "new"
     EXPIRED = "EXPIRED", "expired"
+    
+class CoupleConnectionStatus(TextChoices):
+    NOTHING = "NOTHING","Nothing"
+    PENDING = "PENDING","Pending"
+    ACCEPTED = "ACCEPTED","Accepted"
+    REJECTED = "REJECTED","Rejected"
+    BREAKUP = "BREAK-UP","Break-Up"
