@@ -19,10 +19,12 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from authentication.api.views import *
+from chat.api.views import CoupleConnectionView
 
 routers = DefaultRouter()
-# routers.register("setup-profile", SetUpProfileAPIView, basename="setUpProfileAPIView")
-
+routers.register(
+    "connect-couple", CoupleConnectionView, basename="coupleConnectionView"
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),

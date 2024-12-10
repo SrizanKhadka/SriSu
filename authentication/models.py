@@ -6,8 +6,6 @@ from utils.choices import *
 class UserModel(AbstractUser):
     phone_number = models.CharField(max_length=15, unique=True)
     profile_photo = models.ImageField(upload_to="profiles/", null=True, blank=True)
-    username = models.CharField(null=True,blank=True)
-    password = models.CharField(null=True,blank=True)
     full_name = models.CharField(max_length=100, null=True, blank=True)
     gender = models.CharField(
         max_length=10, choices=GenderChoices, null=True, blank=True
