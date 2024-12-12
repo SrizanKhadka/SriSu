@@ -1,5 +1,8 @@
 from django.db import models
 from utils.choices import CoupleConnectionStatus
+from authentication.models import UserModel
+from django.core.exceptions import ValidationError
+
 
 # Create your models here.
 
@@ -23,6 +26,46 @@ class CoupleConnectionModel(models.Model):
         ]  # Prevent duplicate requests
 
         ordering = ["-updated_at"]
+        verbose_name = "Couple_Connection"
 
     def __str__(self):
         return f"{self.sender_number}-{self.receiver_number}"
+
+
+class CoupleModel(models.Model):
+    couple_connection_model = models.ForeignKey(
+        CoupleConnectionModel,
+        on_delete=models.CASCADE,
+        related_name="couple_connection_model",
+    )
+
+    male_partner = models.ForeignKey(
+        UserModel, on_delete=models.CASCADE, related_name="male_partner"
+    )
+    female_partner = models.ForeignKey(
+        UserModel, on_delete=models.CASCADE, related_name="female_partner"
+    )
+    anniversary_date = models.DateField(null=True, blank=True)
+    shared_dreams = (models.JSONField(null=True, blank=True),)
+    shared_interests = models.JSONField(null=True, blank=True)
+    relationship_tagline = models.CharField(max_length=30, null=True, blank=True)
+    photo_album = models.JSONField(null=True, blank=True)
+    female_nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True, help_text="Timestamp when the couple was created."
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True, help_text="Timestamp when the couple data was last updated."
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Couple"
+        verbose_name_plural = "Couples"
+
+    def clean(self):
+        if self.photo_album.count() > 10:
+            raise ValidationError("You can only upload up to 10 photos.")
+
+    def __str__(self):
+        return f"{self.male_partner} ❤️ {self.female_partner}"

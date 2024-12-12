@@ -40,7 +40,7 @@ class CoupleConnectionView(ModelViewSet):
                     connection_status=CoupleConnectionStatus.ACCEPTED,
                 )
             )
-            # If such a connection exists, respond accordingly
+            # If a user is already engaged, he can't make further requests.
             if connection:
                 return Response(
                     {"message": "You are already engaged."},
@@ -108,7 +108,9 @@ class CoupleConnectionView(ModelViewSet):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         connection_status = request.data.get("connection_status")
-        connection = self.get_connection(sender_number, receiver_number)
+        connection = self.get_connection(
+            sender_number=sender_number, receiver_number=receiver_number
+        )
 
         if not connection:
             return Response(
@@ -119,6 +121,15 @@ class CoupleConnectionView(ModelViewSet):
         if connection_status not in CoupleConnectionStatus.values:
             return Response(
                 {"error": "Invalid connection status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if (
+            connection
+            and connection.connection_status == CoupleConnectionStatus.ACCEPTED
+        ) and connection_status == CoupleConnectionStatus.REJECTED:
+            return Response(
+                {"error": "Unsupported operation."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
