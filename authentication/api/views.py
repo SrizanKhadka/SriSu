@@ -8,6 +8,7 @@ import random
 from rest_framework import permissions
 from django.conf import settings
 from twilio.rest import Client
+from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.token_blacklist.models import (
     BlacklistedToken,
@@ -105,33 +106,17 @@ class VerifyOTPAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = VerifyOtpSerializer(data=request.data)
 
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # if not serializer.is_valid():
+        #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        phone_number = serializer.validated_data["phone_number"]
-
-        # Update user phone verification status
-        user, created = UserModel.objects.update_or_create(
-            phone_number=phone_number,
-            defaults={"is_phone_verified": True},
-        )
-
-        self.revoke_existing_tokens(user=user)
+        phone_number = request.data["phone_number"]
 
         # Update the otp model as otp expired as after the otp is used, it is expired.
         OtpModel.objects.filter(phone_number=phone_number).update(
             otp_status=OtpStatusChoices.EXPIRED
         )
-
-        tokens = self.generate_tokens(user=user)
-        response_data = {
-            "user": {
-                "id": user.id,
-                "phone_number": user.phone_number,
-                "is_phone_verified": user.is_phone_verified,
-            },
-            "tokens": tokens,
-        }
+        
+        response_data = super().post(request,*args,**kwargs)
 
         return Response(
             {"message": "Phone number verified successfully.", "data": response_data},
