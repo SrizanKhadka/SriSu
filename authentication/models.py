@@ -30,6 +30,9 @@ class UserModel(AbstractUser):
     username = models.CharField(null=True,blank=True)
     email = models.CharField(null=True,blank=True)
     password = models.CharField(null=True,blank=True)
+    username = models.CharField(null=True,blank=True)
+    email = models.CharField(null=True,blank=True)
+    password = models.CharField(null=True,blank=True)
     full_name = models.CharField(max_length=100, null=True, blank=True)
     gender = models.CharField(
         max_length=10, choices=GenderChoices, null=True, blank=True
@@ -46,8 +49,11 @@ class UserModel(AbstractUser):
     
     REQUIRED_FIELDS = []
     USERNAME_FIELD = 'phone_number'
+<<<<<<< HEAD
     
     objects = CustomUserManager()
+=======
+>>>>>>> 4fb5612 (password field is not compulsary now.)
 
     def __str__(self):
         return self.full_name or self.phone_number
