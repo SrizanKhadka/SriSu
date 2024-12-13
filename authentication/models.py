@@ -6,6 +6,9 @@ from utils.choices import *
 class UserModel(AbstractUser):
     phone_number = models.CharField(max_length=15, unique=True)
     profile_photo = models.ImageField(upload_to="profiles/", null=True, blank=True)
+    username = models.CharField(null=True,blank=True)
+    email = models.CharField(null=True,blank=True)
+    password = models.CharField(null=True,blank=True)
     full_name = models.CharField(max_length=100, null=True, blank=True)
     gender = models.CharField(
         max_length=10, choices=GenderChoices, null=True, blank=True
@@ -19,6 +22,9 @@ class UserModel(AbstractUser):
     is_phone_verified = models.BooleanField(default=False)
     created_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
+    
+    REQUIRED_FIELDS = []
+    USERNAME_FIELD = 'phone_number'
 
     def __str__(self):
         return self.full_name or self.phone_number
