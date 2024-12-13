@@ -4,6 +4,8 @@ from rest_framework import serializers
 from datetime import timedelta
 from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 
 
 class SendOtpSerializer(serializers.Serializer):
@@ -16,13 +18,19 @@ class SendOtpSerializer(serializers.Serializer):
         return value
 
 
-class VerifyOtpSerializer(serializers.Serializer):
+class VerifyOtpSerializer(TokenObtainPairSerializer):
     phone_number = serializers.CharField(max_length=15)
     otp_code = serializers.CharField(max_length=6)
+    
+    def validate_password(self, password):
+        print("inside validate passowrd")
+        return password
+    
 
-    def validate(self, data):
-        phone_number = data["phone_number"]
-        otp_code = data["otp_code"]
+    def validate(self, attrs):
+        print('INSIDE VALIDATE OTP')
+        phone_number = attrs["phone_number"]
+        otp_code = attrs["otp_code"]
 
         try:
             otp_record = OtpModel.objects.get(phone_number=phone_number)
@@ -40,8 +48,23 @@ class VerifyOtpSerializer(serializers.Serializer):
         # Check if OTP matches
         if otp_record.otp_code != otp_code:
             raise serializers.ValidationError({"error": "Invalid OTP."})
+        
+                # Update user phone verification status
+        user, created = UserModel.objects.update_or_create(
+            phone_number=phone_number,
+            defaults={"is_phone_verified": True},
+        )
+        
+        user.set_unusable_password()
+        user.save()
+        attrs["password"] = user.password
+        
+        print('DATA = ',attrs)
+        
+        # validated_data = super().validate(attrs)
 
-        return data
+
+        return attrs
 
     def is_otp_expired(self, updated_time):
         otp_lifespan = 5
