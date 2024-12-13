@@ -3,10 +3,12 @@ from rest_framework import status
 from rest_framework.response import Response
 from authentication.models import *
 from rest_framework.views import APIView
+from rest_framework.viewsets import GenericViewSet
 import random
 from rest_framework import permissions
 from django.conf import settings
 from twilio.rest import Client
+from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt import tokens
 
@@ -69,57 +71,26 @@ class SendOTPAPIView(APIView):
             )
 
 
-class VerifyOTPAPIView(APIView):
-    http_method_names = ["post"]
+class VerifyOTPAPIView(GenericViewSet,TokenObtainPairView):
+    # http_method_names = ["post"]
+    
+    serializer_class = VerifyOtpSerializer
 
-    def generate_tokens(self, user):
-        refresh = RefreshToken.for_user(user)
-        return {
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-        }
 
-    def revoke_existing_tokens(self, user):
+    def create(self, request, *args, **kwargs):
+        # serializer = VerifyOtpSerializer(data=request.data)
 
-        try:
-            # Find all outstanding tokens for the user
-            is_deleted = tokens.objects.filter(user=user).delete()
-            
-            print(f'IS TOKEN DELETED = {is_deleted}')
+        # if not serializer.is_valid():
+        #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        except Exception as e:
-            print(f"Error finding outstanding tokens: {e}")
-
-    def post(self, request, *args, **kwargs):
-        serializer = VerifyOtpSerializer(data=request.data)
-
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        phone_number = serializer.validated_data["phone_number"]
-
-        # Update user phone verification status
-        user, created = UserModel.objects.update_or_create(
-            phone_number=phone_number,
-            defaults={"is_phone_verified": True},
-        )
-
-        self.revoke_existing_tokens(user=user)
+        phone_number = request.data["phone_number"]
 
         # Update the otp model as otp expired as after the otp is used, it is expired.
         OtpModel.objects.filter(phone_number=phone_number).update(
             otp_status=OtpStatusChoices.EXPIRED
         )
-
-        tokens = self.generate_tokens(user=user)
-        response_data = {
-            "user": {
-                "id": user.id,
-                "phone_number": user.phone_number,
-                "is_phone_verified": user.is_phone_verified,
-            },
-            "tokens": tokens,
-        }
+        
+        response_data = super().post(request,*args,**kwargs)
 
         return Response(
             {"message": "Phone number verified successfully.", "data": response_data},
