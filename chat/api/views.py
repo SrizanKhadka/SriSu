@@ -150,7 +150,7 @@ class CoupleConnectionView(ModelViewSet):
                     {
                         "message": message,
                         "couple_connection": self.serializer_class(connection).data,
-                        "couple": CoupleModelSerializer(couple).data
+                        "couple": CoupleModelSerializer(couple).data,
                     },
                     status=status.HTTP_200_OK,
                 )
@@ -167,13 +167,13 @@ class CoupleConnectionView(ModelViewSet):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    def createCouple(self,couple_connection):
+    def createCouple(self, couple_connection):
         couple_connection_model = couple_connection
         sender_number = couple_connection.sender_number
         receiver_number = couple_connection.receiver_number
-        
-        print('SENDER NUMBER = ',sender_number)
-        print('RECEIVER_NUMBER = ', receiver_number)
+
+        print("SENDER NUMBER = ", sender_number)
+        print("RECEIVER_NUMBER = ", receiver_number)
 
         try:
             # Fetch the male partner
@@ -191,7 +191,7 @@ class CoupleConnectionView(ModelViewSet):
             couple, created = CoupleModel.objects.update_or_create(
                 couple_connection_model=couple_connection_model,
                 male_partner=male_partner,
-                female_partner=female_partner
+                female_partner=female_partner,
             )
 
             return couple
@@ -202,3 +202,35 @@ class CoupleConnectionView(ModelViewSet):
             raise ValueError(f"Data inconsistency detected: {str(e)}")
         except Exception as e:
             raise ValueError(f"Unexpected error occurred: {str(e)}")
+
+
+class CoupleAPIView(ModelViewSet):
+    serializer_class = CoupleModelSerializer
+    queryset = CoupleModel.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Handle photo updates explicitly in the view
+        photo_album_data = request.FILES.getlist("couple_photo_album")
+        print("PHOTO ALBUM DATA", photo_album_data)
+        self.upload_photos(photo_album_data=photo_album_data, instance=instance)
+
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        
+        return Response(
+            {
+                "message": "Couple updated Successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def upload_photos(self, photo_album_data, instance):
+        if photo_album_data:
+            instance.couple_photo_album.all().delete()
+            for photo in photo_album_data:
+                PhotoAlbumModel.objects.create(couple=instance, photo=photo)

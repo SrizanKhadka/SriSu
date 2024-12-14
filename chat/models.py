@@ -64,9 +64,16 @@ class CoupleModel(models.Model):
         verbose_name = "Couple"
         verbose_name_plural = "Couples"
 
-    def clean(self):
-        if self.photo_album.count() > 10:
-            raise ValidationError("You can only upload up to 10 photos.")
+    # def clean(self):
+    #     if self.photo_album.count() > 10:
+    #         raise ValidationError("You can only upload up to 10 photos.")
 
     def __str__(self):
         return f"{self.male_partner} ❤️ {self.female_partner}"
+
+
+class PhotoAlbumModel(models.Model):
+    couple = models.ForeignKey(
+        CoupleModel, on_delete=models.CASCADE, related_name="couple_photo_album"
+    )
+    photo = models.ImageField(upload_to="couple_album/", null=True, blank=True)

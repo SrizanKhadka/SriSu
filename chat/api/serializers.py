@@ -27,8 +27,22 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         return not number.startswith("+") or len(number) < 10
 
 
+class CouplePhotoAlbumSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PhotoAlbumModel
+        fields = "__all__"
+
+
 class CoupleModelSerializer(serializers.ModelSerializer):
+
+    couple_photo_album = CouplePhotoAlbumSerializer(many=True, required=False)
 
     class Meta:
         model = CoupleModel
         fields = "__all__"
+
+    def validate_couple_photo_album(self, photos):
+        if photos and len(photos) > 10:
+            raise serializers.ValidationError("You can only upload 10 photos.")
+        return photos

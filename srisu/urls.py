@@ -19,12 +19,15 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from authentication.api.views import *
-from chat.api.views import CoupleConnectionView
+from chat.api.views import *
+from django.conf.urls.static import static
+
 
 routers = DefaultRouter()
 routers.register(
     "connect-couple", CoupleConnectionView, basename="coupleConnectionView"
 )
+routers.register("update-couple", CoupleAPIView, basename="updateCoupleView")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -32,4 +35,4 @@ urlpatterns = [
     path("api/verify-otp/", VerifyOTPAPIView.as_view(), name="verify-otp"),
     path("api/setup-profile/", SetUpProfileAPIView.as_view(), name="setup-oprofile"),
     path("api/", include(routers.urls)),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
