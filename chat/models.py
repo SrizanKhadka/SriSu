@@ -50,7 +50,8 @@ class CoupleModel(models.Model):
     shared_interests = models.JSONField(null=True, blank=True)
     relationship_tagline = models.CharField(max_length=30, null=True, blank=True)
     photo_album = models.JSONField(null=True, blank=True)
-    female_nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
+    nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
+    nickname_for_female = models.CharField(max_length=30, null=True, blank=True)
     created_at = models.DateTimeField(
         auto_now_add=True, help_text="Timestamp when the couple was created."
     )

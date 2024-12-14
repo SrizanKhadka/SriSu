@@ -1,9 +1,9 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework import status, permissions
-from chat.api.serializers import CoupleConnectionSerializer
-from chat.models import CoupleConnectionModel
-from utils.choices import CoupleConnectionStatus
+from chat.api.serializers import *
+from chat.models import *
+from utils.choices import CoupleConnectionStatus, GenderChoices
 from django.db.models import Q
 
 
@@ -72,6 +72,7 @@ class CoupleConnectionView(ModelViewSet):
         connection = self.get_connection(sender_number, receiver_number)
 
         engaged_response = self.is_already_engaged(sender_number)
+
         if engaged_response:
             return engaged_response
 
@@ -101,6 +102,9 @@ class CoupleConnectionView(ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    def perform_create(self, serializer):
+        return serializer.save()
+
     def update(self, request, *args, **kwargs):
         try:
             sender_number, receiver_number = self.validate_request_data(request)
@@ -116,12 +120,6 @@ class CoupleConnectionView(ModelViewSet):
             return Response(
                 {"error": "Connection does not exist."},
                 status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if connection_status not in CoupleConnectionStatus.values:
-            return Response(
-                {"error": "Invalid connection status."},
-                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if (
@@ -140,20 +138,67 @@ class CoupleConnectionView(ModelViewSet):
         ]:
             connection.connection_status = connection_status
             connection.save()
-            message = (
-                "Connection accepted."
-                if connection_status == CoupleConnectionStatus.ACCEPTED
-                else "Connection rejected."
-            )
-            return Response(
-                {
-                    "message": message,
-                    "data": self.serializer_class(connection).data,
-                },
-                status=status.HTTP_200_OK,
-            )
+            couple = self.createCouple(couple_connection=connection)
+
+            if connection and couple:  # if couple creation is failed,
+                message = (
+                    "Connection accepted."
+                    if connection_status == CoupleConnectionStatus.ACCEPTED
+                    else "Connection rejected."
+                )
+                return Response(
+                    {
+                        "message": message,
+                        "couple_connection": self.serializer_class(connection).data,
+                        "couple": CoupleModelSerializer(couple).data
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                connection.connection_status = CoupleConnectionStatus.PENDING
+                connection.save()
+                return Response(
+                    {"error": "Couple connection failed."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         return Response(
             {"error": "Unsupported operation."},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    def createCouple(self,couple_connection):
+        couple_connection_model = couple_connection
+        sender_number = couple_connection.sender_number
+        receiver_number = couple_connection.receiver_number
+        
+        print('SENDER NUMBER = ',sender_number)
+        print('RECEIVER_NUMBER = ', receiver_number)
+
+        try:
+            # Fetch the male partner
+            male_partner = UserModel.objects.get(
+                Q(phone_number=sender_number, gender=GenderChoices.MALE)
+                | Q(phone_number=receiver_number, gender=GenderChoices.MALE)
+            )
+
+            # Fetch the female partner
+            female_partner = UserModel.objects.get(
+                Q(phone_number=sender_number, gender=GenderChoices.FEMALE)
+                | Q(phone_number=receiver_number, gender=GenderChoices.FEMALE)
+            )
+
+            couple, created = CoupleModel.objects.update_or_create(
+                couple_connection_model=couple_connection_model,
+                male_partner=male_partner,
+                female_partner=female_partner
+            )
+
+            return couple
+
+        except UserModel.DoesNotExist as e:
+            raise ValueError(f"User not found: {str(e)}")
+        except UserModel.MultipleObjectsReturned as e:
+            raise ValueError(f"Data inconsistency detected: {str(e)}")
+        except Exception as e:
+            raise ValueError(f"Unexpected error occurred: {str(e)}")
