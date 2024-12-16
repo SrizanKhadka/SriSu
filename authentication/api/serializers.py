@@ -17,14 +17,9 @@ class SendOtpSerializer(serializers.Serializer):
         return value
 
 
-class VerifyOtpSerializer(TokenObtainPairSerializer):
+class VerifyOtpSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=15)
     otp_code = serializers.CharField(max_length=6)
-    
-    def validate_password(self, password):
-        print("inside validate passowrd")
-        return password
-    
 
     def validate(self, attrs):
         print('INSIDE VALIDATE OTP')
@@ -35,6 +30,9 @@ class VerifyOtpSerializer(TokenObtainPairSerializer):
             otp_record = OtpModel.objects.get(phone_number=phone_number)
         except OtpModel.DoesNotExist:
             raise serializers.ValidationError({"error": "Invalid phone number or OTP."})
+            
+        if otp_record.otp_code != otp_code:
+            raise serializers.ValidationError({"error": "Invalid OTP."})
 
         # Check if OTP is expired
         if self.is_otp_expired(updated_time=otp_record.updated_date):
@@ -43,25 +41,6 @@ class VerifyOtpSerializer(TokenObtainPairSerializer):
             raise serializers.ValidationError({"error": "OTP has expired."})
         elif otp_record.otp_status == OtpStatusChoices.EXPIRED:
             raise serializers.ValidationError({"error": "OTP has expired."})
-
-        # Check if OTP matches
-        if otp_record.otp_code != otp_code:
-            raise serializers.ValidationError({"error": "Invalid OTP."})
-        
-                # Update user phone verification status
-        user, created = UserModel.objects.update_or_create(
-            phone_number=phone_number,
-            defaults={"is_phone_verified": True},
-        )
-        
-        user.set_unusable_password()
-        user.save()
-        attrs["password"] = user.password
-        
-        print('DATA = ',attrs)
-        
-        # validated_data = super().validate(attrs)
-
 
         return attrs
 

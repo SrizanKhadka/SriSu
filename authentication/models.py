@@ -49,11 +49,8 @@ class UserModel(AbstractUser):
     
     REQUIRED_FIELDS = []
     USERNAME_FIELD = 'phone_number'
-<<<<<<< HEAD
     
     objects = CustomUserManager()
-=======
->>>>>>> 4fb5612 (password field is not compulsary now.)
 
     def __str__(self):
         return self.full_name or self.phone_number

@@ -88,7 +88,7 @@ class VerifyOTPAPIView(APIView):
         try:
             # Get all outstanding tokens for the user
             outstanding_tokens = OutstandingToken.objects.filter(user=user)
-            
+
             print('OUTSTANDING TOKENS ', outstanding_tokens)
 
             for token in outstanding_tokens:
@@ -106,8 +106,8 @@ class VerifyOTPAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = VerifyOtpSerializer(data=request.data)
 
-        # if not serializer.is_valid():
-        #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         phone_number = request.data["phone_number"]
 
@@ -116,7 +116,12 @@ class VerifyOTPAPIView(APIView):
             otp_status=OtpStatusChoices.EXPIRED
         )
         
-        response_data = super().post(request,*args,**kwargs)
+        user,created = UserModel.objects.update_or_create(
+            phone_number = phone_number,
+            is_phone_verified = True
+        )
+
+        response_data = self.generate_tokens(user=user)
 
         return Response(
             {"message": "Phone number verified successfully.", "data": response_data},
