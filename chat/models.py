@@ -1,10 +1,7 @@
 from django.db import models
 from utils.choices import CoupleConnectionStatus
 from authentication.models import UserModel
-from django.core.exceptions import ValidationError
-
-
-# Create your models here.
+from utils.choices import MessageType, MessageReaction
 
 
 class CoupleConnectionModel(models.Model):
@@ -42,6 +39,7 @@ class CoupleModel(models.Model):
     male_partner = models.ForeignKey(
         UserModel, on_delete=models.CASCADE, related_name="male_partner"
     )
+
     female_partner = models.ForeignKey(
         UserModel, on_delete=models.CASCADE, related_name="female_partner"
     )
@@ -77,3 +75,57 @@ class PhotoAlbumModel(models.Model):
         CoupleModel, on_delete=models.CASCADE, related_name="couple_photo_album"
     )
     photo = models.ImageField(upload_to="couple_album/", null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.couple.male_partner} ❤️ {self.couple.female_partner}"
+
+
+class MessageModel(models.Model):
+    couple = models.ForeignKey(
+        CoupleModel, on_delete=models.CASCADE, related_name="messages"
+    )
+    sender = models.ForeignKey(
+        UserModel, on_delete=models.CASCADE, related_name="sent_messages"
+    )
+    message_type = models.CharField(
+        max_length=10, choices=MessageType, default=MessageType.TEXT
+    )
+    text = models.TextField(null=True, blank=True)
+    media = models.FileField(
+        upload_to="messages/media/",
+        null=True,
+        blank=True,
+    )
+    reply_to = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="replies"
+    )
+    is_deleted = models.BooleanField(default=False)
+    deleted_message = models.CharField(max_length=100, null=True, blank=True)
+    is_read = models.BooleanField(default=False)
+    is_delivered = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["timestamp"]
+
+    def __str__(self):
+        return f"Message from {self.sender} in couple chat {self.couple.id}"
+
+    def delete_for_everyone(self):
+        """Marks the message as deleted for all users."""
+        self.is_deleted = True
+        self.save()
+
+    def delete_for_self(self, user):
+        """Implements user-specific deletion (if necessary in the app logic)."""
+        pass  # Custom logic for handling "delete for self" if required.
+
+
+class MessageReaction(models.Model):
+    messageModel = models.ForeignKey(
+        MessageModel, on_delete=models.CASCADE, related_name="messages"
+    )
+
+    reaction = models.CharField(
+        max_length=20, choices=MessageReaction, null=True, blank=True
+    )

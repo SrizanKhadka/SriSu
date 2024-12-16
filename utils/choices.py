@@ -40,10 +40,26 @@ class OtpStatusChoices(TextChoices):
     NOTHING = "NOTHING", "nothing"
     NEW = "NEW", "new"
     EXPIRED = "EXPIRED", "expired"
-    
+
+
 class CoupleConnectionStatus(TextChoices):
-    NOTHING = "NOTHING","Nothing"
-    PENDING = "PENDING","Pending"
-    ACCEPTED = "ACCEPTED","Accepted"
-    REJECTED = "REJECTED","Rejected"
-    BREAKUP = "BREAK-UP","Break-Up"
+    NOTHING = "NOTHING", "Nothing"
+    PENDING = "PENDING", "Pending"
+    ACCEPTED = "ACCEPTED", "Accepted"
+    REJECTED = "REJECTED", "Rejected"
+    BREAKUP = "BREAK-UP", "Break-Up"
+
+
+class MessageType(TextChoices):
+    TEXT = "TEXT", "Text"
+    IMAGE = "IMAGE", "Image"
+    VIDEO = "VIDEO", "Video"
+    AUDIO = "AUDIO","Audio"
+
+
+class MessageReaction(TextChoices):
+    HAHA = "HAHA", "Haha"
+    WOW = "WOW", "Wow"
+    SAD = "SAD", "Sad"
+    ANGRY = "ANGRY", "Angry"
+    LOVE = "Love", "Love"
