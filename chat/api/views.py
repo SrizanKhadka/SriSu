@@ -220,7 +220,7 @@ class CoupleAPIView(ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        
+
         return Response(
             {
                 "message": "Couple updated Successfully.",
