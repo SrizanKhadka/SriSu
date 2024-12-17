@@ -22,7 +22,7 @@ class VerifyOtpSerializer(serializers.Serializer):
     otp_code = serializers.CharField(max_length=6)
 
     def validate(self, attrs):
-        print('INSIDE VALIDATE OTP')
+        print("INSIDE VALIDATE OTP")
         phone_number = attrs["phone_number"]
         otp_code = attrs["otp_code"]
 
@@ -30,7 +30,8 @@ class VerifyOtpSerializer(serializers.Serializer):
             otp_record = OtpModel.objects.get(phone_number=phone_number)
         except OtpModel.DoesNotExist:
             raise serializers.ValidationError({"error": "Invalid phone number or OTP."})
-            
+
+            # Check if the otp code matches.
         if otp_record.otp_code != otp_code:
             raise serializers.ValidationError({"error": "Invalid OTP."})
 

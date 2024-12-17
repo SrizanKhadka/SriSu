@@ -21,7 +21,7 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         elif not self.is_number_valid(number=receiver_number):
             raise serializers.ValidationError("Receiver_number is Invalid!")
 
-        return validated_data
+        return data
 
     def is_number_valid(self, number):
         return not number.startswith("+") or len(number) < 10
