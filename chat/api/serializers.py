@@ -1,8 +1,6 @@
 from rest_framework import serializers
 from chat.models import *
-from rest_framework.response import Response
 from django.db.models import Q
-
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
 
