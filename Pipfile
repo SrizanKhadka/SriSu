@@ -6,11 +6,12 @@ name = "pypi"
 [packages]
 djangorestframework = "*"
 psycopg2 = "*"
-psycopg2-binary = "*"
 python-decouple = "*"
 twilio = "*"
 pillow = "*"
-channels = "*"
+djangorestframework-simplejwt = "*"
+django = "*"
+channels = {extras = ["daphne"], version = "*"}
 
 [dev-packages]
 

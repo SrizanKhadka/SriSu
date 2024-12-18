@@ -5,7 +5,7 @@ from rest_framework import exceptions
 def customExceptionHandler(exception, context):
     response = drf_exception_handler(exception, context)
 
-    print(response, response.data)
+    # print(response, response.data)
 
     if response is not None and isinstance(exception, exceptions.APIException):
 
