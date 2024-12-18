@@ -22,7 +22,6 @@ class VerifyOtpSerializer(serializers.Serializer):
     otp_code = serializers.CharField(max_length=6)
 
     def validate(self, attrs):
-        print("INSIDE VALIDATE OTP")
         phone_number = attrs["phone_number"]
         otp_code = attrs["otp_code"]
 
@@ -31,10 +30,6 @@ class VerifyOtpSerializer(serializers.Serializer):
         except OtpModel.DoesNotExist:
             raise serializers.ValidationError({"error": "Invalid phone number or OTP."})
 
-            # Check if the otp code matches.
-        if otp_record.otp_code != otp_code:
-            raise serializers.ValidationError({"error": "Invalid OTP."})
-
         # Check if OTP is expired
         if self.is_otp_expired(updated_time=otp_record.updated_date):
             otp_record.otp_status = OtpStatusChoices.EXPIRED
@@ -42,6 +37,10 @@ class VerifyOtpSerializer(serializers.Serializer):
             raise serializers.ValidationError({"error": "OTP has expired."})
         elif otp_record.otp_status == OtpStatusChoices.EXPIRED:
             raise serializers.ValidationError({"error": "OTP has expired."})
+
+        # Check if the otp code matches.
+        if otp_record.otp_code != otp_code:
+            raise serializers.ValidationError({"error": "Invalid OTP."})
 
         return attrs
 
@@ -63,9 +62,9 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "dob",
             "mood",
             "is_profile_complete",
-            "is_phone_verified"
+            "is_phone_verified",
         ]
-        read_only_fields = ["is_profile_complete","is_phone_verified"]
+        read_only_fields = ["is_profile_complete", "is_phone_verified"]
 
     def validate(self, data):
         validated_data = super().validate(data)
