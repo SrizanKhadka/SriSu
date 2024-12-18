@@ -24,18 +24,6 @@ class CoupleConnectionView(ModelViewSet):
         except CoupleConnectionModel.DoesNotExist:
             return None
 
-    def is_already_engaged(self, number):
-        """
-        Checks if the user is already engaged in an accepted connection.
-        """
-        return CoupleConnectionModel.objects.filter(
-            Q(sender_number=number, connection_status=CoupleConnectionStatus.ACCEPTED)
-            | Q(
-                receiver_number=number,
-                connection_status=CoupleConnectionStatus.ACCEPTED,
-            )
-        ).exists()
-
     def create(self, request, *args, **kwargs):
 
         serializer = self.get_serializer(data=request.data)
@@ -45,15 +33,6 @@ class CoupleConnectionView(ModelViewSet):
         receiver_number = request.data["receiver_number"]
 
         connection = self.get_connection(sender_number, receiver_number)
-
-        is_sender_engaged = self.is_already_engaged(number=sender_number)
-        is_receiver_engaged = self.is_already_engaged(number=receiver_number)
-
-        if is_sender_engaged:
-            return Response({"message": "You are already engaged!"})
-
-        if is_receiver_engaged:
-            return Response({"message": "Requested Person is already engaged!"})
 
         if not connection or connection.connection_status in [
             CoupleConnectionStatus.REJECTED,
