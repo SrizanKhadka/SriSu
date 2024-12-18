@@ -11,8 +11,6 @@ class CoupleConnectionView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
     queryset = CoupleConnectionModel.objects.all()
     permission_classes = [permissions.IsAuthenticated]
-    
-    #TODO QUERY USERS WITH THE NUMBERS FIRST.
 
     def get_connection(self, sender_number, receiver_number):
         """
@@ -26,61 +24,36 @@ class CoupleConnectionView(ModelViewSet):
         except CoupleConnectionModel.DoesNotExist:
             return None
 
-    def is_already_engaged(self, sender_number):
+    def is_already_engaged(self, number):
         """
-        Checks if the sender is already engaged.
+        Checks if the user is already engaged in an accepted connection.
         """
-        try:
-            # Check if there's an accepted connection in either direction
-            connection = CoupleConnectionModel.objects.get(
-                Q(
-                    sender_number=sender_number,
-                    connection_status=CoupleConnectionStatus.ACCEPTED,
-                )
-                | Q(
-                    receiver_number=sender_number,
-                    connection_status=CoupleConnectionStatus.ACCEPTED,
-                )
+        return CoupleConnectionModel.objects.filter(
+            Q(sender_number=number, connection_status=CoupleConnectionStatus.ACCEPTED)
+            | Q(
+                receiver_number=number,
+                connection_status=CoupleConnectionStatus.ACCEPTED,
             )
-            # If a user is already engaged, he can't make further requests.
-            if connection:
-                return Response(
-                    {"message": "You are already engaged."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        except CoupleConnectionModel.DoesNotExist:
-            return None
-        except CoupleConnectionModel.MultipleObjectsReturned:
-            return Response(
-                {
-                    "error": "Multiple active connections found. Data inconsistency detected."
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    def validate_request_data(self, request):
-        sender_number = request.data.get("sender_number")
-        receiver_number = request.data.get("receiver_number")
-        if not sender_number or not receiver_number:
-            raise ValueError("Both sender_number and receiver_number are required.")
-        return sender_number, receiver_number
+        ).exists()
 
     def create(self, request, *args, **kwargs):
-        
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
-        try:
-            sender_number, receiver_number = self.validate_request_data(request)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        sender_number = request.data["sender_number"]
+        receiver_number = request.data["receiver_number"]
 
         connection = self.get_connection(sender_number, receiver_number)
 
-        engaged_response = self.is_already_engaged(sender_number)
+        is_sender_engaged = self.is_already_engaged(number=sender_number)
+        is_receiver_engaged = self.is_already_engaged(number=receiver_number)
 
-        if engaged_response:
-            return engaged_response
+        if is_sender_engaged:
+            return Response({"message": "You are already engaged!"})
+
+        if is_receiver_engaged:
+            return Response({"message": "Requested Person is already engaged!"})
 
         if not connection or connection.connection_status in [
             CoupleConnectionStatus.REJECTED,
