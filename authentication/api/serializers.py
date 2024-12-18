@@ -63,8 +63,9 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "dob",
             "mood",
             "is_profile_complete",
+            "is_phone_verified"
         ]
-        read_only_fields = ["phone_number", "is_profile_complete"]
+        read_only_fields = ["is_profile_complete","is_phone_verified"]
 
     def validate(self, data):
         validated_data = super().validate(data)

@@ -31,8 +31,6 @@ routers.register("update-couple", CoupleAPIView, basename="updateCoupleView")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/send-otp/", SendOTPAPIView.as_view(), name="send-otp"),
-    path("api/verify-otp/", VerifyOTPAPIView.as_view(), name="verify-otp"),
-    path("api/setup-profile/", SetUpProfileAPIView.as_view(), name="setup-oprofile"),
-    path("api/", include(routers.urls)),
+    path("api/",include(routers.urls)),
+    path("api/auth/", include('authentication.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

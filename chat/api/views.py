@@ -11,6 +11,8 @@ class CoupleConnectionView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
     queryset = CoupleConnectionModel.objects.all()
     permission_classes = [permissions.IsAuthenticated]
+    
+    #TODO QUERY USERS WITH THE NUMBERS FIRST.
 
     def get_connection(self, sender_number, receiver_number):
         """
@@ -64,6 +66,10 @@ class CoupleConnectionView(ModelViewSet):
         return sender_number, receiver_number
 
     def create(self, request, *args, **kwargs):
+        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
         try:
             sender_number, receiver_number = self.validate_request_data(request)
         except ValueError as e:
