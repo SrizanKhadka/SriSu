@@ -11,7 +11,7 @@ async def test_websocket():
         # Send a test message
         message = {
             "message": "Hello from Python WebSocket client!",
-            "sender_id": 2,  
+            "sender_id": 5,  
         }
         await websocket.send(json.dumps(message))
         print(f"Sent: {message}")

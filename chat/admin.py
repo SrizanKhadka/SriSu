@@ -6,3 +6,4 @@ from chat.models import *
 admin.site.register(CoupleConnectionModel)
 admin.site.register(CoupleModel)
 admin.site.register(PhotoAlbumModel)
+admin.site.register(MessageModel)
