@@ -109,7 +109,7 @@ class MessageModel(models.Model):
         ordering = ["timestamp"]
 
     def __str__(self):
-        return f"Message from {self.sender} in couple chat {self.couple.id}"
+        return f"{self.couple.male_partner.full_name} - {self.couple.female_partner.full_name}"
 
     def delete_for_everyone(self):
         """Marks the message as deleted for all users."""

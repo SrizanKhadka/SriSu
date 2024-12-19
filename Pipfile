@@ -12,6 +12,8 @@ pillow = "*"
 djangorestframework-simplejwt = "*"
 django = "*"
 channels = {extras = ["daphne"], version = "*"}
+channels-redis = "*"
+websockets = "*"
 
 [dev-packages]
 
