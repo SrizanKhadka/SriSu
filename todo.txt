@@ -1,2 +1,3 @@
-1. Change the websocket with redis server.
-2. Thoroughly check the websocket messaging i.e. chat consumer.
+1. Revoke the old tokens.
+2. Change the websocket with redis server.
+3. Thoroughly check the websocket messaging i.e. chat consumer.

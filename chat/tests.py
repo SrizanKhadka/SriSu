@@ -17,7 +17,7 @@ async def test_websocket():
         print(f"Sent: {message}")
 
         # Receive a response
-        # response = await websocket.recv()
-        # print(f"Received: {response}")
+        response = await websocket.recv()
+        print(f"Received: {response}")
 
 asyncio.run(test_websocket())
