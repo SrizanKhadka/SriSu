@@ -1,16 +1,17 @@
-
-# Create your tests here.
 import asyncio
 import websockets
 import json
 
 async def test_websocket():
-    uri = "ws://127.0.0.1:8000/ws/chat/1/"  
+    uri = "ws://127.0.0.1:8000/ws/chat/1/"
     async with websockets.connect(uri) as websocket:
         # Send a test message
         message = {
-            "message": "Hello from Python WebSocket client!",
-            "sender_id": 25,  
+            "text": "Hello from Python WebSocket client!",
+            "message_type": "IMAGE",
+            "sender_id": 5,
+            "media": "/home/srizan/Pictures/Screenshots/",  # Add file path if testing media uploads
+            "reply_to": None  # Add message ID if replying to a message
         }
         await websocket.send(json.dumps(message))
         print(f"Sent: {message}")
