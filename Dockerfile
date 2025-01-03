@@ -3,7 +3,8 @@ FROM python:3.12.1
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONBUFFERED 1
 
-# RUN apt-get -y install postgresql-client
+RUN apt-get update
+RUN apt-get -y install postgresql-client
 
 RUN pip install --upgrade pip
 RUN pip install pipenv
