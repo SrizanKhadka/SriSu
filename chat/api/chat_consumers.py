@@ -145,15 +145,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
         print("MEDIA BASED6D = ", media)
 
         # # Handle media if applicable
-        media_file = await self.handle_media(media, message_type) if media else None
-        print("MEDIA FILE = ", media_file)
+        # media_file = await self.handle_media(media, message_type) if media else None
+        # print("MEDIA FILE = ", media_file)
 
         # # Create a new message in the database
         new_message = await self.create_message(
             couple=couple,
             sender=sender,
             text=message_text,
-            media=media_file,
+            media=None,
             message_type=message_type,
             reply_to=reply_to,
         )

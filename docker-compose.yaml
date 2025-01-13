@@ -34,6 +34,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data # Persist database data to a Docker volume
 
+  redis:
+      image: redis:latest
+      container_name: redis_server
+      ports:
+        - "6379:6379"
+      restart: unless-stopped
+
 # Define named volumes for persistent data storage
 volumes:
   postgres_data:              # Volume for storing PostgreSQL data
