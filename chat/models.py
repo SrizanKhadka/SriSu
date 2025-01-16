@@ -79,7 +79,10 @@ class PhotoAlbumModel(models.Model):
     def __str__(self):
         return f"{self.couple.male_partner} ❤️ {self.couple.female_partner}"
 
-
+class MediaModel(models.Model):
+    file = models.FileField(upload_to="chats_media/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
 class MessageModel(models.Model):
     couple = models.ForeignKey(
         CoupleModel, on_delete=models.CASCADE, related_name="messages"
@@ -96,6 +99,7 @@ class MessageModel(models.Model):
         null=True,
         blank=True,
     )
+    media_url = models.URLField(max_length=500,null=True,blank=True)
     reply_to = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="replies"
     )

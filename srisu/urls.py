@@ -28,6 +28,7 @@ routers.register(
     "connect-couple", CoupleConnectionView, basename="coupleConnectionView"
 )
 routers.register("update-couple", CoupleAPIView, basename="updateCoupleView")
+routers.register("media-upload",MediaUploadView,basename="mediaUploadView")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

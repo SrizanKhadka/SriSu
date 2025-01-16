@@ -75,3 +75,10 @@ class CoupleModelSerializer(serializers.ModelSerializer):
         if photos and len(photos) > 10:
             raise serializers.ValidationError("You can only upload 10 photos.")
         return photos
+
+
+class MediaModelSerializer(serializers.ModelSerializer):
+    #In future make sure to validate the size of media to a certain size.
+    class Meta:
+        model = MediaModel
+        fields = "__all__"
