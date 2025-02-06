@@ -17,21 +17,13 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
 from authentication.api.views import *
-from chat.api.views import *
+from chat.urls import chat_routers
 from django.conf.urls.static import static
 
 
-routers = DefaultRouter()
-routers.register(
-    "connect-couple", CoupleConnectionView, basename="coupleConnectionView"
-)
-routers.register("update-couple", CoupleAPIView, basename="updateCoupleView")
-routers.register("media-upload",MediaUploadView,basename="mediaUploadView")
-
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/",include(routers.urls)),
     path("api/auth/", include('authentication.urls')),
+    path("api/chat/", include('chat.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

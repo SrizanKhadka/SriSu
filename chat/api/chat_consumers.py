@@ -172,7 +172,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "is_delivered": new_message.is_delivered,
                     "timestamp": new_message.timestamp.isoformat(),
                 },
-                # "message": "message sent",
+                "message": "message sent",
             },
         )
 
