@@ -192,3 +192,9 @@ class CoupleAPIView(ModelViewSet):
             instance.couple_photo_album.all().delete()
             for photo in photo_album_data:
                 PhotoAlbumModel.objects.create(couple=instance, photo=photo)
+
+
+class MediaUploadView(ModelViewSet):
+    serializer_class = MediaModelSerializer
+    queryset = MediaModel.objects.all()
+    permission_classes = [permissions.IsAuthenticated]

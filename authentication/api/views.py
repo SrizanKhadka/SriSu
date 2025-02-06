@@ -84,24 +84,24 @@ class VerifyOTPAPIView(APIView):
             "access": str(refresh.access_token),
         }
 
-    def revoke_existing_tokens(self, user):
-        try:
-            # Get all outstanding tokens for the user
-            outstanding_tokens = OutstandingToken.objects.filter(user=user)
+    # def revoke_existing_tokens(self, user):
+    #     try:
+    #         # Get all outstanding tokens for the user
+    #         outstanding_tokens = OutstandingToken.objects.filter(user=user)
 
-            print('OUTSTANDING TOKENS ', outstanding_tokens)
+    #         print('OUTSTANDING TOKENS ', outstanding_tokens)
 
-            for token in outstanding_tokens:
-                # Blacklist each token
-                try:
-                    # Add the token to the blacklist
-                    BlacklistedToken.objects.create(token=token)
-                    print(f"Token {token} has been blacklisted.")
-                except Exception as e:
-                    print(f"Error blacklisting token {token}: {e}")
+    #         for token in outstanding_tokens:
+    #             # Blacklist each token
+    #             try:
+    #                 # Add the token to the blacklist
+    #                 BlacklistedToken.objects.create(token=token)
+    #                 print(f"Token {token} has been blacklisted.")
+    #             except Exception as e:
+    #                 print(f"Error blacklisting token {token}: {e}")
 
-        except Exception as e:
-            print(f"Error retrieving outstanding tokens: {e}")
+        # except Exception as e:
+        #     print(f"Error retrieving outstanding tokens: {e}")
 
     def post(self, request, *args, **kwargs):
         serializer = VerifyOtpSerializer(data=request.data)
@@ -116,9 +116,10 @@ class VerifyOTPAPIView(APIView):
             otp_status=OtpStatusChoices.EXPIRED
         )
         
+        print('PHONE NUMBER = ',phone_number)
         user,created = UserModel.objects.update_or_create(
-            phone_number = phone_number,
-            is_phone_verified = True
+            phone_number = phone_number, #Lookup_field
+            defaults={"is_phone_verified": True},  # Fields to update
         )
 
         response_data = self.generate_tokens(user=user)
