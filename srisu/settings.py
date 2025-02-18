@@ -157,6 +157,8 @@ CHANNEL_LAYERS = {
     },
 }
 
+AUTH_USER_MODEL = "authentication.UserModel"
+
 
 # CHANNEL_LAYERS = {
 #     "default": {
@@ -168,7 +170,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
-    "EXCEPTION_HANDLER": "srisu.custom.exception_handlers.customExceptionHandler",
+    "EXCEPTION_HANDLER": "utils.exception_handlers.custom_exception_handlers",
 }
 
 SIMPLE_JWT = {
@@ -184,4 +186,3 @@ TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE_NUMBER = config("TWILIO_PHONE_NUMBER")
 
-AUTH_USER_MODEL = "authentication.UserModel"
