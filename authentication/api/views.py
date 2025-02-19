@@ -34,9 +34,8 @@ class SendOTPAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = SendOtpSerializer(data=request.data)
 
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        serializer.is_valid(raise_exception=True)
+           
         phone_number = serializer.validated_data["phone_number"]
 
         user = self.get_object(phone_number)
@@ -80,8 +79,7 @@ class VerifyOTPAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = VerifyOtpSerializer(data=request.data)
 
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         phone_number = request.data["phone_number"]
 
