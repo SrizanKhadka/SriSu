@@ -3,18 +3,11 @@ from rest_framework import status
 from rest_framework.response import Response
 from authentication.models import *
 from rest_framework.views import APIView
-from rest_framework.viewsets import GenericViewSet
 import random
 from rest_framework import permissions
 from django.conf import settings
 from twilio.rest import Client
-from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.token_blacklist.models import (
-    BlacklistedToken,
-    OutstandingToken,
-)
-
 
 class SendOTPAPIView(APIView):
 
@@ -41,9 +34,8 @@ class SendOTPAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = SendOtpSerializer(data=request.data)
 
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        serializer.is_valid(raise_exception=True)
+           
         phone_number = serializer.validated_data["phone_number"]
 
         user = self.get_object(phone_number)
@@ -84,30 +76,10 @@ class VerifyOTPAPIView(APIView):
             "access": str(refresh.access_token),
         }
 
-    # def revoke_existing_tokens(self, user):
-    #     try:
-    #         # Get all outstanding tokens for the user
-    #         outstanding_tokens = OutstandingToken.objects.filter(user=user)
-
-    #         print('OUTSTANDING TOKENS ', outstanding_tokens)
-
-    #         for token in outstanding_tokens:
-    #             # Blacklist each token
-    #             try:
-    #                 # Add the token to the blacklist
-    #                 BlacklistedToken.objects.create(token=token)
-    #                 print(f"Token {token} has been blacklisted.")
-    #             except Exception as e:
-    #                 print(f"Error blacklisting token {token}: {e}")
-
-        # except Exception as e:
-        #     print(f"Error retrieving outstanding tokens: {e}")
-
     def post(self, request, *args, **kwargs):
         serializer = VerifyOtpSerializer(data=request.data)
 
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         phone_number = request.data["phone_number"]
 
