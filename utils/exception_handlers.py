@@ -28,7 +28,7 @@ def custom_exception_handler(exception, context):
 
             response.data = {
                 "error_details": response.data,
-                "message": error_messages[0]
+                "message": error_messages[0] if error_messages[0] else "An unknown error occured"
             }
 
         return response
