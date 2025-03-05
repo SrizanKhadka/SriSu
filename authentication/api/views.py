@@ -8,6 +8,7 @@ from rest_framework import permissions
 from django.conf import settings
 from twilio.rest import Client
 from rest_framework_simplejwt.tokens import RefreshToken
+from authentication.api.serializers import UserModelSerializer
 
 class SendOTPAPIView(APIView):
 
@@ -88,18 +89,26 @@ class VerifyOTPAPIView(APIView):
             otp_status=OtpStatusChoices.EXPIRED
         )
         
-        print('PHONE NUMBER = ',phone_number)
-        user,created = UserModel.objects.update_or_create(
-            phone_number = phone_number, #Lookup_field
-            defaults={"is_phone_verified": True},  # Fields to update
-        )
+        print("PHONE NUMBER = ", phone_number)
+        user, created = UserModel.objects.update_or_create(
+        phone_number=phone_number,  # Lookup_field
+        defaults={"is_phone_verified": True},  # Fields to update
+)
 
         response_data = self.generate_tokens(user=user)
 
+        user_data = UserModelSerializer(user).data
+
         return Response(
-            {"message": "Phone number verified successfully.", "data": response_data},
-            status=status.HTTP_200_OK,
-        )
+        {
+        "message": "Phone number verified successfully.",
+        "data": {
+            "user": user_data,
+            "tokens": response_data,
+        },
+        },
+        status=status.HTTP_200_OK,
+)
 
 
 class SetUpProfileAPIView(APIView):
@@ -140,7 +149,8 @@ class SetUpProfileAPIView(APIView):
             serializer.save(is_profile_complete=True)
             return Response(
                 {
-                    "user": serializer.data,
+                    "message": "Profile setup successful",
+                    "data": {"user": serializer.data}
                 },
                 status=status.HTTP_200_OK,
             )

@@ -6,6 +6,12 @@ from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+class UserModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserModel
+        fields = "__all__" 
+
+
 
 class SendOtpSerializer(serializers.Serializer):
 
