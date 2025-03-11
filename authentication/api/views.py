@@ -9,12 +9,14 @@ from django.conf import settings
 from twilio.rest import Client
 from rest_framework_simplejwt.tokens import RefreshToken
 from authentication.api.serializers import UserModelSerializer
+from django.utils.timezone import now
+from datetime import timedelta
 
 class SendOTPAPIView(APIView):
 
     http_method_names = ["post"]
 
-    def get_object(self, phone_number):
+    def get_object_user(self, phone_number):
         try:
             return UserModel.objects.get(phone_number=phone_number)
         except UserModel.DoesNotExist:
@@ -22,49 +24,93 @@ class SendOTPAPIView(APIView):
 
     def generate_otp(self, phone_number):
         otp_code = random.randint(100000, 999999)
-        # Update the existing record or create a new one
+
         OtpModel.objects.update_or_create(
-            phone_number=phone_number,  # Lookup field
+            phone_number=phone_number,
             defaults={
                 "otp_code": str(otp_code),
-                "otp_status": str(OtpStatusChoices.NEW),
-            },  # Fields to update or set
+                "otp_status": OtpStatusChoices.NEW,
+                "last_request_time": now(),
+            },
         )
+
         return otp_code
 
-    def post(self, request, *args, **kwargs):
-        serializer = SendOtpSerializer(data=request.data)
+    def update_opt_attempts(self, phone_number):
+        otp_record = OtpModel.objects.filter(phone_number=phone_number).first()
+        if otp_record:
+            otp_record.otp_attempts += 1
+            otp_record.save()
 
-        serializer.is_valid(raise_exception=True)
-           
-        phone_number = serializer.validated_data["phone_number"]
-
-        user = self.get_object(phone_number)
-
+    def unverfiy_user(self, phone_number):
+        user = self.get_object_user(phone_number)
         if user:
-            UserModel.objects.filter(phone_number=phone_number).update(
-                is_phone_verified=False
-            )
+            user.is_phone_verified = False
+            user.save()
 
-        otp_code = self.generate_otp(phone_number=phone_number)
-
+    def send_otp_sms(self, phone_number, otp_code):
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-
         try:
             client.messages.create(
                 body=f"Your SriSu Verification Code is {otp_code}",
                 from_=settings.TWILIO_PHONE_NUMBER,
                 to=phone_number,
             )
+            self.update_opt_attempts(phone_number) # Update OTP attempts after the otp is sent successfully.
+            return True
+        except Exception as e:
+            print(f"OTP Send Error: {str(e)}")
+            return False
 
+    def can_request_otp(self, phone_number):
+
+        otp_record = OtpModel.objects.filter(phone_number=phone_number).first()
+
+        if otp_record:
+            now_time = now()
+            time_diff = now_time - otp_record.last_request_time
+
+            # Reset count if 10 minutes have passed
+            if time_diff > timedelta(minutes=10):
+                otp_record.otp_attempts = 0
+                otp_record.last_request_time = now_time
+                otp_record.save()
+                return True
+
+            # If less than 10 mins & attempts exceed limit, block request
+            if otp_record.otp_attempts >= 3:
+                return False
+
+            return True
+        return True
+
+    def post(self, request, *args, **kwargs):
+        serializer = SendOtpSerializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+
+        phone_number = serializer.validated_data["phone_number"]
+
+        self.unverfiy_user(phone_number)  # Unverify user's phone number if exists
+
+        if not self.can_request_otp(phone_number):
             return Response(
-                {"message": "OTP sent Successfully."}, status=status.HTTP_200_OK
+                {"error": "Too many OTP requests. Try again in few minutes."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
-        except Exception as exception:
-            print(f"SEND OTP EXCEPTION -- {str(exception)}")
+
+        otp_code = self.generate_otp(phone_number)
+
+        success = self.send_otp_sms(phone_number, otp_code)
+
+        if success:
             return Response(
-                {"error": str(exception)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"message": "OTP sent successfully."}, status=status.HTTP_200_OK
             )
+        return Response(
+            {"error": "Failed to send OTP."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 class VerifyOTPAPIView(APIView):
@@ -88,27 +134,27 @@ class VerifyOTPAPIView(APIView):
         OtpModel.objects.filter(phone_number=phone_number).update(
             otp_status=OtpStatusChoices.EXPIRED
         )
-        
+
         print("PHONE NUMBER = ", phone_number)
         user, created = UserModel.objects.update_or_create(
-        phone_number=phone_number,  # Lookup_field
-        defaults={"is_phone_verified": True},  # Fields to update
-)
+            phone_number=phone_number,  # Lookup_field
+            defaults={"is_phone_verified": True},  # Fields to update
+        )
 
         response_data = self.generate_tokens(user=user)
 
         user_data = UserModelSerializer(user).data
 
         return Response(
-        {
-        "message": "Phone number verified successfully.",
-        "data": {
-            "user": user_data,
-            "tokens": response_data,
-        },
-        },
-        status=status.HTTP_200_OK,
-)
+            {
+                "message": "Phone number verified successfully.",
+                "data": {
+                    "user": user_data,
+                    "tokens": response_data,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class SetUpProfileAPIView(APIView):
@@ -150,7 +196,7 @@ class SetUpProfileAPIView(APIView):
             return Response(
                 {
                     "message": "Profile setup successful",
-                    "data": {"user": serializer.data}
+                    "data": {"user": serializer.data},
                 },
                 status=status.HTTP_200_OK,
             )
