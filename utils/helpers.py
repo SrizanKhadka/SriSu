@@ -1,5 +1,6 @@
 from rest_framework.exceptions import ValidationError
 
+
 def validate_required_fields(data: dict, required_fields: dict):
 
     errors = {}

@@ -5,7 +5,6 @@ from datetime import timedelta
 from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from utils.helpers import validate_required_fields
 
 
 class UserModelSerializer(serializers.ModelSerializer):
@@ -75,14 +74,14 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
 
     def validate(self, data):
-        required_fields = {
-            "full_name": "Full Name",
-            "gender": "Gender",
-            "zodiac_sign": "Zodiac Sign",
-            "dob": "Date of Birth",
-            "mood": "Mood",
-        }
+        # required_fields = {
+        #     "full_name": "Full Name",
+        #     "gender": "Gender",
+        #     "zodiac_sign": "Zodiac Sign",
+        #     "dob": "Date of Birth",
+        #     "mood": "Mood",
+        # }
 
-        validate_required_fields(data, required_fields)
+        # validate_required_fields(data, required_fields)
 
         return data

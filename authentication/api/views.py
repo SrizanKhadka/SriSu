@@ -11,6 +11,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from authentication.api.serializers import UserModelSerializer
 from django.utils.timezone import now
 from datetime import timedelta
+from rest_framework.exceptions import ValidationError
+
 
 class SendOTPAPIView(APIView):
 
@@ -49,7 +51,9 @@ class SendOTPAPIView(APIView):
             user.save()
 
     def send_otp_sms(self, phone_number, otp_code):
+        
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        
         try:
             client.messages.create(
                 body=f"Your SriSu Verification Code is {otp_code}",
@@ -91,7 +95,7 @@ class SendOTPAPIView(APIView):
 
         phone_number = serializer.validated_data["phone_number"]
 
-        self.unverfiy_user(phone_number)  # Unverify user's phone number if exists
+        self.unverfiy_user(phone_number)  # Unverify user's phone number if exists while requesting for new otp.
 
         if not self.can_request_otp(phone_number):
             return Response(
@@ -158,46 +162,42 @@ class VerifyOTPAPIView(APIView):
 
 
 class SetUpProfileAPIView(APIView):
-
+    http_method_names = ["put", "patch"]  # Allow PUT and PATCH for updates
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, phone_number):
-        try:
-            return UserModel.objects.get(phone_number=phone_number)
-        except UserModel.DoesNotExist:
-            return None
+        """Fetch user object by phone number or return None if not found."""
+        return UserModel.objects.filter(phone_number=phone_number).first()
 
-    def post(self, request, *args, **kwargs):
-
+    def update(self, request, *args, **kwargs):
         phone_number = request.data.get("phone_number")
+
         if not phone_number:
-            return Response(
-                {"error": "Phone number is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            raise ValidationError({"error": "Phone number is required."})
 
         user = self.get_object(phone_number)
         if not user:
-            return Response(
-                {"error": "User with this phone number does not exist."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            raise ValidationError({"error": "User with this phone number does not exist."})
         elif not user.is_phone_verified:
-            return Response(
-                {"error": "Phone number is not verified yet."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            raise ValidationError({"error": "Phone number is not verified yet."})
 
-        serializer = SetUpProfileSerializer(
-            user, data=request.data, partial=True
-        )  # Partial update to allow updates only for provided fields
-        if serializer.is_valid():
-            serializer.save(is_profile_complete=True)
-            return Response(
-                {
-                    "message": "Profile setup successful",
-                    "data": {"user": serializer.data},
-                },
-                status=status.HTTP_200_OK,
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Partial update to allow updating only provided fields
+        serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(is_profile_complete=True)
+
+        return Response(
+            {
+                "message": "Profile updated successfully",
+                "data": {"user": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request, *args, **kwargs):
+        """PUT request for full update"""
+        return self.update(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        """PATCH request for partial update"""
+        return self.update(request, *args, **kwargs)
