@@ -56,6 +56,8 @@ class VerifyOtpSerializer(serializers.Serializer):
 
 
 class SetUpProfileSerializer(serializers.ModelSerializer):
+    
+    profile_photo = serializers.SerializerMethodField()
 
     class Meta:
         model = UserModel
@@ -71,14 +73,6 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "is_phone_verified",
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
-        required_fields = [
-            "phone_number",
-            "profile_photo",
-            "full_name",
-            "gender",
-            "zodiac_sign",
-            "dob",
-        ]
 
     def validate(self, data):
         validated_data = super().validate(data)
@@ -99,3 +93,9 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
                 )
 
         return validated_data
+    
+    def get_profile_photo(self, obj):
+        request = self.context.get("request") 
+        if obj.profile_photo:
+            return request.build_absolute_uri(obj.profile_photo.url)
+        return None

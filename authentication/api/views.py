@@ -187,7 +187,9 @@ class SetUpProfileAPIView(APIView):
             raise ValidationError({"error": "Phone number is not verified yet."})
 
         # Partial update to allow updating only provided fields
-        serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
+        # serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
+        serializer = SetUpProfileSerializer(user, data=request.data, partial=True, context={"request": request})
+
         serializer.is_valid(raise_exception=True)
         serializer.save(is_profile_complete=True)
 
