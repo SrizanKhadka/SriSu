@@ -1,16 +1,17 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from utils.choices import *
+from django.utils.timezone import now
 
 
 class CustomUserManager(BaseUserManager):
-    # def create_user(self, phone_number, password=None, **extra_fields):
-    #     if not phone_number:
-    #         raise ValueError("The Phone Number field must be set")
-    #     user = self.model(phone_number=phone_number, **extra_fields)
-    #     user.set_password(password)
-    #     user.save(using=self._db)
-    #     return user
+    def create_user(self, phone_number, password=None, **extra_fields):
+        if not phone_number:
+            raise ValueError("The Phone Number field must be set")
+        user = self.model(phone_number=phone_number, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
 
     def create_superuser(self, phone_number, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
@@ -62,6 +63,8 @@ class OtpModel(models.Model):
     otp_status = models.CharField(
         max_length=15, choices=OtpStatusChoices, default=OtpStatusChoices.NOTHING
     )
+    last_request_time = models.DateTimeField(default=now)
+    otp_attempts = models.IntegerField(default=0)
     created_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
 
