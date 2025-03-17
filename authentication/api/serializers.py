@@ -7,6 +7,12 @@ from utils.choices import OtpStatusChoices
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
+class UserModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserModel
+        fields = "__all__"
+
+
 class SendOtpSerializer(serializers.Serializer):
 
     phone_number = serializers.CharField(max_length=15)
@@ -65,25 +71,31 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "is_phone_verified",
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
-
-    def validate(self, data):
-        validated_data = super().validate(data)
-
         required_fields = [
+            "phone_number",
             "profile_photo",
             "full_name",
             "gender",
             "zodiac_sign",
             "dob",
-            "mood",
         ]
 
-        print(f"PHONE NUMBER = {data.get("phone_number")}")
+    def validate(self, data):
+        validated_data = super().validate(data)
+
+        # List of fields that cannot be empty
+        required_fields = [
+            "phone_number",
+            "full_name",
+            "gender",
+            "zodiac_sign",
+            "dob",
+        ]
 
         for field in required_fields:
-            if not data.get(field):
+            if field not in data or not data[field]:
                 raise serializers.ValidationError(
-                    {field: f"{field} cannot be null or empty."}
+                    f"{field.replace('_', ' ').capitalize()} cannot be empty."
                 )
 
         return validated_data
