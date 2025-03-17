@@ -10,8 +10,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 class UserModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserModel
-        fields = "__all__" 
-
+        fields = "__all__"
 
 
 class SendOtpSerializer(serializers.Serializer):
@@ -72,16 +71,31 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "is_phone_verified",
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
+        required_fields = [
+            "phone_number",
+            "profile_photo",
+            "full_name",
+            "gender",
+            "zodiac_sign",
+            "dob",
+        ]
 
     def validate(self, data):
-        # required_fields = {
-        #     "full_name": "Full Name",
-        #     "gender": "Gender",
-        #     "zodiac_sign": "Zodiac Sign",
-        #     "dob": "Date of Birth",
-        #     "mood": "Mood",
-        # }
+        validated_data = super().validate(data)
 
-        # validate_required_fields(data, required_fields)
+        # List of fields that cannot be empty
+        required_fields = [
+            "phone_number",
+            "full_name",
+            "gender",
+            "zodiac_sign",
+            "dob",
+        ]
 
-        return data
+        for field in required_fields:
+            if field not in data or not data[field]:
+                raise serializers.ValidationError(
+                    f"{field.replace('_', ' ').capitalize()} cannot be empty."
+                )
+
+        return validated_data

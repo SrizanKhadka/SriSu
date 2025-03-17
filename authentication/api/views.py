@@ -51,16 +51,18 @@ class SendOTPAPIView(APIView):
             user.save()
 
     def send_otp_sms(self, phone_number, otp_code):
-        
+
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        
+
         try:
             client.messages.create(
                 body=f"Your SriSu Verification Code is {otp_code}",
                 from_=settings.TWILIO_PHONE_NUMBER,
                 to=phone_number,
             )
-            self.update_opt_attempts(phone_number) # Update OTP attempts after the otp is sent successfully.
+            self.update_opt_attempts(
+                phone_number
+            )  # Update OTP attempts after the otp is sent successfully.
             return True
         except Exception as e:
             print(f"OTP Send Error: {str(e)}")
@@ -95,7 +97,9 @@ class SendOTPAPIView(APIView):
 
         phone_number = serializer.validated_data["phone_number"]
 
-        self.unverfiy_user(phone_number)  # Unverify user's phone number if exists while requesting for new otp.
+        self.unverfiy_user(
+            phone_number
+        )  # Unverify user's phone number if exists while requesting for new otp.
 
         if not self.can_request_otp(phone_number):
             return Response(
@@ -166,7 +170,6 @@ class SetUpProfileAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, phone_number):
-        """Fetch user object by phone number or return None if not found."""
         return UserModel.objects.filter(phone_number=phone_number).first()
 
     def update(self, request, *args, **kwargs):
@@ -177,7 +180,9 @@ class SetUpProfileAPIView(APIView):
 
         user = self.get_object(phone_number)
         if not user:
-            raise ValidationError({"error": "User with this phone number does not exist."})
+            raise ValidationError(
+                {"error": "User with this phone number does not exist."}
+            )
         elif not user.is_phone_verified:
             raise ValidationError({"error": "Phone number is not verified yet."})
 
@@ -195,9 +200,7 @@ class SetUpProfileAPIView(APIView):
         )
 
     def put(self, request, *args, **kwargs):
-        """PUT request for full update"""
         return self.update(request, *args, **kwargs)
 
     def patch(self, request, *args, **kwargs):
-        """PATCH request for partial update"""
         return self.update(request, *args, **kwargs)
