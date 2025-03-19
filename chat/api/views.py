@@ -46,7 +46,7 @@ class CoupleConnectionView(ModelViewSet):
 
             return Response(
                 {
-                    "message": "Connection request sent.",
+                    "message": "Love request sent.",
                     "data": self.serializer_class(connection).data,
                 },
                 status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -54,7 +54,7 @@ class CoupleConnectionView(ModelViewSet):
 
         return Response(
             {
-                "message": "Connection already exists.",
+                "message": "Love request already exists.",
                 "data": self.serializer_class(connection).data,
             },
             status=status.HTTP_200_OK,
@@ -100,9 +100,9 @@ class CoupleConnectionView(ModelViewSet):
 
             if connection and couple:  # if couple creation is failed,
                 message = (
-                    "Connection accepted."
+                    "Love request accepted."
                     if connection_status == CoupleConnectionStatus.ACCEPTED
-                    else "Connection rejected."
+                    else "Sorry! Love request rejected."
                 )
                 return Response(
                     {
@@ -160,7 +160,120 @@ class CoupleConnectionView(ModelViewSet):
             raise ValueError(f"Data inconsistency detected: {str(e)}")
         except Exception as e:
             raise ValueError(f"Unexpected error occurred: {str(e)}")
+        
+class CoupleConnectionListRequest(ModelViewSet):
+    pass
 
+class SingleConnectionView(ModelViewSet):
+    serializer_class = SingleConnectionSerializer
+    queryset = SingleConnectionModel.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_connection(self, sender_number, receiver_number):
+        """
+        Retrieves a connection between two numbers, regardless of direction.
+        """
+        try:
+            return SingleConnectionModel.objects.get(
+                Q(sender_number=sender_number, receiver_number=receiver_number)
+                | Q(sender_number=receiver_number, receiver_number=sender_number)
+            )
+        except SingleConnectionModel.DoesNotExist:
+            return None
+    
+    def create(self, request, *args, **kwargs):
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        sender_number = request.data["sender_number"]
+        receiver_number = request.data["receiver_number"]
+
+        connection = self.get_connection(sender_number, receiver_number)
+        
+        if not connection or connection.connection_status in [
+            SingleConnectionStaus.REJECTED,
+            SingleConnectionStaus.NOTHING,
+        ]:
+            connection, created = SingleConnectionModel.objects.update_or_create(
+                sender_number=sender_number,
+                receiver_number=receiver_number,
+                defaults={"connection_status": SingleConnectionStaus.PENDING},
+            )
+
+            return Response(
+                {
+                    "message": "Crush request sent.",
+                    "data": self.serializer_class(connection).data,
+                },
+                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            )
+    
+    def perform_create(self, serializer):
+        return serializer.save()
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            sender_number, receiver_number = self.validate_request_data(request)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        connection_status = request.data.get("connection_status")
+        connection = self.get_connection(
+            sender_number=sender_number, receiver_number=receiver_number
+        )
+        
+        if not connection:
+            return Response(
+                {"error": "Connection does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        if (
+            connection
+            and connection.connection_status == SingleConnectionStaus.ACCEPTED
+        ) and connection_status == SingleConnectionStaus.REJECTED:
+            return Response(
+                {"error": "Unsupported operation."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if connection_status in [
+            SingleConnectionStaus.ACCEPTED,
+            SingleConnectionStaus.REJECTED,
+        ]:
+            connection.connection_status = connection_status
+            connection.save()
+            
+            if connection:  
+                message = (
+                    "Crush request accepted."
+                    if connection_status == CoupleConnectionStatus.ACCEPTED
+                    else "Sorry! Love request rejected."
+                )
+                return Response(
+                    {
+                        "message": message,
+                        "couple_connection": self.serializer_class(connection).data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                connection.connection_status = CoupleConnectionStatus.PENDING
+                connection.save()
+                return Response(
+                    {"error": "Couple connection failed."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        
+        return Response(
+            {"error": "Unsupported operation."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+            
+
+
+    
 
 class CoupleAPIView(ModelViewSet):
     serializer_class = CoupleModelSerializer

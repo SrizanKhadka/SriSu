@@ -49,6 +49,11 @@ class CoupleConnectionStatus(TextChoices):
     REJECTED = "REJECTED", "Rejected"
     BREAKUP = "BREAK-UP", "Break-Up"
 
+class SingleConnectionStaus(TextChoices):
+    NOTHING = "NOTHING", "Nothing"
+    PENDING = "PENDING", "Pending"
+    ACCEPTED = "ACCEPTED", "Accepted"
+    REJECTED = "REJECTED", "Rejected"
 
 class MessageType(TextChoices):
     TEXT = "TEXT", "Text"

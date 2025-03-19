@@ -1,5 +1,5 @@
 from django.db import models
-from utils.choices import CoupleConnectionStatus
+from utils.choices import CoupleConnectionStatus, SingleConnectionStaus
 from authentication.models import UserModel
 from utils.choices import MessageType, MessageReaction
 
@@ -82,7 +82,30 @@ class PhotoAlbumModel(models.Model):
 class MediaModel(models.Model):
     file = models.FileField(upload_to="chats_media/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+class SingleConnectionModel(models.Model):
+    sender_number = models.CharField(max_length=15)
+    receiver_number = models.CharField(max_length=15)
+    connection_status = models.CharField(
+        max_length=20,
+        choices=SingleConnectionStaus,
+        default=SingleConnectionStaus.NOTHING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
+    class Meta:
+        unique_together = [
+            "sender_number",
+            "receiver_number",
+        ]  # Prevent duplicate requests
+
+        ordering = ["-updated_at"]
+        verbose_name = "Couple_Connection"
+
+    def __str__(self):
+        return f"{self.sender_number}-{self.receiver_number}"
+
 class MessageModel(models.Model):
     couple = models.ForeignKey(
         CoupleModel, on_delete=models.CASCADE, related_name="messages"
