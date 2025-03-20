@@ -22,6 +22,9 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Sender_number is Invalid!")
         elif not is_number_valid(number=receiver_number):
             raise serializers.ValidationError("Receiver_number is Invalid!")
+        
+        if is_number_same(sender_number, receiver_number):
+            raise serializers.ValidationError("Sender and Receiver number can't be same.")
 
         if not user_with_number_exists(number=sender_number):
             raise serializers.ValidationError("User doesn't exists")
