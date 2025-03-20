@@ -17,10 +17,10 @@ class CoupleConnectionModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = [
-            "sender_number",
-            "receiver_number",
-        ]  # Prevent duplicate requests
+        # unique_together = [
+        #     "sender_number",
+        #     "receiver_number",
+        # ]  # Prevent duplicate requests
 
         ordering = ["-updated_at"]
         verbose_name = "Couple_Connection"
@@ -95,10 +95,10 @@ class SingleConnectionModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = [
-            "sender_number",
-            "receiver_number",
-        ]  # Prevent duplicate requests
+        # unique_together = [
+        #     "sender_number",
+        #     "receiver_number",
+        # ]  # Prevent duplicate requests
 
         ordering = ["-updated_at"]
         verbose_name = "Couple_Connection"

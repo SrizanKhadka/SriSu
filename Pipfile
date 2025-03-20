@@ -15,6 +15,7 @@ channels = {extras = ["daphne"], version = "*"}
 channels-redis = "*"
 websockets = "*"
 pydantic = "*"
+django-filter = "*"
 
 [dev-packages]
 

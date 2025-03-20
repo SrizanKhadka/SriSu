@@ -16,45 +16,20 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         receiver_number = validated_data["receiver_number"]
 
         print(f"SENDER_NUMBER = {sender_number}")
-        print("IS NUMBER VALID", self.is_number_valid(number=sender_number))
+        print("IS NUMBER VALID", is_number_valid(number=sender_number))
 
-        if not self.is_number_valid(number=sender_number):
+        if not is_number_valid(number=sender_number):
             raise serializers.ValidationError("Sender_number is Invalid!")
-        elif not self.is_number_valid(number=receiver_number):
+        elif not is_number_valid(number=receiver_number):
             raise serializers.ValidationError("Receiver_number is Invalid!")
 
-        if not self.user_with_number_exists(number=sender_number):
+        if not user_with_number_exists(number=sender_number):
             raise serializers.ValidationError("User doesn't exists")
-        elif not self.user_with_number_exists(number=receiver_number):
+        elif not user_with_number_exists(number=receiver_number):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
-
-        is_sender_engaged = self.is_already_engaged(number=sender_number)
-        is_receiver_engaged = self.is_already_engaged(number=receiver_number)
-
-        if is_sender_engaged:
-            raise serializers.ValidationError({"message": "You are already engaged!"})
-
-        if is_receiver_engaged:
-            raise serializers.ValidationError(
-                {"message": "Requested Person is already engaged!"}
-            )
 
         return validated_data
 
-    def is_number_valid(self, number):
-        return number.startswith("+") and len(number) > 11
-
-    def user_with_number_exists(self, number):
-        return UserModel.objects.filter(phone_number=number).exists()
-
-    def is_already_engaged(self, number):
-        return CoupleConnectionModel.objects.filter(
-            Q(sender_number=number, connection_status=CoupleConnectionStatus.ACCEPTED)
-            | Q(
-                receiver_number=number,
-                connection_status=CoupleConnectionStatus.ACCEPTED,
-            )
-        ).exists()
 
 
 class CouplePhotoAlbumSerializer(serializers.ModelSerializer):
