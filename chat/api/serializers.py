@@ -75,12 +75,15 @@ class SingleConnectionSerializer(serializers.ModelSerializer):
         receiver_number = validated_data["receiver_number"]
 
         print(f"SENDER_NUMBER = {sender_number}")
-        print("IS NUMBER VALID", self.is_number_valid(number=sender_number))
+        print("IS NUMBER VALID", is_number_valid(number=sender_number))
 
         if not is_number_valid(number=sender_number):
             raise serializers.ValidationError("Sender_number is Invalid!")
         elif not is_number_valid(number=receiver_number):
             raise serializers.ValidationError("Receiver_number is Invalid!")
+        
+        if is_number_same(sender_number, receiver_number):
+            raise serializers.ValidationError("Sender and Receiver number can't be same.")
 
         if not user_with_number_exists(number=sender_number):
             raise serializers.ValidationError("User doesn't exists")

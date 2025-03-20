@@ -54,6 +54,7 @@ class SingleConnectionStaus(TextChoices):
     PENDING = "PENDING", "Pending"
     ACCEPTED = "ACCEPTED", "Accepted"
     REJECTED = "REJECTED", "Rejected"
+    BLOCKED = "BLOCKED", "Blocked"
 
 class MessageType(TextChoices):
     TEXT = "TEXT", "Text"
