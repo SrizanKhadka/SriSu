@@ -125,9 +125,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             reply_to=reply_to,
         )
     
-
-
-
     validate = URLValidator()
 
     def validateURL(self,url):

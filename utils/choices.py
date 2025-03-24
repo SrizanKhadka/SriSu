@@ -69,3 +69,9 @@ class MessageReaction(TextChoices):
     SAD = "SAD", "Sad"
     ANGRY = "ANGRY", "Angry"
     LOVE = "Love", "Love"
+
+
+class DeleteOption(TextChoices):
+    NOT_DELETED = "NOT_DELETED", "Not deleted"
+    DELETE_FOR_ME = "DELETE_FOR_ME", "Delete for me"
+    DELETE_FOR_EVERYONE = "DELETE_FOR_EVERYONE", "Delete for everyone"

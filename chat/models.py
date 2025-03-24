@@ -1,7 +1,7 @@
 from django.db import models
 from utils.choices import CoupleConnectionStatus, SingleConnectionStaus
 from authentication.models import UserModel
-from utils.choices import MessageType, MessageReaction
+from utils.choices import *
 
 
 class CoupleConnectionModel(models.Model):
@@ -107,15 +107,17 @@ class SingleConnectionModel(models.Model):
         return f"{self.sender_number}-{self.receiver_number}"
 
 class MessageModel(models.Model):
-    couple = models.ForeignKey(
-        CoupleModel, on_delete=models.CASCADE, related_name="messages"
-    )
-    sender = models.ForeignKey(
-        UserModel, on_delete=models.CASCADE, related_name="sent_messages"
-    )
-    message_type = models.CharField(
-        max_length=10, choices=MessageType, default=MessageType.TEXT
-    )
+    
+    #chat associates
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="messages")
+    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="messages")
+    
+    #sender and receiver
+    sender = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="sent_messages")
+    receiver = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="received_messages",null=True,blank=True)
+    
+    #Message contents
+    message_type = models.CharField(max_length=10, choices=MessageType, default=MessageType.TEXT)
     text = models.TextField(null=True, blank=True)
     media = models.FileField(
         upload_to="messages/media/",
@@ -123,30 +125,40 @@ class MessageModel(models.Model):
         blank=True,
     )
     media_url = models.URLField(max_length=500,null=True,blank=True)
+    sticker_url = models.URLField(blank=True, null=True)
+    medias = models.ManyToManyField("MediaModel", related_name="messages", blank=True)     # Many-to-Many Relationship with MediaModel (for multiple media per message)
+    
+    #Reply to message
     reply_to = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="replies"
     )
+    
+    #Message status
     is_deleted = models.BooleanField(default=False)
-    deleted_message = models.CharField(max_length=100, null=True, blank=True)
     is_read = models.BooleanField(default=False)
     is_delivered = models.BooleanField(default=False)
+    
+    #Message actions
+    deleted_message = models.CharField(max_length=100, null=True, blank=True)
+    delete_option = models.CharField(
+        max_length=10, 
+        choices=DeleteOption.choices, 
+        default=DeleteOption.NOT_DELETED
+    )
+    is_edited = models.BooleanField(default=False)
+    
+    #reactions
+    reactions = models.JSONField(default=dict)  # Example: { "user_id_1": "❤️", "user_id_2": "😂" }
+
+    
+    #Timestamps
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["timestamp"]
+        ordering = ["-timestamp"]
 
     def __str__(self):
         return f"{self.couple.male_partner.full_name} - {self.couple.female_partner.full_name}"
-
-    def delete_for_everyone(self):
-        """Marks the message as deleted for all users."""
-        self.is_deleted = True
-        self.save()
-
-    def delete_for_self(self, user):
-        """Implements user-specific deletion (if necessary in the app logic)."""
-        pass  # Custom logic for handling "delete for self" if required.
-
 
 class MessageReaction(models.Model):
     messageModel = models.ForeignKey(
