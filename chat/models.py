@@ -2,6 +2,7 @@ from django.db import models
 from utils.choices import CoupleConnectionStatus, SingleConnectionStaus
 from authentication.models import UserModel
 from utils.choices import *
+import uuid
 
 
 class CoupleConnectionModel(models.Model):
@@ -106,9 +107,11 @@ class SingleConnectionModel(models.Model):
     def __str__(self):
         return f"{self.sender_number}-{self.receiver_number}"
 
+
 class MessageModel(models.Model):
     
     #chat associates
+    chat_room = models.ForeignKey("ChatRoom", on_delete=models.CASCADE, related_name="messages")
     couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="messages")
     singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="messages")
     
@@ -126,7 +129,7 @@ class MessageModel(models.Model):
     )
     media_url = models.URLField(max_length=500,null=True,blank=True)
     sticker_url = models.URLField(blank=True, null=True)
-    medias = models.ManyToManyField("MediaModel", related_name="messages", blank=True)     # Many-to-Many Relationship with MediaModel (for multiple media per message)
+    medias = models.ManyToManyField(MediaModel, related_name="messages", blank=True)     # Many-to-Many Relationship with MediaModel (for multiple media per message)
     
     #Reply to message
     reply_to = models.ForeignKey(
@@ -150,7 +153,6 @@ class MessageModel(models.Model):
     #reactions
     reactions = models.JSONField(default=dict)  # Example: { "user_id_1": "❤️", "user_id_2": "😂" }
 
-    
     #Timestamps
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -168,3 +170,37 @@ class MessageReaction(models.Model):
     reaction = models.CharField(
         max_length=20, choices=MessageReaction, null=True, blank=True
     )
+
+
+class ChatRoom(models.Model):
+    
+    CHAT_TYPE_CHOICES = [
+        ("single", "Single"),
+        ("couple", "Couple"),
+    ]
+    
+    id = models.UUIDField(primary_key=True, unique=True, default=uuid.uuid4, editable=False)
+    chat_type = models.CharField(max_length=10, choices=CHAT_TYPE_CHOICES, default="single")
+
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="chat_rooms")
+    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="chat_rooms")
+    
+    # Messages
+    messages = models.ManyToManyField(MessageModel, blank=True, related_name="chat_rooms")
+
+    # Chat metadata
+    last_message = models.ForeignKey(MessageModel, null=True, blank=True, on_delete=models.SET_NULL, related_name="last_message_chat")
+    unread_count = models.JSONField(default=dict)  # Example: {"user_1": 5, "user_2": 3}
+    
+    # Extra features
+    is_typing = models.JSONField(default=dict)  # Example: {"user_1": True, "user_2": False}
+    pinned_messages = models.ManyToManyField(MessageModel, blank=True, related_name="pinned_in_chat")
+    settings = models.JSONField(default=dict)  # Example: {"muted": True, "archived": False}
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "ChatRoom"
+        verbose_name_plural = "ChatRooms"
