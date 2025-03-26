@@ -111,9 +111,9 @@ class SingleConnectionModel(models.Model):
 class MessageModel(models.Model):
     
     #chat associates
-    chat_room = models.ForeignKey("ChatRoom", on_delete=models.CASCADE, related_name="messages")
-    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="messages")
-    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="messages")
+    chat_room = models.ForeignKey("chat.ChatRoom", on_delete=models.CASCADE, related_name="message_models")
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="message_models")
+    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="message_models")
     
     #sender and receiver
     sender = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="sent_messages")
@@ -129,7 +129,7 @@ class MessageModel(models.Model):
     )
     media_url = models.URLField(max_length=500,null=True,blank=True)
     sticker_url = models.URLField(blank=True, null=True)
-    medias = models.ManyToManyField(MediaModel, related_name="messages", blank=True)     # Many-to-Many Relationship with MediaModel (for multiple media per message)
+    medias = models.ManyToManyField(MediaModel, related_name="message_models", blank=True)     # Many-to-Many Relationship with MediaModel (for multiple media per message)
     
     #Reply to message
     reply_to = models.ForeignKey(
@@ -144,7 +144,7 @@ class MessageModel(models.Model):
     #Message actions
     deleted_message = models.CharField(max_length=100, null=True, blank=True)
     delete_option = models.CharField(
-        max_length=10, 
+        max_length=20, 
         choices=DeleteOption.choices, 
         default=DeleteOption.NOT_DELETED
     )
