@@ -148,6 +148,7 @@ class MessageModel(models.Model):
         choices=DeleteOption.choices, 
         default=DeleteOption.NOT_DELETED
     )
+    message_deletion_dict = models.JSONField()
     is_edited = models.BooleanField(default=False)
     
     #reactions

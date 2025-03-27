@@ -5,6 +5,8 @@ from asgiref.sync import sync_to_async
 from django.db.models import Q
 from chat.models import ChatRoom, MessageModel
 from authentication.models import UserModel
+from channels.db import database_sync_to_async
+from utils.choices import DeleteOption
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -22,8 +24,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
-    async def receive(self, text_data):
-        data = json.loads(text_data)
+    async def receive(self, message_data):
+        data = json.loads(message_data)
         action = data.get("action")
 
         if action == "send_message":
@@ -38,11 +40,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.handle_react_to_message(data)
 
     async def handle_send_message(self, data):
+        couple = data.get("couple")
+        singles = data.get("single")
         sender_id = data.get("sender_id")
+        receiver_id = data.get("receiver_id")
         text = data.get("text", "")
         message_type = data.get("message_type", "text")
-        media_url = data.get("media_url")
+        medias = data.get("medias")
         reply_to_id = data.get("reply_to")
+        timestamp = data.get("timestamp")
         
         sender = await self.get_user(sender_id)
         if not sender or not self.chat_room:
@@ -52,10 +58,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
         new_message = await self.create_message(
             chat_room=self.chat_room,
+            couple = couple,
+            singles = singles,
             sender=sender,
-            text=text,
+            receiver=receiver_id,
             message_type=message_type,
-            media_url=media_url,
+            text=text,
+            is_delivered=True,
+            timestamp = timestamp,
+            medias=medias,
             reply_to=reply_to,
         )
         
@@ -67,26 +78,76 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def handle_edit_message(self, data):
         message_id = data.get("message_id")
         new_text = data.get("new_text")
+        is_read = data.get("is_read", False)
         
         message = await self.get_message(message_id)
         if message:
             message.text = new_text
+            message.is_delivered = True
+            message.is_read = is_read
+            message.is_edited = True
             await self.save_message(message)
             
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {"type": "chat.message", "message": self.serialize_message(message)}
             )
+    
+    async def handle_mark_messages_read(self, data):
+        receiver_id = data.get("receiver_id")
+    
+        if not receiver_id:
+            return
+
+        # Fetch all unread messages sent to this receiver
+        unread_messages = await database_sync_to_async(
+        lambda: list(MessageModel.objects.filter(receiver=receiver_id, is_read=False))
+        )()
+
+        if unread_messages:
+        # Bulk update messages as read
+            for message in unread_messages:
+                message.is_read = True
+
+            await database_sync_to_async(MessageModel.objects.bulk_update)(
+            unread_messages, ["is_read"]
+            )
+
+        # Notify all participants that messages are now read
+            await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                "type": "chat.messages_read",
+                "message_ids": [msg.id for msg in unread_messages],
+            },
+         )
+
 
     async def handle_delete_message(self, data):
         message_id = data.get("message_id")
+        delete_option = data.get('delete_option')
+        message = await self.get_message(messasge_id=message_id)
         
-        message = await self.get_message(message_id)
-        if message:
-            await self.delete_message(message)
-            await self.channel_layer.group_send(
+        if message.delete_option == DeleteOption.DELETE_FOR_EVERYONE or message.delete_option == DeleteOption.DELETE_FOR_ME:
+           message.is_deleted = True
+           message.delete_option = DeleteOption.DELETED
+           await self.channel_layer.group_send(
                 self.room_group_name,
                 {"type": "chat.message.deleted", "message_id": message_id}
+            )
+        elif delete_option == DeleteOption.DELETE_FOR_ME:
+            message.delete_option =  DeleteOption.DELETE_FOR_ME
+            message.deleted_message = "This message was deleted."
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {"type": "chat.message.deleted_for_me", "message_id": message_id}
+            )
+        else:
+            message.delete_option =  DeleteOption.DELETE_FOR_EVERYONE
+            message.deleted_message = "This message was deleted."
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {"type": "chat.message.deleted_for_everyone", "message_id": message_id}
             )
     
     async def handle_react_to_message(self, data):
@@ -155,7 +216,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "sender_id": str(message.sender.id),
             "text": message.text,
             "message_type": message.message_type,
-            "media_url": message.media_url if message.media_url else None,
+            "medias": message.medias if message.medias else None,
             "reply_to": str(message.reply_to.id) if message.reply_to else None,
             "reaction": message.reaction,
             "is_read": message.is_read,
