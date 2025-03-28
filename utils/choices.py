@@ -76,3 +76,8 @@ class DeleteOption(TextChoices):
     NOT_DELETED = "NOT_DELETED", "Not deleted"
     DELETE_FOR_ME = "DELETE_FOR_ME", "Delete for me"
     DELETE_FOR_EVERYONE = "DELETE_FOR_EVERYONE", "Delete for everyone"
+    CONVERSATION_DELETED = "CONVERSATION_DELETED", "Conversation deleted"
+
+class ChatTypeChoices(TextChoices):
+    SINGLE = "single", "Single"
+    COUPLE = "couple", "Couple"

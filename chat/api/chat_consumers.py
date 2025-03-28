@@ -6,7 +6,9 @@ from django.db.models import Q
 from chat.models import ChatRoom, MessageModel
 from authentication.models import UserModel
 from channels.db import database_sync_to_async
-from utils.choices import DeleteOption
+from utils.choices import DeleteOption, ChatTypeChoices
+import asyncio
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -121,34 +123,146 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "message_ids": [msg.id for msg in unread_messages],
             },
          )
-
-
-    async def handle_delete_message(self, data):
+    
+    async def handle_delete_for_me(self, data):
         message_id = data.get("message_id")
-        delete_option = data.get('delete_option')
-        message = await self.get_message(messasge_id=message_id)
+        user_id = data.get("user_id")
         
-        if message.delete_option == DeleteOption.DELETE_FOR_EVERYONE or message.delete_option == DeleteOption.DELETE_FOR_ME:
-           message.is_deleted = True
-           message.delete_option = DeleteOption.DELETED
-           await self.channel_layer.group_send(
-                self.room_group_name,
-                {"type": "chat.message.deleted", "message_id": message_id}
-            )
-        elif delete_option == DeleteOption.DELETE_FOR_ME:
-            message.delete_option =  DeleteOption.DELETE_FOR_ME
-            message.deleted_message = "This message was deleted."
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {"type": "chat.message.deleted_for_me", "message_id": message_id}
-            )
+        message = await self.get_message(message_id)
+        if message:
+            delete_entry = {
+                "user_id": user_id,
+                "delete_option": DeleteOption.DELETE_FOR_ME,
+                "deleted_message": None,
+            }
+            
+             # Check if the user has already deleted this message
+            
+            if not any(entry["user_id"] == user_id for entry in message.deleted_for):
+             message.deleted_for.append(delete_entry)
+
+            await self.save_message(message)
+
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {"type": "chat.message", "message": self.serialize_message(message)}
+        )
+    
+    async def handle_delete_for_everyone(self, data):
+        message_id = data.get("message_id")
+        user_id = data.get("user_id")
+
+        message = await self.get_message(message_id)
+     
+        if message:
+            
+         sender = message.sender.id
+         delete_message = "You deleted this message" if sender == user_id else "This message was deleted"         
+
+         delete_entry = {
+            "user_id": user_id,
+            "option": DeleteOption.DELETE_FOR_EVERYONE,
+            "delete_message": delete_message
+            }
+
+            # Replace any existing delete entry for the same user
+         message.deleted_for = [
+            entry for entry in message.deleted_for if entry["user_id"] != user_id
+            ]
+         message.deleted_for.append(delete_entry)
+
+         message.deleted_message = delete_message
+
+         await self.save_message(message)
+
+         # Notify both sender and receiver
+         await self.channel_layer.group_send(
+            self.room_group_name,
+            {"type": "chat.message", "message": self.serialize_message(message)}
+         )
+    
+    async def handle_bulk_delete_message(self, data):
+        message_ids = data.get("message_ids")
+        user_id = data.get("user_id")
+        delete_option = data.get("delete_option")
+
+        messages = await self.get_messages(message_ids)  # Fetch messages in bulk
+        tasks = []  # Store async tasks for execution
+
+        for message in messages:
+         delete_data = {
+            "message_id": message.id,
+            "user_id": user_id,
+            }
+        
+        if delete_option == DeleteOption.DELETE_FOR_ME:
+            tasks.append(self.handle_delete_for_me(delete_data))  
         else:
-            message.delete_option =  DeleteOption.DELETE_FOR_EVERYONE
-            message.deleted_message = "This message was deleted."
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {"type": "chat.message.deleted_for_everyone", "message_id": message_id}
+            tasks.append(self.handle_delete_for_everyone(delete_data)) 
+            
+        # Run all delete tasks concurrently
+        await asyncio.gather(*tasks)
+
+        # Notify all users in the chat about bulk deletion
+        await self.channel_layer.group_send(
+        self.room_group_name,
+        {"type": "chat.message_bulk_delete", "message_ids": message_ids}
+        )
+    
+    async def handle_delete_conversation(self, data):
+        chat_type = data.get("chat_type")
+        user_id = data.get("user_id")
+
+        messages = []
+
+        if chat_type == ChatTypeChoices.SINGLE:
+            single_user = data.get("singles")
+            if not single_user:
+             return
+
+            messages = await database_sync_to_async(list)(
+            MessageModel.objects.filter(singles=single_user)
             )
+
+        elif chat_type == ChatTypeChoices.COUPLE:
+            couple = data.get("couple")
+            if not couple:
+                return
+        
+            messages = await database_sync_to_async(list)(
+            MessageModel.objects.filter(couple=couple)
+            )
+
+        if messages:
+            for message in messages:
+                
+                delete_entry = {
+                    "user_id": user_id,
+                    "delete_option": DeleteOption.CONVERSATION_DELETED,
+                    "deleted_message": None,
+                }
+                
+                message.delete_for = delete_entry
+
+            # Bulk update messages
+            await database_sync_to_async(MessageModel.objects.bulk_update)(
+             messages, ["delete_for"]
+            )
+
+            # Notify all users in the chat about the conversation deletion
+            await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                "type": "chat.conversation_deleted",
+                "user_id": user_id,
+                "message_ids": [msg.id for msg in messages]
+            }
+            )
+    
+    async def delete_message(self, data):
+        message_id = data.get("message_id")
+        user_id = data.get("user_id")
+          
     
     async def handle_react_to_message(self, data):
         message_id = data.get("message_id")

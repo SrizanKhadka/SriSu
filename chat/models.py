@@ -151,6 +151,8 @@ class MessageModel(models.Model):
     message_deletion_dict = models.JSONField()
     is_edited = models.BooleanField(default=False)
     
+    delete_for = models.JSONField(default=dict)
+    
     #reactions
     reactions = models.JSONField(default=dict)  # Example: { "user_id_1": "❤️", "user_id_2": "😂" }
 
@@ -175,13 +177,8 @@ class MessageReaction(models.Model):
 
 class ChatRoom(models.Model):
     
-    CHAT_TYPE_CHOICES = [
-        ("single", "Single"),
-        ("couple", "Couple"),
-    ]
-    
     id = models.UUIDField(primary_key=True, unique=True, default=uuid.uuid4, editable=False)
-    chat_type = models.CharField(max_length=10, choices=CHAT_TYPE_CHOICES, default="single")
+    chat_type = models.CharField(max_length=10, choices=ChatTypeChoices, default="single")
 
     couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="chat_rooms")
     singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="chat_rooms")
