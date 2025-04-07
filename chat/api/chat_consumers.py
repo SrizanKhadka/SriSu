@@ -258,10 +258,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "message_ids": [msg.id for msg in messages]
             }
             )
-    
-    async def delete_message(self, data):
-        message_id = data.get("message_id")
-        user_id = data.get("user_id")
           
     
     async def handle_react_to_message(self, data):
