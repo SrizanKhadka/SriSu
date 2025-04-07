@@ -37,7 +37,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         elif action == "edit_message":
             await self.handle_edit_message(data)
         elif action == "delete_message":
-            await self.handle_delete_message(data)
+            await self.handle_bulk_delete_message(data)
         elif action == "react_to_message":
             await self.handle_react_to_message(data)
 
