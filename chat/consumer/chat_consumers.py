@@ -9,6 +9,7 @@ from channels.db import database_sync_to_async
 from utils.choices import DeleteOption, ChatTypeChoices
 import asyncio
 
+
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.chat_room_id = self.scope["url_route"]["kwargs"]["chat_room_id"]
@@ -149,27 +150,27 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             # Notify users in the room
             await self.channel_layer.group_send(
-            self.room_group_name,
-            {"type": "chat.message", "message": self.serialize_message(message)},
+                self.room_group_name,
+                {"type": "chat.message", "message": self.serialize_message(message)},
             )
 
     async def handle_delete_for_everyone(self, data):
         message_id = data.get("message_id")
-        user_id = data.get("user_id") 
+        user_id = data.get("user_id")
 
         message = await self.get_message(message_id)
 
         if message:
             sender_id = message.sender.id
             delete_message = (
-            "You deleted this message"
-            if sender_id == user_id
-            else "This message was deleted"
+                "You deleted this message"
+                if sender_id == user_id
+                else "This message was deleted"
             )
 
             delete_entry = {
-            "option": DeleteOption.DELETE_FOR_EVERYONE,
-            "delete_message": delete_message,
+                "option": DeleteOption.DELETE_FOR_EVERYONE,
+                "delete_message": delete_message,
             }
 
             if not message.deleted_for:
@@ -184,12 +185,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             # Notify both sender and receiver
             await self.channel_layer.group_send(
                 self.room_group_name,
-                {
-                "type": "chat.message",
-                "message": self.serialize_message(message)
-                },
+                {"type": "chat.message", "message": self.serialize_message(message)},
             )
-
 
     async def handle_bulk_delete_message(self, data):
         message_ids = data.get("message_ids")
@@ -215,8 +212,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             # Notify all users in the chat about bulk deletion
         await self.channel_layer.group_send(
-        self.room_group_name,
-        {"type": "chat.message_bulk_delete", "message_ids": message_ids},
+            self.room_group_name,
+            {"type": "chat.message_bulk_delete", "message_ids": message_ids},
         )
 
     async def handle_delete_conversation(self, data):
@@ -289,10 +286,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 {"type": "chat.message", "message": self.serialize_message(message)},
             )
 
-    async def handle_fetch_messages(self, data):
+    async def handle_fetch_messages(self, user, data):
         page = int(data.get("page", 1))
         page_size = int(data.get("page_size", 20))
-        messages = await self.get_paginated_messages(self.chat_room, page, page_size)
+        messages = await self.get_paginated_messages(
+            self.chat_room, user, page, page_size
+        )
 
         await self.send(
             text_data=json.dumps(
@@ -338,13 +337,38 @@ class ChatConsumer(AsyncWebsocketConsumer):
         message.delete()
 
     @sync_to_async
-    def get_paginated_messages(self, chat_room, page, page_size):
+    def get_paginated_messages(self, chat_room, user, page, page_size):
         offset = (page - 1) * page_size
-        return list(
-            MessageModel.objects.filter(chat_room=chat_room).order_by("-timestamp")[
-                offset : offset + page_size
-            ]
+
+        all_messages = MessageModel.objects.filter(chat_room=chat_room).order_by(
+            "-timestamp"
         )
+
+        filtered_messages = []
+
+        for message in all_messages[offset : offset + page_size]:
+            deleted_for = message.deleted_for or []
+
+            # Skip message if current user has any delete_for entry
+            skip = False
+            for entry in deleted_for:
+                try:
+                    if entry.get("user_id") == user.id and entry.get(
+                        "delete_option"
+                    ) in [
+                        DeleteOption.DELETE_FOR_ME,
+                        DeleteOption.CONVERSATION_DELETED,
+                        DeleteOption.DELETE_FOR_EVERYONE,
+                    ]:
+                        skip = True
+                        break
+                except Exception:
+                    continue
+
+            if not skip:
+                filtered_messages.append(message)
+
+        return filtered_messages
 
     def serialize_message(self, message):
         return {
