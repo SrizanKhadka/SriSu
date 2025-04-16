@@ -4,7 +4,6 @@ from authentication.models import UserModel
 from utils.choices import *
 import uuid
 
-
 class CoupleConnectionModel(models.Model):
     sender_number = models.CharField(max_length=15)
     receiver_number = models.CharField(max_length=15)
@@ -111,9 +110,9 @@ class SingleConnectionModel(models.Model):
 class MessageModel(models.Model):
     
     #chat associates
-    chat_room = models.ForeignKey("chat.ChatRoom", on_delete=models.CASCADE, related_name="message_models")
+    chat_room = models.ForeignKey("chat.ChatRoom", on_delete=models.CASCADE, related_name="message_models",null=True, blank=True)
     couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="message_models")
-    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="message_models")
+    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="message_models",null=True, blank=True)
     
     #sender and receiver
     sender = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="sent_messages")
@@ -148,7 +147,7 @@ class MessageModel(models.Model):
         choices=DeleteOption.choices, 
         default=DeleteOption.NOT_DELETED
     )
-    message_deletion_dict = models.JSONField()
+    message_deletion_dict = models.JSONField(null=True, blank=True)  # Example: {"user_id_1": "delete_for_me", "user_id_2": "delete_for_everyone"}
     is_edited = models.BooleanField(default=False)
     
     delete_for = models.JSONField(default=dict)
@@ -180,20 +179,20 @@ class ChatRoom(models.Model):
     id = models.UUIDField(primary_key=True, unique=True, default=uuid.uuid4, editable=False)
     chat_type = models.CharField(max_length=10, choices=ChatTypeChoices, default="single")
 
-    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="chat_rooms")
-    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="chat_rooms")
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="chat_rooms",null=True, blank=True)
+    singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="chat_rooms",null=True, blank=True)
     
     # Messages
-    messages = models.ManyToManyField(MessageModel, blank=True, related_name="chat_rooms")
+    messages = models.ManyToManyField(MessageModel, related_name="chat_rooms",null=True, blank=True)
 
     # Chat metadata
-    last_message = models.ForeignKey(MessageModel, null=True, blank=True, on_delete=models.SET_NULL, related_name="last_message_chat")
-    unread_count = models.JSONField(default=dict)  # Example: {"user_1": 5, "user_2": 3}
+    last_message = models.ForeignKey(MessageModel, null=True, blank=True, on_delete=models.SET_NULL, related_name="last_message_chat",default="")
+    unread_count = models.JSONField(default=dict,blank=True,null=True)  # Example: {"user_1": 5, "user_2": 3}
     
     # Extra features
-    is_typing = models.JSONField(default=dict)  # Example: {"user_1": True, "user_2": False}
+    is_typing = models.JSONField(default=dict,blank=True,null=True)  # Example: {"user_1": True, "user_2": False}
     pinned_messages = models.ManyToManyField(MessageModel, blank=True, related_name="pinned_in_chat")
-    settings = models.JSONField(default=dict)  # Example: {"muted": True, "archived": False}
+    settings = models.JSONField(default=dict,blank=True,null=True)  # Example: {"muted": True, "archived": False}
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
