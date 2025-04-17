@@ -4,17 +4,18 @@ from django.db.models import Q
 from chat.models import MessageModel
 from utils.choices import DeleteOption
 
-async def handle_fetch_messages(user, chat_room, data, on_message_fetched):
+async def handle_fetch_messages(user, chat_room, data):
     page = int(data.get("page", 1))
     page_size = int(data.get("page_size", 20))
     messages = await get_paginated_messages(
         chat_room, user, page, page_size
     )
     
-    on_message_fetched(messages)
+    # on_message_fetched(messages)
+    return messages
 
 @sync_to_async
-def get_paginated_messages(self, chat_room, user, page, page_size):
+def get_paginated_messages(chat_room, user, page, page_size):
     offset = (page - 1) * page_size
 
     all_messages = MessageModel.objects.filter(chat_room=chat_room).order_by(
@@ -24,7 +25,7 @@ def get_paginated_messages(self, chat_room, user, page, page_size):
     filtered_messages = []
 
     for message in all_messages[offset : offset + page_size]:
-        deleted_for = message.deleted_for or []
+        deleted_for = message.delete_for or []
 
         # Skip message if current user has any delete_for entry
         skip = False
@@ -43,6 +44,7 @@ def get_paginated_messages(self, chat_room, user, page, page_size):
                 continue
 
         if not skip:
+            print(f'message = {message.text}')
             filtered_messages.append(message)
 
     return filtered_messages

@@ -32,36 +32,54 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+    
 
-    async def receive(self, message_data):
-        data = json.loads(message_data)
-        action = data.get("action")
+    async def receive(self, text_data):
+        print(f"Received message: {text_data}")
+        data = json.loads(text_data)
+        action = "send_message"
         
         if action == "send_message":
-           await handle_send_message(
-                data,
-                self.chat_room,
-                lambda msg: self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        "type": "chat.message",
-                        "message": self.serialize_message(msg),
-                    }
+
+            message = await handle_send_message(data,self.chat_room)
+            if message:
+                print(f"MESSAGE TEXT : {message.text}")
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "message": "message_sent successfully",
+                        }
+                    )
                 )
-            )
+        
+            else:
+                await self.send(text_data=json.dumps(
+                    {
+                        "message": "message_sent failed",
+                    }
+                ))
+            
+           
+            # await self.close()
+            
         elif action == "fetch_messages":
-            await handle_fetch_messages(
-                user=self.user,
+            messages = await handle_fetch_messages(
+                user=5,                 # user=self.user,
                 chat_room=self.chat_room,
-                data=data, 
-                on_message_fetched=lambda messages: self.send(
+                data=data
+            )
+            
+            if messages:
+                for mgs in messages:
+                    print(f"message = {mgs.text}")
+                await self.send(
                     text_data=json.dumps(
                         {
                             "action": "fetch_messages",
-                            "messages": [self.serialize_message(msg) for msg in messages],
                         }
                     )
-                ))
+                )
+            
         elif action == "edit_message":
             await handle_edit_message(data=data, on_message_edited=lambda msg: 
              self.channel_layer.group_send(
@@ -103,15 +121,5 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "action": "fetch_messages",
                     "messages": [self.serialize_message(msg) for msg in messages],
                 }
-            )
-        )
-
-    async def chat_message(self, event):
-        await self.send(text_data=json.dumps(event["message"]))
-
-    async def chat_message_deleted(self, event):
-        await self.send(
-            text_data=json.dumps(
-                {"action": "delete_message", "message_id": event["message_id"]}
             )
         )

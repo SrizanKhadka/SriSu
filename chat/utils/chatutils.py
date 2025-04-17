@@ -30,6 +30,13 @@ def get_user(user_id):
     except Exception as e:
         print(f"Error in get_user: {e}")
         return None
+@sync_to_async
+def get_couple(couple_id):
+    try:
+        return CoupleModel.objects.filter(id=couple_id).first()
+    except Exception as e:
+        print(f"Error in get_couple: {e}")
+        return None
 
 @sync_to_async
 def get_message(message_id):
@@ -39,7 +46,7 @@ def get_message(message_id):
         print(f"Error in get_message: {e}")
         return None
 
-@sync_to_async
+@sync_to_async #for fetching list of messages.
 def get_messages(message_ids):
     try:
         return list(MessageModel.objects.filter(id__in=message_ids))
@@ -80,7 +87,7 @@ def serialize_message(message):
         "message_type": message.message_type,
         "medias": message.medias if message.medias else None,
         "reply_to": str(message.reply_to.id) if message.reply_to else None,
-        "reaction": message.reaction,
+        "reaction": message.reactions,
         "is_read": message.is_read,
         "is_delivered": message.is_delivered,
         "timestamp": message.timestamp.isoformat(),

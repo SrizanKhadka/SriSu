@@ -24,25 +24,23 @@ async def test_websocket():
 # asyncio.run(test_websocket())
 
 async def send_message():
-    uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
+    uri = "ws://localhost:8000/ws/chat/7091ea84-fddc-4ff8-a610-1488722d8760/"
     async with websockets.connect(uri) as websocket:
         await websocket.send(json.dumps({
-            "type": "send_message",
+            "action": "send_message",
             "text": "Script Test!",
-            "sender_id": 27,
-            "receiver_id": 26,
+            "sender_id": 13,
+            "receiver_id": 5,
+            "couple":4,
             "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
             "message_type": "text"
         }))
 
-        while True:
-            try:
-                response = await websocket.recv()
-                print("Response:", response)
-            except websockets.ConnectionClosed:
-                print("Connection closed")
-                break
-            
+        response = await websocket.recv()
+        print("Response:", response)
+
+                
+
 asyncio.run(send_message())
 
 if __name__ == "__send_message__":
