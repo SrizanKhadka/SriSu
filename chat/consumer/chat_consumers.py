@@ -37,7 +37,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         print(f"Received message: {text_data}")
         data = json.loads(text_data)
-        action = "send_message"
+        action = "fetch_messages"
         
         if action == "send_message":
 
@@ -58,27 +58,28 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "message": "message_sent failed",
                     }
                 ))
-            
-           
-            # await self.close()
-            
+                        
         elif action == "fetch_messages":
             messages = await handle_fetch_messages(
-                user=5,                 # user=self.user,
+                user=27,                 # user=self.user,
                 chat_room=self.chat_room,
                 data=data
             )
             
             if messages:
                 for mgs in messages:
-                    print(f"message = {mgs.text}")
-                await self.send(
+                    print(f"message is available = {mgs.text}")
+                    serialized_message = await serialize_message(mgs)
+                    print(f"serialized message = {serialized_message}")
+                    await self.send(
                     text_data=json.dumps(
                         {
                             "action": "fetch_messages",
+                            "message": "message sent successfully!",
+                            "data": serialized_message
                         }
+                        )
                     )
-                )
             
         elif action == "edit_message":
             await handle_edit_message(data=data, on_message_edited=lambda msg: 

@@ -77,7 +77,7 @@ def delete_message(message):
     except Exception as e:
         print(f"Error in delete_message: {e}")
 
-
+@sync_to_async
 def serialize_message(message):
     return {
         "id": str(message.id),
@@ -85,10 +85,11 @@ def serialize_message(message):
         "sender_id": str(message.sender.id),
         "text": message.text,
         "message_type": message.message_type,
-        "medias": message.medias if message.medias else None,
+        "medias": [media.file.url for media in message.medias.all()] if message.medias.exists() else [],  # ✅ Fix here
         "reply_to": str(message.reply_to.id) if message.reply_to else None,
         "reaction": message.reactions,
         "is_read": message.is_read,
         "is_delivered": message.is_delivered,
         "timestamp": message.timestamp.isoformat(),
     }
+
