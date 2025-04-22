@@ -37,17 +37,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         print(f"Received message: {text_data}")
         data = json.loads(text_data)
-        action = "fetch_messages"
+        action = "message_read"
         
         if action == "send_message":
 
             message = await handle_send_message(data,self.chat_room)
             if message:
-                print(f"MESSAGE TEXT : {message.text}")
+                serialized_message = await serialize_message(message)
+                print(f"Serialized message: {serialized_message}")
                 await self.send(
                     text_data=json.dumps(
                         {
                             "message": "message_sent successfully",
+                            "data": serialized_message,
                         }
                     )
                 )
@@ -67,34 +69,63 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
             
             if messages:
+                messageslist = []
                 for mgs in messages:
                     print(f"message is available = {mgs.text}")
                     serialized_message = await serialize_message(mgs)
+                    messageslist.append(serialized_message)
                     print(f"serialized message = {serialized_message}")
-                    await self.send(
+                await self.send(
                     text_data=json.dumps(
                         {
                             "action": "fetch_messages",
                             "message": "message sent successfully!",
-                            "data": serialized_message
+                            "data": messageslist
                         }
                         )
                     )
             
         elif action == "edit_message":
-            await handle_edit_message(data=data, on_message_edited=lambda msg: 
-             self.channel_layer.group_send(
-                self.room_group_name,
-                {"type": "chat.message", "message": self.serialize_message(msg)},
-            ))
+            edited_message = await handle_edit_message(data=data)
+            if edited_message:
+                serialized_message = await serialize_message(edited_message)
+                await self.send(
+                        text_data=json.dumps(
+                            {
+                                "message": "message edited successfully",
+                                "data": serialized_message,
+                            }
+                        )
+                    )
+                
         elif action == "message_read":
-            await handle_mark_messages_read(data=data,on_messages_read=lambda unread_messages: self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                "type": "chat.messages_read",
-                "message_ids": [msg.id for msg in unread_messages],
-            },
-            ))
+            read_messages = await handle_mark_messages_read(data=data)
+            read_messages_list = []
+            
+            if read_messages:
+                for msg in read_messages:
+                    serialized_message = await serialize_message(msg)
+                    read_messages_list.append(serialized_message)
+                    
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "action": "message_read",
+                            "message": "message read successfully!",
+                            "data": read_messages_list
+                        }
+                    )
+                )
+            else:
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "action": "message_read",
+                            "message": "No unread messages found!",
+                        }
+                    )
+                )
+                
         elif action == "delete_message":
             await handle_delete_message(data, on_message_deleted=lambda msg_id:  self.channel_layer.group_send(
             self.room_group_name,
@@ -102,25 +133,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
             ))
             
         elif action == "react_to_message":
-            await handle_react_to_message(data=data, on_message_reacted=lambda msg: self.channel_layer.group_send(
-            self.room_group_name,
-            {"type": "chat.message", "message": self.serialize_message(msg)},
-            ))
-
-
-
-    async def handle_fetch_messages(self, user, data):
-        page = int(data.get("page", 1))
-        page_size = int(data.get("page_size", 20))
-        messages = await self.get_paginated_messages(
-            self.chat_room, user, page, page_size
-        )
-
-        await self.send(
-            text_data=json.dumps(
-                {
-                    "action": "fetch_messages",
-                    "messages": [self.serialize_message(msg) for msg in messages],
-                }
-            )
-        )
+            reacted_message = await handle_react_to_message(data=data)
+            if reacted_message:
+                serialized_message = await serialize_message(reacted_message)
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "action": "react_to_message",
+                            "message": "message reacted successfully",
+                            "data": serialized_message,
+                        }
+                    )
+                )
+            else:
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "action": "react_to_message",
+                            "message": "message reaction failed",
+                        }
+                    )
+                )

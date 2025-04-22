@@ -5,47 +5,58 @@ from chat.models import MessageModel
 from channels.db import database_sync_to_async
 from chat.utils.chatutils import *
 
-async def handle_edit_message(data, on_message_edited):
-        message_id = data.get("message_id")
-        new_text = data.get("new_text")
-        is_read = data.get("is_read", False)
+async def handle_edit_message(data):
+    message_id = data.get("message_id")
+    new_text = data.get("text")
+    is_read = data.get("is_read", False)
 
-        message = await get_message(message_id)
-        if message:
-            message.text = new_text
-            message.is_delivered = True
-            message.is_read = is_read
-            message.is_edited = True
-            await save_message(message)
-            
-            on_message_edited(message)
+    message = await get_message(message_id)
+    if message:
+        message.text = new_text
+        message.is_delivered = True
+        message.is_read = is_read
+        message.is_edited = True
+        await save_message(message)
+        
+        print(f"Message edited:  {message.text}")
+        return message
 
-async def handle_mark_messages_read(data, on_messages_read):
+async def handle_mark_messages_read(data):
     receiver_id = data.get("receiver_id")
+    print(f"Receiver ID: {receiver_id}")
 
-    if not receiver_id:
-        return
+    if not receiver_id: #check if user_id is equal to receiver_id
+        return None
 
-    # Fetch all unread messages sent to this receiver
-    unread_messages = await database_sync_to_async(
-        lambda: list(
-            MessageModel.objects.filter(receiver=receiver_id, is_read=False)
-        )
+    # Get receiver as UserModel instance
+    try:
+        receiver = await sync_to_async(UserModel.objects.get)(id=receiver_id)
+    except UserModel.DoesNotExist:
+        print("Receiver not found")
+        return None
+
+    # Get unread messages for this receiver
+    unread_messages = await sync_to_async(
+        lambda: list(MessageModel.objects.filter(receiver=receiver, is_read=True).all())
     )()
+    
+    # print("UN_READ MESSAGES: ", serialize_message(unread_messages))
 
     if unread_messages:
-        # Bulk update messages as read
-        for message in unread_messages:
-            message.is_read = True
-
-        await database_sync_to_async(MessageModel.objects.bulk_update)(
-            unread_messages, ["is_read"]
-        )
-
-        # Notify all participants that messages are now read
-        on_messages_read(unread_messages)
+        for msg in unread_messages:
+            msg.is_read = True
         
-async def handle_react_to_message(data, on_message_reacted):
+        print("MESSAGES ARE READ: ")
+
+        await sync_to_async(MessageModel.objects.bulk_update)(unread_messages, ["is_read"])
+
+        # Notify participants
+        return unread_messages
+    else:
+        print("No unread messages found")
+        return None
+        
+async def handle_react_to_message(data):
     message_id = data.get("message_id")
     reaction = data.get("reaction")
 
@@ -54,4 +65,7 @@ async def handle_react_to_message(data, on_message_reacted):
         message.reaction = reaction
         await save_message(message)
 
-        on_message_reacted(message)
+        return message
+    else:
+        print("Message not found")
+        return None

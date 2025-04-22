@@ -23,27 +23,60 @@ async def test_websocket():
 
 # asyncio.run(test_websocket())
 
-async def send_message():
+# async def send_message():
+#     uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
+#     async with websockets.connect(uri) as websocket:
+#         await websocket.send(json.dumps({
+#             "action": "send_message",
+#             "text": "I am fine!",
+#             "sender_id": 27,
+#             "receiver_id": 26,
+#             "couple":2,
+#             "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
+#             "message_type": "text"
+#         }))
+
+#         response = await websocket.recv()
+#         print("Response:", response)
+
+# asyncio.run(send_message())
+
+# async def editMessage():
+#     uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
+#     async with websockets.connect(uri) as websocket:
+#         await websocket.send(json.dumps({
+#             "action": "edit_message",
+#             "message_id": 15,
+#             "sender_id": 27,
+#             "text": "I am fine!",
+#             "receiver_id": 26,
+#             "couple":2,
+#             "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
+#             "message_type": "text"
+#         }))
+
+#         response = await websocket.recv()
+#         print("Response:", response)
+
+# asyncio.run(editMessage())
+
+async def markMessagesRead():
     uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
     async with websockets.connect(uri) as websocket:
         await websocket.send(json.dumps({
-            "action": "send_message",
-            "text": "Script Test!",
-            "sender_id": 27,
+            "action": "mark_messages_read",
             "receiver_id": 26,
             "couple":2,
             "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
-            "message_type": "text"
         }))
 
         response = await websocket.recv()
         print("Response:", response)
 
-                
+asyncio.run(markMessagesRead())
 
-asyncio.run(send_message())
-
-if __name__ == "__send_message__":
-    send_message()
+    
+if __name__ == "__markMessagesRead__":
+    markMessagesRead()
     
     

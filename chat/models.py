@@ -1,5 +1,4 @@
 from django.db import models
-from utils.choices import CoupleConnectionStatus, SingleConnectionStaus
 from authentication.models import UserModel
 from utils.choices import *
 import uuid
