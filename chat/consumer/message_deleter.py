@@ -5,37 +5,37 @@ from utils.choices import DeleteOption, ChatTypeChoices
 import asyncio
 from chat.utils.chatutils import *
 
-async def handle_delete_for_me(data, on_message_deleted):
-        message_id = data.get("message_id")
-        user_id = data.get("user_id")
-
-        message = await get_message(message_id)
-
-        if message:
-            delete_entry = {
-                "user_id": user_id,
-                "delete_option": DeleteOption.DELETE_FOR_ME,
-                "deleted_message": None,
-            }
-
-            if not message.deleted_for:
-                message.deleted_for = {}
-
-            # Avoid duplicate delete entries
-            if not any(entry["user_id"] == user_id for entry in message.deleted_for):
-                message.deleted_for.append(delete_entry)
-
-            await save_message(message)
-
-            # Notify users in the room
-            # await self.channel_layer.group_send(
-            #     self.room_group_name,
-            #     {"type": "chat.message", "message": self.serialize_message(message)},
-            # )
-
-async def handle_delete_for_everyone(data, on_message_deleted):
+async def handle_delete_for_me(data):
     message_id = data.get("message_id")
-    user_id = data.get("user_id")
+    user_id = str(data.get("user_id"))  # Ensure it's string if keys are expected to be str
+
+    message = await get_message(message_id)
+
+    if message:
+        delete_entry = {
+            "user_id": user_id,
+            "delete_option": DeleteOption.DELETE_FOR_ME,
+            "deleted_message": None,
+        }
+
+        if not message.delete_for:
+            message.delete_for = {}
+
+        # Initialize list for this user if it doesn't exist
+        if user_id not in message.delete_for:
+            message.delete_for[user_id] = []
+
+        # Avoid adding duplicate entry
+        if delete_entry not in message.delete_for[user_id]:
+            message.delete_for[user_id].append(delete_entry)
+
+        await save_message(message)
+
+
+
+async def handle_delete_for_everyone(data):
+    message_id = data.get("message_id")
+    user_id = str(data.get("user_id"))
 
     message = await get_message(message_id)
 
@@ -52,11 +52,11 @@ async def handle_delete_for_everyone(data, on_message_deleted):
             "delete_message": delete_message,
         }
 
-        if not message.deleted_for:
-            message.deleted_for = {}
+        if not message.delete_for:
+            message.delete_for = {}
 
         # Update the delete entry for this user
-        message.deleted_for[user_id] = delete_entry
+        message.delete_for[user_id] = delete_entry
         message.deleted_message = delete_message  # this can be shown to both sides
 
         await save_message(message)
@@ -68,7 +68,7 @@ async def handle_delete_for_everyone(data, on_message_deleted):
         # )
 
 async def handle_delete_message(data,on_message_deleted):
-    message_ids = data.get("message_ids")
+    message_ids = data.get("message_id")
     user_id = data.get("user_id")
     delete_option = data.get("delete_option")
 
@@ -87,12 +87,12 @@ async def handle_delete_message(data,on_message_deleted):
             tasks.append(handle_delete_for_everyone(delete_data))
 
         # Run all delete tasks concurrently
-        await asyncio.gather(*tasks)
+    await asyncio.gather(*tasks)
 
         # Notify all users in the chat about bulk deletion
-        on_message_deleted(message_ids)
+    on_message_deleted(message_ids)
 
-async def handle_delete_conversation(self, data):
+async def handle_delete_conversation(data):
     chat_type = data.get("chat_type")
     user_id = data.get("user_id")
 
@@ -139,11 +139,11 @@ async def handle_delete_conversation(self, data):
     )
 
     # Notify all users in the chat about the conversation deletion
-    await self.channel_layer.group_send(
-        self.room_group_name,
-        {
-            "type": "chat.conversation_deleted",
-            "user_id": user_id,
-            "message_ids": [msg.id for msg in messages],
-        },
-    )
+    # await self.channel_layer.group_send(
+    #     self.room_group_name,
+    #     {
+    #         "type": "chat.conversation_deleted",
+    #         "user_id": user_id,
+    #         "message_ids": [msg.id for msg in messages],
+    #     },
+    # )

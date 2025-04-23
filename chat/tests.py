@@ -23,40 +23,40 @@ async def test_websocket():
 
 # asyncio.run(test_websocket())
 
-# async def send_message():
-#     uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
-#     async with websockets.connect(uri) as websocket:
-#         await websocket.send(json.dumps({
-#             "action": "send_message",
-#             "text": "I am fine!",
-#             "sender_id": 27,
-#             "receiver_id": 26,
-#             "couple":2,
-#             "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
-#             "message_type": "text"
-#         }))
+async def send_message():
+    uri = "ws://localhost:8000/ws/chat/7091ea84-fddc-4ff8-a610-1488722d8760/"
+    async with websockets.connect(uri) as websocket:
+        await websocket.send(json.dumps({
+            "action": "send_message",
+            "text": "I am fine!",
+            "sender_id": 13,
+            "receiver_id": 5,
+            "couple":4,
+            "chat_room": "7091ea84-fddc-4ff8-a610-1488722d8760",
+            "message_type": "text"
+        }))
 
-#         response = await websocket.recv()
-#         print("Response:", response)
+        response = await websocket.recv()
+        print("Response:", response)
 
 # asyncio.run(send_message())
 
-# async def editMessage():
-#     uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
-#     async with websockets.connect(uri) as websocket:
-#         await websocket.send(json.dumps({
-#             "action": "edit_message",
-#             "message_id": 15,
-#             "sender_id": 27,
-#             "text": "I am fine!",
-#             "receiver_id": 26,
-#             "couple":2,
-#             "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
-#             "message_type": "text"
-#         }))
+async def editMessage():
+    uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
+    async with websockets.connect(uri) as websocket:
+        await websocket.send(json.dumps({
+            "action": "edit_message",
+            "message_id": 15,
+            "sender_id": 27,
+            "text": "I am fine!",
+            "receiver_id": 26,
+            "couple":2,
+            "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
+            "message_type": "text"
+        }))
 
-#         response = await websocket.recv()
-#         print("Response:", response)
+        response = await websocket.recv()
+        print("Response:", response)
 
 # asyncio.run(editMessage())
 
@@ -73,10 +73,31 @@ async def markMessagesRead():
         response = await websocket.recv()
         print("Response:", response)
 
-asyncio.run(markMessagesRead())
+# asyncio.run(markMessagesRead())
 
-    
-if __name__ == "__markMessagesRead__":
-    markMessagesRead()
+async def deleteMessage():
+    uri = "ws://localhost:8000/ws/chat/7091ea84-fddc-4ff8-a610-1488722d8760/"
+    async with websockets.connect(uri) as websocket:
+        await websocket.send(json.dumps({
+            "action": "delete_message",
+            "message_id": [61,62],
+            "user_id": 13,
+            "sender_id": 13,
+            "receiver_id": 5,
+            "couple":4,
+            "delete_option": "DELETE_FOR_ME",
+            "chat_room": "7091ea84-fddc-4ff8-a610-1488722d8760",
+        }))
+
+        response = await websocket.recv()
+        print("Response:", response)
+
+asyncio.run(deleteMessage())
+
+if __name__ == "deletemessage":
+    deleteMessage()
+
+# if __name__ == "__send_message__":
+#     send_message()
     
     

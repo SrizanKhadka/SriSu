@@ -37,7 +37,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         print(f"Received message: {text_data}")
         data = json.loads(text_data)
-        action = "message_read"
+        action = "delete_message"
         
         if action == "send_message":
 
@@ -127,10 +127,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 )
                 
         elif action == "delete_message":
-            await handle_delete_message(data, on_message_deleted=lambda msg_id:  self.channel_layer.group_send(
-            self.room_group_name,
-            {"type": "chat.message_delete", "message_ids": msg_id},
-            ))
+            await handle_delete_message(data, on_message_deleted=lambda msg_id:  
+                print('MESSAGES DELETED SUCCESSFULLY.')
+            )
             
         elif action == "react_to_message":
             reacted_message = await handle_react_to_message(data=data)
