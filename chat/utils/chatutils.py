@@ -41,7 +41,8 @@ def get_couple(couple_id):
 @sync_to_async
 def get_message(message_id):
     try:
-        return MessageModel.objects.filter(id=message_id).first()
+        message = MessageModel.objects.filter(id=message_id).first()
+        return message
     except Exception as e:
         print(f"Error in get_message: {e}")
         return None

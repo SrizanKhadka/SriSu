@@ -40,9 +40,11 @@ async def handle_delete_for_everyone(data):
     user_id = str(data.get("user_id"))
 
     message = await get_message(message_id)
-
+    
     if message:
-        sender_id = message.sender.id
+        # print(f"Message ID: {message_id}, User ID: {user_id}")
+        # print(f"Message: {message.text}, Sender ID: {message.sender_id}")
+        sender_id = message.sender_id
         delete_message = (
             "You deleted this message"
             if sender_id == user_id

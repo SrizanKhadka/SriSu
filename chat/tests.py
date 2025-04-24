@@ -76,17 +76,17 @@ async def markMessagesRead():
 # asyncio.run(markMessagesRead())
 
 async def deleteMessage():
-    uri = "ws://localhost:8000/ws/chat/7091ea84-fddc-4ff8-a610-1488722d8760/"
+    uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
     async with websockets.connect(uri) as websocket:
         await websocket.send(json.dumps({
             "action": "delete_message",
-            "message_id": [56],
-            "user_id": 13,
-            "sender_id": 13,
-            "receiver_id": 5,
-            "couple":4,
+            "message_id": [14,15],
+            "user_id": 26,
+            "sender_id": 26,
+            "receiver_id": 27,
+            "couple":2,
             "delete_option": "DELETE_FOR_EVERYONE",
-            "chat_room": "7091ea84-fddc-4ff8-a610-1488722d8760",
+            "chat_room": "3d0504c6-21ac-40dc-963a-97fb75adf711",
         }))
 
         response = await websocket.recv()
