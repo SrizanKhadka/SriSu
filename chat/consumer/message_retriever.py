@@ -18,33 +18,34 @@ async def handle_fetch_messages(user, chat_room, data):
 def get_paginated_messages(chat_room, user, page, page_size):
     offset = (page - 1) * page_size
 
-    all_messages = MessageModel.objects.filter(chat_room=chat_room).order_by(
-        "-timestamp"
-    )
+    all_messages = MessageModel.objects.filter(chat_room=chat_room).order_by("-timestamp")
 
     filtered_messages = []
+    deleted_for = []
 
     for message in all_messages[offset : offset + page_size]:
-        deleted_for = message.delete_for or []
-
-        # Skip message if current user has any delete_for entry
         skip = False
-        for entry in deleted_for:
-            try:
-                if entry.get("user_id") == user.id and entry.get(
-                    "delete_option"
-                ) in [
-                    DeleteOption.DELETE_FOR_ME,
-                    DeleteOption.CONVERSATION_DELETED,
-                    DeleteOption.DELETE_FOR_EVERYONE,
-                ]:
-                    skip = True
-                    break
-            except Exception:
-                continue
-
+        if message.delete_for:
+            deleted_for = message.delete_for[str(user)]
+            if isinstance(deleted_for, list):  # just to be safe
+                print('INSTANCE OF LIST')
+                for entry in deleted_for:
+                    print('ENTRY', entry)
+                    try:
+                        print('INSIDE OF TRY')
+                        if str(entry.get("user_id")) == str(user) and entry.get("delete_option") in [
+                            DeleteOption.DELETE_FOR_ME,
+                            DeleteOption.CONVERSATION_DELETED,
+                            # DeleteOption.DELETE_FOR_EVERYONE,  # optional
+                        ]:
+                            print('SKIPPING')
+                            skip = True
+                            break
+                    except Exception as e:
+                        print(f"Error parsing delete_for entry: {e}")
+                        continue
+                    
         if not skip:
-            print(f'message = {message.text}')
             filtered_messages.append(message)
 
     return filtered_messages

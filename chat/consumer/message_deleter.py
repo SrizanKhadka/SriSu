@@ -7,11 +7,10 @@ from chat.utils.chatutils import *
 
 async def handle_delete_for_me(data):
     message_id = data.get("message_id")
-    user_id = str(data.get("user_id"))  # Ensure it's string if keys are expected to be str
-
+    user_id = str(data.get("user_id")) 
     message = await get_message(message_id)
 
-    if message:
+    if message and not message.delete_for:
         delete_entry = {
             "user_id": user_id,
             "delete_option": DeleteOption.DELETE_FOR_ME,
@@ -30,6 +29,9 @@ async def handle_delete_for_me(data):
             message.delete_for[user_id].append(delete_entry)
 
         await save_message(message)
+    else:
+        await save_message(message)
+
 
 
 
@@ -48,6 +50,7 @@ async def handle_delete_for_everyone(data):
         )
 
         delete_entry = {
+            "user_id": user_id,
             "option": DeleteOption.DELETE_FOR_EVERYONE,
             "delete_message": delete_message,
         }
@@ -55,17 +58,17 @@ async def handle_delete_for_everyone(data):
         if not message.delete_for:
             message.delete_for = {}
 
-        # Update the delete entry for this user
-        message.delete_for[user_id] = delete_entry
-        message.deleted_message = delete_message  # this can be shown to both sides
+        # Initialize list for this user if it doesn't exist
+        if user_id not in message.delete_for:
+            message.delete_for[user_id] = []
+
+        # Avoid adding duplicate entry
+        if delete_entry not in message.delete_for[user_id]:
+            message.delete_for[user_id].append(delete_entry)
 
         await save_message(message)
-
-        # Notify both sender and receiver
-        # await self.channel_layer.group_send(
-        #     self.room_group_name,
-        #     {"type": "chat.message", "message": self.serialize_message(message)},
-        # )
+    else:
+        await save_message(message)
 
 async def handle_delete_message(data,on_message_deleted):
     message_ids = data.get("message_id")

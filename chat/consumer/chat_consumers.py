@@ -63,7 +63,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         
         elif action == "fetch_messages":
             messages = await handle_fetch_messages(
-                user=27,                 # user=self.user,
+                user=13,                 # user=self.user,
                 chat_room=self.chat_room,
                 data=data
             )

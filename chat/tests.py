@@ -80,12 +80,12 @@ async def deleteMessage():
     async with websockets.connect(uri) as websocket:
         await websocket.send(json.dumps({
             "action": "delete_message",
-            "message_id": [61,62],
+            "message_id": [56],
             "user_id": 13,
             "sender_id": 13,
             "receiver_id": 5,
             "couple":4,
-            "delete_option": "DELETE_FOR_ME",
+            "delete_option": "DELETE_FOR_EVERYONE",
             "chat_room": "7091ea84-fddc-4ff8-a610-1488722d8760",
         }))
 
@@ -93,6 +93,7 @@ async def deleteMessage():
         print("Response:", response)
 
 asyncio.run(deleteMessage())
+
 
 if __name__ == "deletemessage":
     deleteMessage()
