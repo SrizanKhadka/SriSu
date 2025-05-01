@@ -9,7 +9,6 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from chat.utils.chatutils import *
 
-
 class CoupleConnectionView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
     queryset = CoupleConnectionModel.objects.all()
@@ -44,6 +43,12 @@ class CoupleConnectionView(ModelViewSet):
 
         sender_number = data["sender_number"]
         receiver_number = data["receiver_number"]
+        
+        if not is_user_valid(user_number=request.user.phone_number, sender_number=sender_number):
+            return Response(
+                {"message": "You don't have permission to perform this operation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         connection = self.get_connection(sender_number, receiver_number)
 
@@ -311,6 +316,12 @@ class SingleConnectionView(ModelViewSet):
 
         sender_number = request.data["sender_number"]
         receiver_number = request.data["receiver_number"]
+        
+        if not is_user_valid(user_number=request.user.phone_number, sender_number=sender_number):
+            return Response(
+                {"message": "You don't have permission to perform this operation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         connection = self.get_connection(sender_number, receiver_number)
 

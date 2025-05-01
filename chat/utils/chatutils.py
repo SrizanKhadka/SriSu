@@ -15,6 +15,9 @@ def user_with_number_exists(number):
 def has_permission(user_number,sender_number, receiver_number):
     return user_number == sender_number or user_number == receiver_number
 
+def is_user_valid(user_number, sender_number):
+    return user_number == sender_number
+
 @sync_to_async
 def get_chat_room(chat_room_id):
     try:
@@ -94,4 +97,3 @@ def serialize_message(message):
         "is_delivered": message.is_delivered,
         "timestamp": message.timestamp.isoformat(),
     }
-

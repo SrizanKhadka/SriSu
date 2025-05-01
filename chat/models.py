@@ -100,7 +100,7 @@ class SingleConnectionModel(models.Model):
         # ]  # Prevent duplicate requests
 
         ordering = ["-updated_at"]
-        verbose_name = "Couple_Connection"
+        verbose_name = "Single_Connection"
 
     def __str__(self):
         return f"{self.sender_number}-{self.receiver_number}"
