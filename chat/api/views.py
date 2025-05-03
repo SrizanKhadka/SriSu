@@ -264,6 +264,9 @@ class CoupleConnectionRequestView(ModelViewSet):
         sent_requests = CoupleConnectionModel.objects.filter(
             sender_number=phone_number, connection_status=CoupleConnectionStatus.PENDING
         )
+        
+        page_size = request.query_params.get("page_size", 10)
+        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
         page = self.paginate_queryset(sent_requests)
 
         if page is not None:
@@ -284,6 +287,9 @@ class CoupleConnectionRequestView(ModelViewSet):
             connection_status=CoupleConnectionStatus.PENDING,
         )
         page = self.paginate_queryset(received_requests)
+        page_size = request.query_params.get("page_size", 10)
+        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
+        
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
@@ -466,6 +472,9 @@ class SingleConnectionRequestView(ModelViewSet):
         sent_requests = SingleConnectionModel.objects.filter(
             sender_number=phone_number, connection_status=SingleConnectionStaus.PENDING
         )
+        page_size = request.query_params.get("page_size", 10)
+        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
+        
         page = self.paginate_queryset(sent_requests)
 
         if page is not None:
@@ -485,7 +494,12 @@ class SingleConnectionRequestView(ModelViewSet):
             receiver_number=phone_number,
             connection_status=SingleConnectionStaus.PENDING,
         )
+        
+        page_size = request.query_params.get("page_size", 10)
+        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
+        
         page = self.paginate_queryset(received_requests)
+        
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
