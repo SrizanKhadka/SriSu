@@ -255,10 +255,9 @@ class CoupleConnectionRequestView(ModelViewSet):
     queryset = CoupleConnectionModel.objects.all()
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = PageNumberPagination
-    pagination_class.page_size = 10
 
     @action(detail=False, methods=["GET"], url_path="sent-requests")
-    def retrieve_coupleConnection_sent_list(self, request, *args, **kwargs):
+    def retrieve_coupleConnection_sent_list(self, request, *args, **kwargs): #this will provide all the list of sent requests
 
         phone_number = request.user.phone_number
         sent_requests = CoupleConnectionModel.objects.filter(
@@ -266,7 +265,7 @@ class CoupleConnectionRequestView(ModelViewSet):
         )
         
         page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
+        self.pagination_class.page_size = int(page_size)
         page = self.paginate_queryset(sent_requests)
 
         if page is not None:
@@ -279,7 +278,7 @@ class CoupleConnectionRequestView(ModelViewSet):
     @action(
         detail=False, methods=["GET"], url_path="received-requests"
     )
-    def retrieve_couple_connection_request_list(self, request, *args, **kwargs):
+    def retrieve_couple_connection_request_list(self, request, *args, **kwargs): #this will provide all the list of received requests
 
         phone_number = request.user.phone_number
         received_requests = CoupleConnectionModel.objects.filter(
@@ -288,7 +287,7 @@ class CoupleConnectionRequestView(ModelViewSet):
         )
         page = self.paginate_queryset(received_requests)
         page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
+        self.pagination_class.page_size = int(page_size)
         
         if page is not None:
             serializer = self.get_serializer(page, many=True)

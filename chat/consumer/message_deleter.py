@@ -44,7 +44,7 @@ async def handle_delete_for_everyone(data):
     if message:
         # print(f"Message ID: {message_id}, User ID: {user_id}")
         # print(f"Message: {message.text}, Sender ID: {message.sender_id}")
-        sender_id = message.sender_id
+        sender_id = message.sender_idti
         delete_message = (
             "You deleted this message"
             if sender_id == user_id

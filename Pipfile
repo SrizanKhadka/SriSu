@@ -16,6 +16,7 @@ channels-redis = "*"
 websockets = "*"
 pydantic = "*"
 django-filter = "*"
+faker = "*"
 
 [dev-packages]
 
