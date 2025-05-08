@@ -103,7 +103,10 @@ class SingleConnectionModel(models.Model):
         # ]  # Prevent duplicate requests
 
         ordering = ["-updated_at"]
-        verbose_name = "Single_Connection"
+        verbose_name = "Single_Connection",
+        indexes = [
+            models.Index(fields=["sender_number", "receiver_number","connection_status"]),
+        ]
 
     def __str__(self):
         return f"{self.sender_number}-{self.receiver_number}"

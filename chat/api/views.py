@@ -462,7 +462,6 @@ class SingleConnectionRequestView(ModelViewSet):
     queryset = SingleConnectionModel.objects.all()
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = PageNumberPagination
-    pagination_class.page_size = 10
 
     @action(detail=False, methods=["GET"], url_path="sent-requests")
     def retrieve_single_connection_sent_list(self, request, *args, **kwargs):
@@ -472,7 +471,7 @@ class SingleConnectionRequestView(ModelViewSet):
             sender_number=phone_number, connection_status=SingleConnectionStaus.PENDING
         )
         page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
+        self.pagination_class.page_size = int(page_size)
         
         page = self.paginate_queryset(sent_requests)
 
@@ -495,7 +494,7 @@ class SingleConnectionRequestView(ModelViewSet):
         )
         
         page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size) if page_size.isdigit() else 10
+        self.pagination_class.page_size = int(page_size)
         
         page = self.paginate_queryset(received_requests)
         
