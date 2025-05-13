@@ -1,10 +1,11 @@
 from rest_framework import serializers
-from authentication.models import OtpModel, UserModel
+from authentication.models import *
 from rest_framework import serializers
 from datetime import timedelta
 from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+# from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from drf_writable_nested import WritableNestedModelSerializer
 
 
 class UserModelSerializer(serializers.ModelSerializer):
@@ -54,10 +55,29 @@ class VerifyOtpSerializer(serializers.Serializer):
         otp_lifespan = 5
         return now() > updated_time + timedelta(minutes=otp_lifespan)
 
+class UserPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPhotoAlbumModel
+        fields = "__all__"
+    
+    def validate(self, data):
+        validated_data = super().validate(data)
+        existing_photos = UserPhotoAlbumModel.objects.filter(user=validated_data["user"]).count()
+        
+        if existing_photos >= 10:
+            raise serializers.ValidationError("You can only upload 10 photos.")
+        return validated_data
 
-class SetUpProfileSerializer(serializers.ModelSerializer):
+class UserInterestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserInterestModel
+        fields = "__all__"
+
+class SetUpProfileSerializer(WritableNestedModelSerializer):
     
     profile_photo = serializers.SerializerMethodField()
+    user_photos = UserPhotoSerializer(many=True, required=False)
+    user_interests = UserInterestSerializer(many=True, required=False)
 
     class Meta:
         model = UserModel
@@ -71,6 +91,8 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "mood",
             "is_profile_complete",
             "is_phone_verified",
+            'user_interests',
+            'user_photos',
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
 

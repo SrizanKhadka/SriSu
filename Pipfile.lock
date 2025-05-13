@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "95be91264b6696a97f6aea2bbce03261081aaf833476616e2449d2f5aaaeaeb5"
+            "sha256": "94ad8e02eb884844fb09f596a3d60f8d9b6ec3a07ceffb2ad019a972ce49bf45"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -458,6 +458,22 @@
             "index": "pypi",
             "markers": "python_version >= '3.8'",
             "version": "==5.3.1"
+        },
+        "drf-nested-forms": {
+            "hashes": [
+                "sha256:087fe5b6df32c95fcc605962a61109df08e7059580ef3adc6ba9de68d375b57b",
+                "sha256:5d086b7e68c56915f430bd5a1beffe0c79a6ac48424732287d056c5322e65f93"
+            ],
+            "index": "pypi",
+            "version": "==1.1.8"
+        },
+        "drf-writable-nested": {
+            "hashes": [
+                "sha256:4a3d2737c1cbfafa690e30236b169112e5b23cfe3d288f3992b0651a1b828c4d"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.9'",
+            "version": "==0.7.2"
         },
         "faker": {
             "hashes": [

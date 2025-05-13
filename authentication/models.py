@@ -33,6 +33,7 @@ class UserModel(AbstractUser):
     password = models.CharField(null=True,blank=True)
     username = models.CharField(null=True,blank=True)
     email = models.CharField(null=True,blank=True)
+    bio = models.TextField(null=True, blank=True)
     password = models.CharField(null=True,blank=True)
     full_name = models.CharField(max_length=100, null=True, blank=True)
     gender = models.CharField(
@@ -43,7 +44,7 @@ class UserModel(AbstractUser):
     )
     dob = models.DateField(null=True, blank=True)
     mood = models.CharField(max_length=50, choices=MoodChoices, null=True, blank=True)
-    is_profile_complete = models.BooleanField(default=False)  # For redirection logic
+    is_profile_complete = models.BooleanField(default=False)
     is_phone_verified = models.BooleanField(default=False)
     created_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
@@ -57,6 +58,35 @@ class UserModel(AbstractUser):
         return self.full_name or self.phone_number
 
 
+class UserPreferenceModel(models.Model):
+    user = models.OneToOneField("UserModel", on_delete=models.CASCADE)
+    min_age = models.IntegerField(null=True, blank=True,default=18)
+    max_age = models.IntegerField(null=True, blank=True,default=35)
+    radius_km = models.IntegerField(null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)    
+    created_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.user.full_name or self.user.phone_number
+
+class UserPhotoAlbumModel(models.Model):
+    user = models.ForeignKey("UserModel", on_delete=models.CASCADE, related_name="user_photos")
+    photo = models.ImageField(upload_to="user_album/", null=True, blank=True)
+    created_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.user.full_name or self.user.phone_number
+
+class UserInterestModel(models.Model):
+    user = models.ForeignKey("UserModel", on_delete=models.CASCADE, related_name="user_interests")
+    name = models.CharField(max_length=100)
+    
+    def __str__(self):
+        return self.name
+    
 class OtpModel(models.Model):
     phone_number = models.CharField(max_length=15,unique=True)
     otp_code = models.CharField(max_length=6)
