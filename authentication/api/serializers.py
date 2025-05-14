@@ -4,7 +4,6 @@ from rest_framework import serializers
 from datetime import timedelta
 from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
-# from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from drf_writable_nested import WritableNestedModelSerializer
 
 
@@ -55,26 +54,31 @@ class VerifyOtpSerializer(serializers.Serializer):
         otp_lifespan = 5
         return now() > updated_time + timedelta(minutes=otp_lifespan)
 
+
 class UserPhotoSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserPhotoAlbumModel
         fields = "__all__"
-    
+
     def validate(self, data):
         validated_data = super().validate(data)
-        existing_photos = UserPhotoAlbumModel.objects.filter(user=validated_data["user"]).count()
-        
+        existing_photos = UserPhotoAlbumModel.objects.filter(
+            user=validated_data["user"]
+        ).count()
+
         if existing_photos >= 10:
             raise serializers.ValidationError("You can only upload 10 photos.")
         return validated_data
+
 
 class UserInterestSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserInterestModel
         fields = "__all__"
 
+
 class SetUpProfileSerializer(WritableNestedModelSerializer):
-    
+
     profile_photo = serializers.SerializerMethodField()
     user_photos = UserPhotoSerializer(many=True, required=False)
     user_interests = UserInterestSerializer(many=True, required=False)
@@ -91,8 +95,8 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             "mood",
             "is_profile_complete",
             "is_phone_verified",
-            'user_interests',
-            'user_photos',
+            "user_interests",
+            "user_photos",
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
 
@@ -115,9 +119,15 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
                 )
 
         return validated_data
-    
+
     def get_profile_photo(self, obj):
-        request = self.context.get("request") 
+        request = self.context.get("request")
         if obj.profile_photo:
             return request.build_absolute_uri(obj.profile_photo.url)
         return None
+
+
+class UserPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPreferenceModel
+        fields = "__all__"

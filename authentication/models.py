@@ -59,7 +59,7 @@ class UserModel(AbstractUser):
 
 
 class UserPreferenceModel(models.Model):
-    user = models.OneToOneField("UserModel", on_delete=models.CASCADE)
+    user = models.OneToOneField("UserModel", on_delete=models.CASCADE, related_name="user_preferences")
     min_age = models.IntegerField(null=True, blank=True,default=18)
     max_age = models.IntegerField(null=True, blank=True,default=35)
     radius_km = models.IntegerField(null=True, blank=True)
