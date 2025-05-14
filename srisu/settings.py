@@ -173,7 +173,7 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "utils.exception_handlers.custom_exception_handler",
     "DEFAULT_PARSER_CLASSES" :[
         'drf_nested_forms.parsers.NestedMultiPartParser',
-        'drf_nested_forms.parsers.NestedJSONPartParser',
+        'drf_nested_forms.parsers.NestedJSONParser',
         'rest_framework.parsers.FormParser',
     ]
 }
