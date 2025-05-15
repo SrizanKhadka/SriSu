@@ -218,14 +218,10 @@ class UserPreferenceView(ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        user = request.user.id
-        
-        print("USER = ", user)
-        print("DATA USER = ", data.get("user").id)
-        print("DATA = ", data)
-        
-        self.is_user_valid(user,data)
-            
+        user = request.user
+    
+        self.validate_user_request(data=data, user=user)
+                        
         self.perform_create(serializer)
         
         return Response(
@@ -239,18 +235,16 @@ class UserPreferenceView(ModelViewSet):
     def perform_create(self, serializer):
         return serializer.save()
     
-    
-    def is_user_valid(self,user,data):
-        if data.get("user").id != user:
-            print("USER IS NOT VALID")
-            return Response(
-                {"error": "User does not match."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-            
+    def validate_user_request(self,data, user):
+        
+        user_data = data.get("user")
+        if not user_data or user_data.id != user.id:
+            raise ValidationError({"error": "User does not match."})
+
         if not user.is_profile_complete:
             raise ValidationError({"error": "User profile is not complete."})
-        
+
         if not user.is_phone_verified:
             raise ValidationError({"error": "User phone number is not verified."})
-        return True
+            
+       
