@@ -13,7 +13,10 @@ from django.utils.timezone import now
 from datetime import timedelta
 from rest_framework.exceptions import ValidationError
 from rest_framework.viewsets import ModelViewSet
-
+from utils.choices import GenderChoices
+from datetime import date
+from collections import defaultdict
+from rest_framework.pagination import PageNumberPagination
 
 class SendOTPAPIView(APIView):
 
@@ -262,4 +265,73 @@ class UserPreferenceView(ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
+        
+class UserSuggestionPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
        
+class UserSuggestionView(ModelViewSet):
+    queryset = UserModel.objects.all()
+    serializer_class = UserModelSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = UserSuggestionPagination
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        user = self.request.user
+        preferences = UserPreferenceModel.objects.filter(user=user).first()
+        
+        if not preferences:
+            return UserModel.objects.order_by('?') #return random users if no preferences are set
+
+        today = date.today()
+        min_birth_year = today.year - preferences.max_age
+        max_birth_year = today.year - preferences.min_age
+        zodiac_sign = preferences.zodiac_sign
+
+        gender = GenderChoices.MALE if user.gender == GenderChoices.FEMALE else GenderChoices.FEMALE
+
+        filtered_users = UserModel.objects.exclude(id=user.id)
+        
+        if user.city:
+            filtered_users = filtered_users.filter(city=user.city)
+
+        if gender:
+            filtered_users = filtered_users.filter(gender=gender)
+
+        if zodiac_sign:
+            filtered_users = filtered_users.filter(zodiac_sign=zodiac_sign)
+
+        if min_birth_year and max_birth_year:
+            filtered_users = filtered_users.filter(dob__year__range=(min_birth_year, max_birth_year))
+            
+            # Step 2: Fetch all interests of filtered users in one query
+        all_interest_qs = UserInterestModel.objects.filter(user__in=filtered_users)
+        
+        # Step 3: Build a dictionary {user_id: set of interests}
+        user_interest_map = defaultdict(set)
+        for obj in all_interest_qs:
+            user_interest_map[obj.user_id].add(obj.name)
+
+        # Step 4: Get current user's interests
+        user_interests = set(
+            UserInterestModel.objects.filter(user=user).values_list("name", flat=True)
+        )
+
+        # Step 5: Compute scores
+        scored_users = []
+        for candidate in filtered_users:
+            candidate_interests = user_interest_map.get(candidate.id, set())
+            intersection = user_interests & candidate_interests
+
+            score = int((len(intersection) / len(user_interests)) * 100) if user_interests else 0
+            print('SCORE = ', score)
+            scored_users.append((candidate, score))
+
+        # Step 6: Sort by category
+        strong = [u for u, score in scored_users if score >= 70]
+        medium = [u for u, score in scored_users if 40 <= score < 70]
+        weak = [u for u, score in scored_users if score < 40]
+
+        return strong + medium + weak

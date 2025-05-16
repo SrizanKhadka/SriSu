@@ -6,6 +6,7 @@ from rest_framework.routers import DefaultRouter
 auth_routers = DefaultRouter()
 
 auth_routers.register("user-preferences", UserPreferenceView, basename="user_preferences")
+auth_routers.register("user-suggestions", UserSuggestionView, basename="user_suggestions")
 
 urlpatterns = [
     path("", include(auth_routers.urls)),
