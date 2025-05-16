@@ -213,30 +213,8 @@ class UserPreferenceView(ModelViewSet):
     queryset = UserPreferenceModel.objects.all()
     serializer_class = UserPreferenceSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        user = request.user
-    
-        self.validate_user_request(data=data, user=user)
-                        
-        self.perform_create(serializer)
-        
-        return Response(
-            {
-                "message": "User preference created successfully.",
-                "data": serializer.data,
-            },
-            status=status.HTTP_201_CREATED,
-        )
-    
-    def perform_create(self, serializer):
-        return serializer.save()
-    
-    def validate_user_request(self,data, user):
-        
+
+    def validate_user_request(self, data, user):
         user_data = data.get("user")
         if not user_data or user_data.id != user.id:
             raise ValidationError({"error": "User does not match."})
@@ -246,5 +224,42 @@ class UserPreferenceView(ModelViewSet):
 
         if not user.is_phone_verified:
             raise ValidationError({"error": "User phone number is not verified."})
-            
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        self.validate_user_request(data=serializer.validated_data, user=request.user)
+        self.perform_create(serializer)
+
+        return Response(
+            {
+                "message": "User preference created successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        self.validate_user_request(data=serializer.validated_data, user=request.user)
+
+        self.perform_update(serializer)
+
+        return Response(
+            {
+                "message": "User preference updated successfully.",
+                "data": serializer.data,
+            }
+        )
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_update(self, serializer):
+        serializer.save()
        

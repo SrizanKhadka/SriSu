@@ -128,6 +128,18 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
 
 
 class UserPreferenceSerializer(serializers.ModelSerializer):
+    
+    user = serializers.PrimaryKeyRelatedField(
+            queryset=UserModel.objects.all(),
+            write_only=True
+        )    
     class Meta:
         model = UserPreferenceModel
-        fields = "__all__"
+        fields = [
+            "user",
+            "min_age",
+            "max_age",
+            "radius_km",
+            "city",
+            "country"
+        ]
