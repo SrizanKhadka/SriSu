@@ -278,19 +278,35 @@ class UserSuggestionView(ModelViewSet):
     pagination_class = UserSuggestionPagination
     http_method_names = ["get"]
 
-    def get_queryset(self):
+    def list(self, request, *args, **kwargs):
         user = self.request.user
         preferences = UserPreferenceModel.objects.filter(user=user).first()
+        gender = GenderChoices.MALE if user.gender == GenderChoices.FEMALE else GenderChoices.FEMALE
+
         
         if not preferences:
-            return UserModel.objects.order_by('?') #return random users if no preferences are set
+            all_users = list(UserModel.objects.exclude(id=user.id).filter(gender=gender))
+            random.seed(request.user.id)
+            random.shuffle(all_users)
+
+            page = self.paginate_queryset(all_users)
+            serializer = self.get_serializer(page, many=True)
+            return Response({
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data
+                },
+                "message": "User Suggestions fetched successfully."
+            })
+
+
 
         today = date.today()
         min_birth_year = today.year - preferences.max_age
         max_birth_year = today.year - preferences.min_age
         zodiac_sign = preferences.zodiac_sign
-
-        gender = GenderChoices.MALE if user.gender == GenderChoices.FEMALE else GenderChoices.FEMALE
 
         filtered_users = UserModel.objects.exclude(id=user.id)
         
@@ -306,20 +322,17 @@ class UserSuggestionView(ModelViewSet):
         if min_birth_year and max_birth_year:
             filtered_users = filtered_users.filter(dob__year__range=(min_birth_year, max_birth_year))
             
-            # Step 2: Fetch all interests of filtered users in one query
         all_interest_qs = UserInterestModel.objects.filter(user__in=filtered_users)
         
-        # Step 3: Build a dictionary {user_id: set of interests}
+        #Build a dictionary {user_id: set of interests}
         user_interest_map = defaultdict(set)
         for obj in all_interest_qs:
             user_interest_map[obj.user_id].add(obj.name)
 
-        # Step 4: Get current user's interests
         user_interests = set(
             UserInterestModel.objects.filter(user=user).values_list("name", flat=True)
         )
 
-        # Step 5: Compute scores
         scored_users = []
         for candidate in filtered_users:
             candidate_interests = user_interest_map.get(candidate.id, set())
@@ -329,9 +342,24 @@ class UserSuggestionView(ModelViewSet):
             print('SCORE = ', score)
             scored_users.append((candidate, score))
 
-        # Step 6: Sort by category
-        strong = [u for u, score in scored_users if score >= 70]
-        medium = [u for u, score in scored_users if 40 <= score < 70]
-        weak = [u for u, score in scored_users if score < 40]
+        strong = [user for user, score in scored_users if score >= 70]
+        medium = [user for user, score in scored_users if 40 <= score < 70]
+        weak = [user for user, score in scored_users if score < 40]
+        
+        sorted_users = strong + medium + weak
 
-        return strong + medium + weak
+        page = self.paginate_queryset(sorted_users)
+        serializer = self.get_serializer(page, many=True)
+        return Response({
+            "data": {
+                "count": self.paginator.page.paginator.count,
+                "next": self.paginator.get_next_link(),
+                "previous": self.paginator.get_previous_link(),
+                "results": serializer.data
+            },
+            "message": "User Suggestions fetched successfully."
+        })
+
+
+
+

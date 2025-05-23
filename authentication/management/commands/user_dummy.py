@@ -12,17 +12,18 @@ class Command(BaseCommand):
 
     def create_fake_user(self):
         phone_number = "+977" + self.fake.msisdn()[:8]
-        full_name = self.fake.name()
-        last_name = self.fake.last_name()
+        full_name = self.fake.first_name() + " " + self.fake.last_name()
+        
+        # male_url = self.generate_unsplash_url(query="man portrait")
+        female_url = self.generate_unsplash_url(query="woman portrait")
 
         user = UserModel.objects.create(
             phone_number=phone_number,
-            profile_photo=self.fake.image_url(),
+            profile_photo=female_url,
             full_name=full_name,
             gender=GenderChoices.FEMALE,
             zodiac_sign=ZodiacSignChoices.ARIES,
             mood=MoodChoices.HAPPY,
-            last_name=last_name,
             city= "Kathmandu",
             country="Nepal",
             bio=self.fake.text(max_nb_chars=200),
@@ -37,4 +38,7 @@ class Command(BaseCommand):
         for _ in range(10):
             user = self.create_fake_user()
             self.stdout.write(self.style.SUCCESS(f"✅ Created user: {user.full_name} ({user.phone_number})"))
+    
+    def generate_unsplash_url(self,query="person", width=300, height=300):
+        return f"https://source.unsplash.com/{width}x{height}/?{query}"
             

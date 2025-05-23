@@ -6,8 +6,30 @@ from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
 from drf_writable_nested import WritableNestedModelSerializer
 
+class UserPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPhotoAlbumModel
+        fields = "__all__"
+
+    def validate(self, data):
+        validated_data = super().validate(data)
+        existing_photos = UserPhotoAlbumModel.objects.filter(
+            user=validated_data["user"]
+        ).count()
+
+        if existing_photos >= 10:
+            raise serializers.ValidationError("You can only upload 10 photos.")
+        return validated_data
+class UserInterestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserInterestModel
+        fields = "__all__"
+
 
 class UserModelSerializer(serializers.ModelSerializer):
+    
+    user_interests = UserInterestSerializer(many=True, read_only=True)
+    user_photos = UserPhotoSerializer(many=True, read_only=True)
     class Meta:
         model = UserModel
         fields = "__all__"
@@ -54,29 +76,6 @@ class VerifyOtpSerializer(serializers.Serializer):
         otp_lifespan = 5
         return now() > updated_time + timedelta(minutes=otp_lifespan)
 
-
-class UserPhotoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserPhotoAlbumModel
-        fields = "__all__"
-
-    def validate(self, data):
-        validated_data = super().validate(data)
-        existing_photos = UserPhotoAlbumModel.objects.filter(
-            user=validated_data["user"]
-        ).count()
-
-        if existing_photos >= 10:
-            raise serializers.ValidationError("You can only upload 10 photos.")
-        return validated_data
-
-
-class UserInterestSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserInterestModel
-        fields = "__all__"
-
-
 class SetUpProfileSerializer(WritableNestedModelSerializer):
 
     profile_photo = serializers.SerializerMethodField()
@@ -89,6 +88,7 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             "phone_number",
             "profile_photo",
             "full_name",
+            "username",
             "gender",
             "zodiac_sign",
             "dob",
@@ -107,6 +107,7 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
         required_fields = [
             "phone_number",
             "full_name",
+            "username",
             "gender",
             "zodiac_sign",
             "dob",
