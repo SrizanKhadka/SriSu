@@ -3,6 +3,7 @@ from authentication.models import *
 from rest_framework import serializers
 from datetime import timedelta
 from django.utils.timezone import now
+from chat.models import SingleConnectionModel
 from utils.choices import OtpStatusChoices
 from drf_writable_nested import WritableNestedModelSerializer
 
@@ -33,6 +34,32 @@ class UserModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserModel
         fields = "__all__"
+
+class UserSuggestionSerializer(serializers.ModelSerializer):
+    user_interests = UserInterestSerializer(many=True, read_only=True)
+    user_photos = UserPhotoSerializer(many=True, read_only=True)
+    crushed = serializers.BooleanField()
+
+    class Meta:
+        model = UserModel
+        fields = [
+            "id",
+            "phone_number",
+            "full_name",
+            "username",
+            "user_interests",
+            "user_photos",
+            "profile_photo",
+            "city",
+            "country",
+            "dob",
+            "gender",
+            "zodiac_sign",
+            "mood",
+            "bio",
+            "crushed"
+        ]
+        
 
 
 class SendOtpSerializer(serializers.Serializer):

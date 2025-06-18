@@ -17,6 +17,8 @@ from utils.choices import GenderChoices
 from datetime import date
 from collections import defaultdict
 from rest_framework.pagination import PageNumberPagination
+from django.db.models import OuterRef, Exists, Subquery
+
 
 class SendOTPAPIView(APIView):
 
@@ -273,7 +275,7 @@ class UserSuggestionPagination(PageNumberPagination):
        
 class UserSuggestionView(ModelViewSet):
     queryset = UserModel.objects.all()
-    serializer_class = UserModelSerializer
+    serializer_class = UserSuggestionSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = UserSuggestionPagination
     http_method_names = ["get"]
@@ -307,6 +309,11 @@ class UserSuggestionView(ModelViewSet):
         min_birth_year = today.year - preferences.max_age
         max_birth_year = today.year - preferences.min_age
         zodiac_sign = preferences.zodiac_sign
+        
+        connection_sent = SingleConnectionModel.objects.filter(
+            sender_number=user.phone_number,
+            receiver_number=OuterRef('phone_number'),
+        )
 
         filtered_users = UserModel.objects.exclude(id=user.id)
         
@@ -322,6 +329,16 @@ class UserSuggestionView(ModelViewSet):
         if min_birth_year and max_birth_year:
             filtered_users = filtered_users.filter(dob__year__range=(min_birth_year, max_birth_year))
             
+            
+        connection_sent = SingleConnectionModel.objects.filter(
+            sender_number=user.phone_number,
+            receiver_number=OuterRef('phone_number'),
+        )
+
+        filtered_users = filtered_users.annotate(
+            crushed=Exists(connection_sent)
+        )
+
         all_interest_qs = UserInterestModel.objects.filter(user__in=filtered_users)
         
         #Build a dictionary {user_id: set of interests}
@@ -359,6 +376,8 @@ class UserSuggestionView(ModelViewSet):
             },
             "message": "User Suggestions fetched successfully."
         })
+
+
 
 
 
