@@ -284,10 +284,18 @@ class UserSuggestionView(ModelViewSet):
         user = self.request.user
         preferences = UserPreferenceModel.objects.filter(user=user).first()
         gender = GenderChoices.MALE if user.gender == GenderChoices.FEMALE else GenderChoices.FEMALE
-
+        
+        connection_sent = SingleConnectionModel.objects.filter(
+            sender_number=user.phone_number,
+            receiver_number=OuterRef('phone_number'),
+        )
         
         if not preferences:
-            all_users = list(UserModel.objects.exclude(id=user.id).filter(gender=gender))
+            all_users = UserModel.objects.exclude(id=user.id).filter(gender=gender)
+            all_users = list(all_users.annotate(
+                crushed=Exists(connection_sent)
+            ))
+            
             random.seed(request.user.id)
             random.shuffle(all_users)
 
@@ -309,11 +317,6 @@ class UserSuggestionView(ModelViewSet):
         min_birth_year = today.year - preferences.max_age
         max_birth_year = today.year - preferences.min_age
         zodiac_sign = preferences.zodiac_sign
-        
-        connection_sent = SingleConnectionModel.objects.filter(
-            sender_number=user.phone_number,
-            receiver_number=OuterRef('phone_number'),
-        )
 
         filtered_users = UserModel.objects.exclude(id=user.id)
         
@@ -329,12 +332,7 @@ class UserSuggestionView(ModelViewSet):
         if min_birth_year and max_birth_year:
             filtered_users = filtered_users.filter(dob__year__range=(min_birth_year, max_birth_year))
             
-            
-        connection_sent = SingleConnectionModel.objects.filter(
-            sender_number=user.phone_number,
-            receiver_number=OuterRef('phone_number'),
-        )
-
+        
         filtered_users = filtered_users.annotate(
             crushed=Exists(connection_sent)
         )
