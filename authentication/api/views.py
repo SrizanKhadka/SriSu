@@ -18,6 +18,7 @@ from datetime import date
 from collections import defaultdict
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import OuterRef, Exists, Subquery
+from rest_framework.decorators import action
 
 
 class SendOTPAPIView(APIView):
@@ -229,6 +230,18 @@ class UserPreferenceView(ModelViewSet):
 
         if not user.is_phone_verified:
             raise ValidationError({"error": "User phone number is not verified."})
+    
+    def get_object(self):
+        obj = UserPreferenceModel.objects.filter(user=self.request.user).first()
+        if not obj:
+           return None
+        return obj
+        
+    @action(detail=False, methods=["get"], url_path="me")
+    def get_my_preference(self, request):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

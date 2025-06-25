@@ -164,6 +164,7 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserPreferenceModel
         fields = [
+            "id",
             "user",
             "min_age",
             "max_age",
