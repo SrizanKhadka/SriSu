@@ -1,4 +1,10 @@
-from .serializers import *
+from .serializers import (
+    CoupleConnectionSerializer,
+    SingleConnectionSerializer,
+    CoupleModelSerializer,
+    UserPreferenceSerializer,
+    UserSuggestionSerializer
+)
 from rest_framework import status
 from rest_framework.response import Response
 import random

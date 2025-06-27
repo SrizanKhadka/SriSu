@@ -1,8 +1,8 @@
 from rest_framework import serializers
-from social.models import *
+from social.models import CoupleConnectionModel, CoupleModel, PhotoAlbumModel, SingleConnectionModel, UserPreferenceModel
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
-from chat.models import *
-from chat.utils.chatutils import *
+from authentication.models import UserModel
+from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
 
