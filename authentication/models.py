@@ -68,30 +68,6 @@ class UserModel(AbstractUser):
         return self.full_name or self.phone_number
 
 
-class UserPreferenceModel(models.Model):
-    user = models.OneToOneField("UserModel", on_delete=models.CASCADE, related_name="user_preferences")
-    min_age = models.IntegerField(null=True, blank=True,default=18)
-    max_age = models.IntegerField(null=True, blank=True,default=35)
-    zodiac_sign = models.CharField(
-        max_length=20, choices=ZodiacSignChoices, null=True, blank=True
-    )
-    radius_km = models.IntegerField(null=True, blank=True)
-    city = models.CharField(max_length=100, null=True, blank=True)
-    country = models.CharField(max_length=100, null=True, blank=True)    
-    created_date = models.DateTimeField(auto_now_add=True)
-    updated_date = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        verbose_name = "User Preference"
-        verbose_name_plural = "User Preferences"
-        ordering = ["user"]
-        indexes = [
-            models.Index(fields=["user"]),
-        ]
-
-    def __str__(self):
-        return self.user.full_name or self.user.phone_number
-
 class UserPhotoAlbumModel(models.Model):
     user = models.ForeignKey("UserModel", on_delete=models.CASCADE, related_name="user_photos")
     photo = models.ImageField(upload_to="user_album/", null=True, blank=True)

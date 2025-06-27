@@ -1,114 +1,115 @@
 from django.db import models
 from authentication.models import UserModel
 from utils.choices import *
+from social.models import CoupleModel, SingleConnectionModel, CoupleConnectionModel, PhotoAlbumModel
 import uuid
 
-class CoupleConnectionModel(models.Model):
-    sender_number = models.CharField(max_length=15)
-    receiver_number = models.CharField(max_length=15)
-    connection_status = models.CharField(
-        max_length=20,
-        choices=CoupleConnectionStatus,
-        default=CoupleConnectionStatus.NOTHING,
-    )
-    breakup_reason = models.TextField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+# class CoupleConnectionModel(models.Model):
+#     sender_number = models.CharField(max_length=15)
+#     receiver_number = models.CharField(max_length=15)
+#     connection_status = models.CharField(
+#         max_length=20,
+#         choices=CoupleConnectionStatus,
+#         default=CoupleConnectionStatus.NOTHING,
+#     )
+#     breakup_reason = models.TextField(null=True, blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        # unique_together = [
-        #     "sender_number",
-        #     "receiver_number",
-        # ]  # Prevent duplicate requests
+#     class Meta:
+#         # unique_together = [
+#         #     "sender_number",
+#         #     "receiver_number",
+#         # ]  # Prevent duplicate requests
 
-        ordering = ["-updated_at"]
-        verbose_name = "Couple_Connection"
-        indexes = [
-            models.Index(fields=["sender_number", "receiver_number","connection_status"]),
-        ]
+#         ordering = ["-updated_at"]
+#         verbose_name = "Couple_Connection"
+#         indexes = [
+#             models.Index(fields=["sender_number", "receiver_number","connection_status"]),
+#         ]
 
-    def __str__(self):
-        return f"{self.sender_number}-{self.receiver_number}"
-
-
-class CoupleModel(models.Model):
-    couple_connection_model = models.ForeignKey(
-        CoupleConnectionModel,
-        on_delete=models.CASCADE,
-        related_name="couple_connection_model",
-    )
-
-    male_partner = models.ForeignKey(
-        UserModel, on_delete=models.CASCADE, related_name="male_partner"
-    )
-
-    female_partner = models.ForeignKey(
-        UserModel, on_delete=models.CASCADE, related_name="female_partner"
-    )
-    anniversary_date = models.DateField(null=True, blank=True)
-    shared_dreams = (models.JSONField(null=True, blank=True),)
-    shared_interests = models.JSONField(null=True, blank=True)
-    relationship_tagline = models.CharField(max_length=30, null=True, blank=True)
-    photo_album = models.JSONField(null=True, blank=True)
-    nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
-    nickname_for_female = models.CharField(max_length=30, null=True, blank=True)
-    created_at = models.DateTimeField(
-        auto_now_add=True, help_text="Timestamp when the couple was created."
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True, help_text="Timestamp when the couple data was last updated."
-    )
-
-    class Meta:
-        ordering = ["-created_at"]
-        verbose_name = "Couple"
-        verbose_name_plural = "Couples"
-
-    # def clean(self):
-    #     if self.photo_album.count() > 10:
-    #         raise ValidationError("You can only upload up to 10 photos.")
-
-    def __str__(self):
-        return f"{self.male_partner} ❤️ {self.female_partner}"
+#     def __str__(self):
+#         return f"{self.sender_number}-{self.receiver_number}"
 
 
-class PhotoAlbumModel(models.Model):
-    couple = models.ForeignKey(
-        CoupleModel, on_delete=models.CASCADE, related_name="couple_photo_album"
-    )
-    photo = models.ImageField(upload_to="couple_album/", null=True, blank=True)
+# class CoupleModel(models.Model):
+#     couple_connection_model = models.ForeignKey(
+#         CoupleConnectionModel,
+#         on_delete=models.CASCADE,
+#         related_name="couple_connection_model",
+#     )
 
-    def __str__(self):
-        return f"{self.couple.male_partner} ❤️ {self.couple.female_partner}"
+#     male_partner = models.ForeignKey(
+#         UserModel, on_delete=models.CASCADE, related_name="male_partner"
+#     )
+
+#     female_partner = models.ForeignKey(
+#         UserModel, on_delete=models.CASCADE, related_name="female_partner"
+#     )
+#     anniversary_date = models.DateField(null=True, blank=True)
+#     shared_dreams = (models.JSONField(null=True, blank=True),)
+#     shared_interests = models.JSONField(null=True, blank=True)
+#     relationship_tagline = models.CharField(max_length=30, null=True, blank=True)
+#     photo_album = models.JSONField(null=True, blank=True)
+#     nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
+#     nickname_for_female = models.CharField(max_length=30, null=True, blank=True)
+#     created_at = models.DateTimeField(
+#         auto_now_add=True, help_text="Timestamp when the couple was created."
+#     )
+#     updated_at = models.DateTimeField(
+#         auto_now=True, help_text="Timestamp when the couple data was last updated."
+#     )
+
+#     class Meta:
+#         ordering = ["-created_at"]
+#         verbose_name = "Couple"
+#         verbose_name_plural = "Couples"
+
+#     # def clean(self):
+#     #     if self.photo_album.count() > 10:
+#     #         raise ValidationError("You can only upload up to 10 photos.")
+
+#     def __str__(self):
+#         return f"{self.male_partner} ❤️ {self.female_partner}"
+
+
+# class PhotoAlbumModel(models.Model):
+#     couple = models.ForeignKey(
+#         CoupleModel, on_delete=models.CASCADE, related_name="couple_photo_album"
+#     )
+#     photo = models.ImageField(upload_to="couple_album/", null=True, blank=True)
+
+#     def __str__(self):
+#         return f"{self.couple.male_partner} ❤️ {self.couple.female_partner}"
 
 class MediaModel(models.Model):
     file = models.FileField(upload_to="chats_media/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
-class SingleConnectionModel(models.Model):
-    sender_number = models.CharField(max_length=15)
-    receiver_number = models.CharField(max_length=15)
-    connection_status = models.CharField(
-        max_length=20,
-        choices=SingleConnectionStaus,
-        default=SingleConnectionStaus.NOTHING,
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+# class SingleConnectionModel(models.Model):
+#     sender_number = models.CharField(max_length=15)
+#     receiver_number = models.CharField(max_length=15)
+#     connection_status = models.CharField(
+#         max_length=20,
+#         choices=SingleConnectionStatus,
+#         default=SingleConnectionStatus.NOTHING,
+#     )
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
     
-    class Meta:
-        # unique_together = [
-        #     "sender_number",
-        #     "receiver_number",
-        # ]  # Prevent duplicate requests
+#     class Meta:
+#         # unique_together = [
+#         #     "sender_number",
+#         #     "receiver_number",
+#         # ]  # Prevent duplicate requests
 
-        ordering = ["-updated_at"]
-        indexes = [
-            models.Index(fields=["sender_number", "receiver_number","connection_status"]),
-        ]
+#         ordering = ["-updated_at"]
+#         indexes = [
+#             models.Index(fields=["sender_number", "receiver_number","connection_status"]),
+#         ]
 
-    def __str__(self):
-        return f"{self.sender_number}-{self.receiver_number}"
+#     def __str__(self):
+#         return f"{self.sender_number}-{self.receiver_number}"
 
 
 class MessageModel(models.Model):
@@ -187,7 +188,7 @@ class ChatRoom(models.Model):
     singles = models.ForeignKey(SingleConnectionModel, on_delete=models.CASCADE, related_name="chat_rooms",null=True, blank=True)
     
     # Messages
-    messages = models.ManyToManyField(MessageModel, related_name="chat_rooms",null=True, blank=True)
+    messages = models.ManyToManyField(MessageModel, related_name="chat_rooms", blank=True)
 
     # Chat metadata
     last_message = models.ForeignKey(MessageModel, null=True, blank=True, on_delete=models.SET_NULL, related_name="last_message_chat",default="")

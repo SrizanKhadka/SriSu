@@ -3,7 +3,6 @@ from authentication.models import *
 from rest_framework import serializers
 from datetime import timedelta
 from django.utils.timezone import now
-from chat.models import SingleConnectionModel
 from utils.choices import OtpStatusChoices
 from drf_writable_nested import WritableNestedModelSerializer
 
@@ -154,23 +153,3 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             return request.build_absolute_uri(obj.profile_photo.url)
         return None
 
-
-class UserPreferenceSerializer(serializers.ModelSerializer):
-    
-    user = serializers.PrimaryKeyRelatedField(
-            queryset=UserModel.objects.all(),
-            write_only=True
-        )    
-    class Meta:
-        model = UserPreferenceModel
-        # fields = [
-        #     "id",
-        #     "user",
-        #     "min_age",
-        #     "max_age",
-        #     "radius_km",
-        #     "city",
-        #     "zodiac_sign",
-        #     "country"
-        # ]
-        fields = "__all__"
