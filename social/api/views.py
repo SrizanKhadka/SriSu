@@ -1,10 +1,4 @@
-from .serializers import (
-    CoupleConnectionSerializer,
-    SingleConnectionSerializer,
-    CoupleModelSerializer,
-    UserPreferenceSerializer,
-    UserSuggestionSerializer
-)
+from .serializers import *
 from rest_framework import status
 from rest_framework.response import Response
 import random
@@ -528,6 +522,7 @@ class CoupleAPIView(ModelViewSet):
 
         # Handle photo updates explicitly in the view
         photo_album_data = request.FILES.getlist("couple_photo_album")
+        print("PHOTO ALBUM DATA", photo_album_data)
         self.upload_photos(photo_album_data=photo_album_data, instance=instance)
 
         serializer = self.get_serializer(instance, data=request.data, partial=True)
