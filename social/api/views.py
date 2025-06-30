@@ -522,7 +522,6 @@ class CoupleAPIView(ModelViewSet):
 
         # Handle photo updates explicitly in the view
         photo_album_data = request.FILES.getlist("couple_photo_album")
-        print("PHOTO ALBUM DATA", photo_album_data)
         self.upload_photos(photo_album_data=photo_album_data, instance=instance)
 
         serializer = self.get_serializer(instance, data=request.data, partial=True)
@@ -669,9 +668,14 @@ class UserSuggestionView(ModelViewSet):
         zodiac_sign = preferences.zodiac_sign
 
         filtered_users = UserModel.objects.exclude(id=user.id)
+        
+        print("FILTERING USERS BASED ON PREFERENCES", filtered_users.count())
+        print("USER CITY PREF = ", preferences.city)
 
-        if user.city:
-            filtered_users = filtered_users.filter(city=user.city)
+        if preferences.city:
+            filtered_users = filtered_users.filter(city=preferences.city)
+        elif preferences.country:
+            filtered_users = filtered_users.filter(country=preferences.country)
 
         if gender:
             filtered_users = filtered_users.filter(gender=gender)
@@ -683,6 +687,8 @@ class UserSuggestionView(ModelViewSet):
             filtered_users = filtered_users.filter(
                 dob__year__range=(min_birth_year, max_birth_year)
             )
+            
+        print("FILTERED USERS = ", filtered_users.count())
 
         filtered_users = filtered_users.annotate(crushed=Exists(connection_sent))
 
@@ -715,6 +721,10 @@ class UserSuggestionView(ModelViewSet):
         weak = [user for user, score in scored_users if score < 40]
 
         sorted_users = strong + medium + weak
+        
+        print("STRONG USERS = ", len(strong))
+        print("MEDIUM USERS = ", len(medium))
+        print("WEAK USERS = ", len(weak))
 
         page = self.paginate_queryset(sorted_users)
         serializer = self.get_serializer(page, many=True)

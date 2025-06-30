@@ -58,6 +58,7 @@ class Command(BaseCommand):
 
         country = random.choice(list(self.country_city_map.keys()))
         city = random.choice(self.country_city_map[country])
+        age = random.randint(18, 35)
 
         user = UserModel.objects.create(
             phone_number=phone_number,
@@ -70,7 +71,7 @@ class Command(BaseCommand):
             country=country,
             bio=self.fake.text(max_nb_chars=200),
             username=self.fake.user_name(),
-            dob=self.fake.date_of_birth(minimum_age=18, maximum_age=40),
+            dob=self.fake.date_of_birth(minimum_age=18, maximum_age=35),
             is_profile_complete=True,
             is_phone_verified=True,
         )
