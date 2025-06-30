@@ -63,10 +63,6 @@ class CoupleModel(models.Model):
         verbose_name = "Couple"
         verbose_name_plural = "Couples"
 
-    # def clean(self):
-    #     if self.photo_album.count() > 10:
-    #         raise ValidationError("You can only upload up to 10 photos.")
-
     def __str__(self):
         return f"{self.male_partner} ❤️ {self.female_partner}"
 
@@ -92,10 +88,6 @@ class SingleConnectionModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        # unique_together = [
-        #     "sender_number",
-        #     "receiver_number",
-        # ]  # Prevent duplicate requests
 
         ordering = ["-updated_at"]
         indexes = [
