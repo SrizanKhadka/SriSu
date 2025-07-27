@@ -1,2 +1,0 @@
-1. Change the websocket with redis server.
-2. Thoroughly check the websocket messaging i.e. chat consumer.
