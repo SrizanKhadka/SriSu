@@ -12,13 +12,6 @@ from authentication.api.serializers import UserModelSerializer
 from django.utils.timezone import now
 from datetime import timedelta
 from rest_framework.exceptions import ValidationError
-from rest_framework.viewsets import ModelViewSet
-from utils.choices import GenderChoices
-from datetime import date
-from collections import defaultdict
-from rest_framework.pagination import PageNumberPagination
-from django.db.models import OuterRef, Exists, Subquery
-from rest_framework.decorators import action
 
 
 class SendOTPAPIView(APIView):
