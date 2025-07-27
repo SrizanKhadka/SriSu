@@ -739,3 +739,4 @@ class UserSuggestionView(ModelViewSet):
                 "message": "User Suggestions fetched successfully.",
             }
         )
+
