@@ -5,3 +5,5 @@ from authentication.models import *
 
 admin.site.register(OtpModel)
 admin.site.register(UserModel)
+admin.site.register(UserPhotoAlbumModel)
+admin.site.register(UserInterestModel)

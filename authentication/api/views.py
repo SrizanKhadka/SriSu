@@ -1,4 +1,4 @@
-from .serializers import SendOtpSerializer, VerifyOtpSerializer, SetUpProfileSerializer
+from .serializers import *
 from rest_framework import status
 from rest_framework.response import Response
 from authentication.models import *
@@ -188,7 +188,9 @@ class SetUpProfileAPIView(APIView):
 
         # Partial update to allow updating only provided fields
         # serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
-        serializer = SetUpProfileSerializer(user, data=request.data, partial=True, context={"request": request})
+        serializer = SetUpProfileSerializer(
+            user, data=request.data, partial=True, context={"request": request}
+        )
 
         serializer.is_valid(raise_exception=True)
         serializer.save(is_profile_complete=True)

@@ -1,16 +1,64 @@
 from rest_framework import serializers
-from authentication.models import OtpModel, UserModel
+from authentication.models import *
 from rest_framework import serializers
 from datetime import timedelta
 from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from drf_writable_nested import WritableNestedModelSerializer
+
+class UserPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPhotoAlbumModel
+        fields = "__all__"
+
+    def validate(self, data):
+        validated_data = super().validate(data)
+        existing_photos = UserPhotoAlbumModel.objects.filter(
+            user=validated_data["user"]
+        ).count()
+
+        if existing_photos >= 10:
+            raise serializers.ValidationError("You can only upload 10 photos.")
+        return validated_data
+class UserInterestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserInterestModel
+        fields = "__all__"
 
 
 class UserModelSerializer(serializers.ModelSerializer):
+    
+    user_interests = UserInterestSerializer(many=True, read_only=True)
+    user_photos = UserPhotoSerializer(many=True, read_only=True)
     class Meta:
         model = UserModel
         fields = "__all__"
+
+class UserSuggestionSerializer(serializers.ModelSerializer):
+    user_interests = UserInterestSerializer(many=True, read_only=True)
+    user_photos = UserPhotoSerializer(many=True, read_only=True)
+    crushed = serializers.BooleanField()
+
+    class Meta:
+        model = UserModel
+        fields = [
+            "id",
+            "phone_number",
+            "full_name",
+            "username",
+            "user_interests",
+            "user_photos",
+            "profile_photo",
+            "city",
+            "country",
+            "dob",
+            "gender",
+            "zodiac_sign",
+            "mood",
+            "bio",
+            "crushed"
+        ]
+        
 
 
 class SendOtpSerializer(serializers.Serializer):
@@ -54,10 +102,11 @@ class VerifyOtpSerializer(serializers.Serializer):
         otp_lifespan = 5
         return now() > updated_time + timedelta(minutes=otp_lifespan)
 
+class SetUpProfileSerializer(WritableNestedModelSerializer):
 
-class SetUpProfileSerializer(serializers.ModelSerializer):
-    
     profile_photo = serializers.SerializerMethodField()
+    user_photos = UserPhotoSerializer(many=True, required=False)
+    user_interests = UserInterestSerializer(many=True, required=False)
 
     class Meta:
         model = UserModel
@@ -65,12 +114,15 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
             "phone_number",
             "profile_photo",
             "full_name",
+            "username",
             "gender",
             "zodiac_sign",
             "dob",
             "mood",
             "is_profile_complete",
             "is_phone_verified",
+            "user_interests",
+            "user_photos",
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
 
@@ -81,6 +133,7 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
         required_fields = [
             "phone_number",
             "full_name",
+            "username",
             "gender",
             "zodiac_sign",
             "dob",
@@ -93,9 +146,10 @@ class SetUpProfileSerializer(serializers.ModelSerializer):
                 )
 
         return validated_data
-    
+
     def get_profile_photo(self, obj):
-        request = self.context.get("request") 
+        request = self.context.get("request")
         if obj.profile_photo:
             return request.build_absolute_uri(obj.profile_photo.url)
         return None
+

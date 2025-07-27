@@ -49,7 +49,7 @@ class CoupleConnectionStatus(TextChoices):
     REJECTED = "REJECTED", "Rejected"
     BREAKUP = "BREAK-UP", "Break-Up"
 
-class SingleConnectionStaus(TextChoices):
+class SingleConnectionStatus(TextChoices):
     NOTHING = "NOTHING", "Nothing"
     PENDING = "PENDING", "Pending"
     ACCEPTED = "ACCEPTED", "Accepted"
@@ -72,6 +72,12 @@ class MessageReaction(TextChoices):
 
 
 class DeleteOption(TextChoices):
+    DELETED = "DELETED","deleted"
     NOT_DELETED = "NOT_DELETED", "Not deleted"
     DELETE_FOR_ME = "DELETE_FOR_ME", "Delete for me"
     DELETE_FOR_EVERYONE = "DELETE_FOR_EVERYONE", "Delete for everyone"
+    CONVERSATION_DELETED = "CONVERSATION_DELETED", "Conversation deleted"
+
+class ChatTypeChoices(TextChoices):
+    SINGLE = "single", "Single"
+    COUPLE = "couple", "Couple"

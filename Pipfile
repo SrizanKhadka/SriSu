@@ -16,8 +16,11 @@ channels-redis = "*"
 websockets = "*"
 pydantic = "*"
 django-filter = "*"
+faker = "*"
+drf-writable-nested = "*"
+drf-nested-forms = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.12"
+python_version = "3.13.5"
