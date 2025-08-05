@@ -151,8 +151,9 @@ class VerifyOTPAPIView(APIView):
 
         response_data = self.generate_tokens(user=user)
 
-        user_data = UserModelSerializer(user).data
-
+        context = {'request': self.request}
+        user_data = UserModelSerializer(user, context=context).data
+        
         return Response(
             {
                 "message": "Phone number verified successfully.",

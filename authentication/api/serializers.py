@@ -30,9 +30,20 @@ class UserModelSerializer(serializers.ModelSerializer):
     
     user_interests = UserInterestSerializer(many=True, read_only=True)
     user_photos = UserPhotoSerializer(many=True, read_only=True)
+    profile_photo = serializers.SerializerMethodField()
     class Meta:
         model = UserModel
         fields = "__all__"
+    
+    def get_profile_photo(self, obj):
+        request = self.context.get('request')
+        print(f"Object: {obj}, Profile photo: {obj.profile_photo}, Request: {self.context.get('request')}")
+
+        if obj.profile_photo and request:
+            return request.build_absolute_uri(obj.profile_photo.url)
+        elif obj.profile_photo:
+            return obj.profile_photo.url
+        return None
 
 class UserSuggestionSerializer(serializers.ModelSerializer):
     user_interests = UserInterestSerializer(many=True, read_only=True)
