@@ -115,7 +115,7 @@ class VerifyOtpSerializer(serializers.Serializer):
 
 class SetUpProfileSerializer(WritableNestedModelSerializer):
 
-    profile_photo = serializers.SerializerMethodField()
+    # profile_photo = serializers.SerializerMethodField()
     user_photos = UserPhotoSerializer(many=True, required=False)
     user_interests = UserInterestSerializer(many=True, required=False)
 
@@ -134,6 +134,9 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             "is_phone_verified",
             "user_interests",
             "user_photos",
+            "country",
+            "city",
+            "bio",
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
 
@@ -157,10 +160,22 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
                 )
 
         return validated_data
-
-    def get_profile_photo(self, obj):
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)  # Default serialization
         request = self.context.get("request")
-        if obj.profile_photo:
-            return request.build_absolute_uri(obj.profile_photo.url)
-        return None
+        
+        # Modify profile_photo to return absolute URL
+        if instance.profile_photo and request:
+            data['profile_photo'] = request.build_absolute_uri(instance.profile_photo.url)
+        else:
+            data['profile_photo'] = None
+
+        return data
+
+    # def get_profile_photo(self, obj):
+    #     request = self.context.get("request")
+    #     if obj.profile_photo:
+    #         return request.build_absolute_uri(obj.profile_photo.url)
+    #     return None
 
