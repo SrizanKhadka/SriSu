@@ -167,11 +167,30 @@ class VerifyOTPAPIView(APIView):
 
 
 class SetUpProfileAPIView(APIView):
-    http_method_names = ["put", "patch"]  # Allow PUT and PATCH for updates
+    http_method_names = ["get","put", "patch"] 
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, phone_number):
         return UserModel.objects.filter(phone_number=phone_number).first()
+    
+    def get(self, request, *args, **kwargs):
+        
+        user = request.user
+        
+        if not user:
+            raise ValidationError(
+                {"error": "User does not exist."}
+            )
+            
+        serializer = SetUpProfileSerializer(user, context={"request": request})
+
+        return Response(
+            {
+                "message": "User profile retrieved successfully",
+                "data": {"user": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def update(self, request, *args, **kwargs):
         phone_number = request.data.get("phone_number")
