@@ -8,10 +8,12 @@ from rest_framework import permissions
 from django.conf import settings
 from twilio.rest import Client
 from rest_framework_simplejwt.tokens import RefreshToken
-from authentication.api.serializers import UserModelSerializer
+from authentication.api.serializers import UserModelSerializer, InterestSerializer
 from django.utils.timezone import now
 from datetime import timedelta
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny
+
 
 
 class SendOTPAPIView(APIView):
@@ -228,3 +230,18 @@ class SetUpProfileAPIView(APIView):
 
     def patch(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
+
+class InterestsAPIView(APIView):
+    http_method_names = ["get"]
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        interests = InterestModel.objects.all()
+        serializer = InterestSerializer(interests, many=True)
+        return Response(
+            {
+                "message": "User interests retrieved successfully.",
+                "data": {"interests": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+        )

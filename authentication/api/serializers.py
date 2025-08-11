@@ -178,4 +178,16 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
     #     if obj.profile_photo:
     #         return request.build_absolute_uri(obj.profile_photo.url)
     #     return None
+    
+class InterestCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InterestCategory
+        fields = "__all__"
 
+class InterestSerializer(serializers.ModelSerializer):
+    category = InterestCategorySerializer(read_only=True)
+    class Meta:
+        model = InterestModel
+        fields = "__all__"
+
+    

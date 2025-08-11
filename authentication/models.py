@@ -80,6 +80,15 @@ class UserPhotoAlbumModel(models.Model):
 class UserInterestModel(models.Model):
     user = models.ForeignKey("UserModel", on_delete=models.CASCADE, related_name="user_interests")
     name = models.CharField(max_length=100)
+    interest = models.ForeignKey("InterestModel", on_delete=models.CASCADE, related_name="user_interests", null=True, blank=True)
+    category = models.ForeignKey(
+        "InterestCategory",
+        on_delete=models.CASCADE,
+        related_name="user_interests",
+        null=True,
+        blank=True,
+    ),
+    
     
     class Meta:
         verbose_name = "User Interest"
@@ -91,6 +100,34 @@ class UserInterestModel(models.Model):
     
     def __str__(self):
         return f"{self.user.full_name} - {self.name}"
+    
+class InterestModel(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    category = models.ForeignKey(
+        "InterestCategory",
+        on_delete=models.CASCADE,
+        related_name="interests",
+        null=True,
+        blank=True,
+    )
+    created_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Interest"
+        verbose_name_plural = "Interests"
+        ordering = ["name"]
+    
+    def __str__(self):
+        return self.name
+
+class InterestCategory(models.Model):
+    name = models.CharField(max_length=50, unique=True)   # e.g. "SPORTS"
+    label = models.CharField(max_length=100)              # e.g. "Sports"
+
+    def __str__(self):
+        return self.label
+    
     
 class OtpModel(models.Model):
     phone_number = models.CharField(max_length=15,unique=True)

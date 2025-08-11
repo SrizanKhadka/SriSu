@@ -81,3 +81,23 @@ class DeleteOption(TextChoices):
 class ChatTypeChoices(TextChoices):
     SINGLE = "single", "Single"
     COUPLE = "couple", "Couple"
+    
+class InterestCategoryChoices(TextChoices):
+    SPORTS = "SPORTS", "Sports"
+    MUSIC = "MUSIC", "Music"
+    TRAVEL = "TRAVEL", "Travel"
+    FOOD = "FOOD", "Food"
+    ART = "ART", "Art"
+    TECHNOLOGY = "TECHNOLOGY", "Technology"
+    FITNESS = "FITNESS", "Fitness"
+    FASHION = "FASHION", "Fashion"
+    GAMING = "GAMING", "Gaming"
+    MOVIES = "MOVIES", "Movies"
+    BOOKS = "BOOKS", "Books"
+    PHOTOGRAPHY = "PHOTOGRAPHY", "Photography"
+    NATURE = "NATURE", "Nature"
+    ANIMALS = "ANIMALS", "Animals"
+    HOBBIES = "HOBBIES", "Hobbies"
+    CULTURE = "CULTURE", "Culture"
+    EDUCATION = "EDUCATION", "Education"
+    OTHER = "OTHER", "Other"
