@@ -46,18 +46,8 @@ class Command(BaseCommand):
                     "Cycling": "SPORTS",
                     "Football": "SPORTS",
                     "Hockey": "SPORTS",
-                    "Rugby": "SPORTS",
-                    "Running": "SPORTS",
-                    "Soccer": "SPORTS",
-                    "Swimming": "SPORTS",
-                    "Table Tennis": "SPORTS",
-                    "Tennis": "SPORTS",
-                    "Volleyball": "SPORTS",
 
                     # MUSIC
-                    "Classical Music": "MUSIC",
-                    "Electronic Music": "MUSIC",
-                    "Hip Hop Music": "MUSIC",
                     "Jazz Music": "MUSIC",
                     "Music Production": "MUSIC",
                     "Pop Music": "MUSIC",
@@ -82,27 +72,10 @@ class Command(BaseCommand):
 
                     # TECHNOLOGY
                     "AI Technology": "TECHNOLOGY",
-                    "Artificial Intelligence": "TECHNOLOGY",
-                    "Augmented Reality": "TECHNOLOGY",
                     "Blockchain": "TECHNOLOGY",
                     "Cloud Computing": "TECHNOLOGY",
-                    "Content Creation": "TECHNOLOGY",
                     "Cybersecurity": "TECHNOLOGY",
-                    "Data Science": "TECHNOLOGY",
-                    "Digital Marketing": "TECHNOLOGY",
-                    "E-commerce": "TECHNOLOGY",
-                    "Internet of Things": "TECHNOLOGY",
-                    "Machine Learning": "TECHNOLOGY",
-                    "Mobile App Development": "TECHNOLOGY",
-                    "Podcasting": "TECHNOLOGY",
-                    "Robotics": "TECHNOLOGY",
-                    "Smart Home Technology": "TECHNOLOGY",
-                    "Social Media": "TECHNOLOGY",
-                    "Virtual Reality": "TECHNOLOGY",
-                    "Wearable Technology": "TECHNOLOGY",
-                    "Web Development": "TECHNOLOGY",
-                    "3D Printing": "TECHNOLOGY",
-
+                    
                     # FITNESS
                     "Fitness Training": "FITNESS",
                     "Yoga": "FITNESS",

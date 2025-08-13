@@ -14,8 +14,6 @@ from datetime import timedelta
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 
-
-
 class SendOTPAPIView(APIView):
 
     http_method_names = ["post"]

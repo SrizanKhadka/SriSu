@@ -81,15 +81,6 @@ class UserInterestModel(models.Model):
     user = models.ForeignKey("UserModel", on_delete=models.CASCADE, related_name="user_interests")
     name = models.CharField(max_length=100)
     interest = models.ForeignKey("InterestModel", on_delete=models.CASCADE, related_name="user_interests", null=True, blank=True)
-    category = models.ForeignKey(
-        "InterestCategory",
-        on_delete=models.CASCADE,
-        related_name="user_interests",
-        null=True,
-        blank=True,
-    ),
-    
-    
     class Meta:
         verbose_name = "User Interest"
         verbose_name_plural = "User Interests"
