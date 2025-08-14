@@ -24,7 +24,7 @@ class UserInterestSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserInterestModel
         fields = "__all__"
-
+    
 
 class UserModelSerializer(serializers.ModelSerializer):
     
@@ -117,11 +117,12 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
 
     # profile_photo = serializers.SerializerMethodField()
     user_photos = UserPhotoSerializer(many=True, required=False)
-    user_interests = UserInterestSerializer(many=True, required=False)
+    user_interests = UserInterestSerializer(many=True, required=False)  
 
     class Meta:
         model = UserModel
         fields = [
+            "id",
             "phone_number",
             "profile_photo",
             "full_name",
@@ -170,14 +171,13 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             data['profile_photo'] = request.build_absolute_uri(instance.profile_photo.url)
         else:
             data['profile_photo'] = None
+        
+        data['user_interests'] = [
+        interest for interest in data.get('user_interests', [])
+        if not interest.get('removed', False)
+    ]
 
         return data
-
-    # def get_profile_photo(self, obj):
-    #     request = self.context.get("request")
-    #     if obj.profile_photo:
-    #         return request.build_absolute_uri(obj.profile_photo.url)
-    #     return None
     
 class InterestCategorySerializer(serializers.ModelSerializer):
     class Meta:
