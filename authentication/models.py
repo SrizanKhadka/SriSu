@@ -71,6 +71,7 @@ class UserModel(AbstractUser):
 class UserPhotoAlbumModel(models.Model):
     user = models.ForeignKey("UserModel", on_delete=models.CASCADE, related_name="user_photos")
     photo = models.ImageField(upload_to="user_album/", null=True, blank=True)
+    removed = models.BooleanField(default=False)
     created_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
 

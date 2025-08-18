@@ -20,6 +20,7 @@ class UserPhotoSerializer(serializers.ModelSerializer):
         if existing_photos >= 10:
             raise serializers.ValidationError("You can only upload 10 photos.")
         return validated_data
+
 class UserInterestSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserInterestModel
