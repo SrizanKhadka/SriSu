@@ -20,7 +20,7 @@ class UserPhotoSerializer(serializers.ModelSerializer):
         if existing_photos >= 10:
             raise serializers.ValidationError("You can only upload 10 photos.")
         return validated_data
-
+                        
 class UserInterestSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserInterestModel
@@ -118,7 +118,8 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
 
     # profile_photo = serializers.SerializerMethodField()
     user_photos = UserPhotoSerializer(many=True, required=False)
-    user_interests = UserInterestSerializer(many=True, required=False)  
+    user_interests = UserInterestSerializer(many=True, required=False)
+    print(f"Setting up profile for user")  
 
     class Meta:
         model = UserModel
@@ -176,8 +177,12 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
         data['user_interests'] = [
         interest for interest in data.get('user_interests', [])
         if not interest.get('removed', False)
-    ]
-
+        ]
+        
+        data['user_photos'] = [
+            photo for photo in data.get('user_photos', [])
+            if not photo.get('removed', False)
+        ]
         return data
     
 class InterestCategorySerializer(serializers.ModelSerializer):

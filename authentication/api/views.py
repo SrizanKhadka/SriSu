@@ -191,6 +191,44 @@ class SetUpProfileAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
+    # def update(self, request, *args, **kwargs):
+    #     phone_number = request.data.get("phone_number")
+
+    #     if not phone_number:
+    #         raise ValidationError({"error": "Phone number is required."})
+
+    #     user = self.get_object(phone_number)
+    #     if not user:
+    #         raise ValidationError(
+    #             {"error": "User with this phone number does not exist."}
+    #         )
+    #     elif not user.is_phone_verified:
+    #         raise ValidationError({"error": "Phone number is not verified yet."})
+
+    #     # Partial update to allow updating only provided fields
+    #     # serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
+    #     serializer = SetUpProfileSerializer(
+    #         user, data=request.data, partial=True, context={"request": request}
+    #     )
+
+    #     serializer.is_valid(raise_exception=True)
+    #     serializer.save(is_profile_complete=True)
+
+    #     return Response(
+    #         {
+    #             "message": "Profile updated successfully",
+    #             "data": {"user": serializer.data},
+    #         },
+    #         status=status.HTTP_200_OK,
+    #     )
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    
     def update(self, request, *args, **kwargs):
         phone_number = request.data.get("phone_number")
 
@@ -199,14 +237,46 @@ class SetUpProfileAPIView(APIView):
 
         user = self.get_object(phone_number)
         if not user:
-            raise ValidationError(
-                {"error": "User with this phone number does not exist."}
-            )
+            raise ValidationError({"error": "User with this phone number does not exist."})
         elif not user.is_phone_verified:
             raise ValidationError({"error": "Phone number is not verified yet."})
 
-        # Partial update to allow updating only provided fields
-        # serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
+        # Extract nested user_photos
+        user_photos_data = request.data.pop("user_photos", [])
+
+        # Handle user photos manually
+        for photo_data in user_photos_data:
+            photo_id = photo_data.get("id")
+            removed = photo_data.get("removed", False)
+            new_photo = photo_data.get("photo", None)
+
+            if not photo_id:
+                # Case 1: New photo upload
+                UserPhotoAlbumModel.objects.create(
+                    user=user,
+                    photo=new_photo,
+                    removed=False
+                )
+            else:
+                try:
+                    photo_instance = UserPhotoAlbumModel.objects.get(id=photo_id, user=user)
+
+                    if removed:
+                        # Case 2: Mark as removed
+                        photo_instance.removed = True
+                        photo_instance.save()
+
+                    elif new_photo:
+                        # Case 3: Replace photo file
+                        photo_instance.photo = new_photo
+                        photo_instance.removed = False
+                        photo_instance.save()
+                    # Case 4: No change → keep as is
+
+                except UserPhotoAlbumModel.DoesNotExist:
+                    raise ValidationError({"error": f"Photo with id {photo_id} not found."})
+
+        # Now update the rest of the user fields
         serializer = SetUpProfileSerializer(
             user, data=request.data, partial=True, context={"request": request}
         )
@@ -222,11 +292,6 @@ class SetUpProfileAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    def put(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
-
-    def patch(self, request, *args, **kwargs):
-        return self.update(request, *args, **kwargs)
 
 class InterestsAPIView(APIView):
     http_method_names = ["get"]
