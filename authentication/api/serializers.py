@@ -179,10 +179,14 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
         if not interest.get('removed', False)
         ]
         
-        data['user_photos'] = [
-            photo for photo in data.get('user_photos', [])
-            if not photo.get('removed', False)
-        ]
+        data['user_photos'] = sorted(
+            (
+                photo for photo in data.get('user_photos', [])
+                if not photo.get('removed', False)
+            ),
+            key=lambda x: x.get('id', 0)  # use 0 or None-safe default if id missing
+        )
+        
         return data
     
 class InterestCategorySerializer(serializers.ModelSerializer):
