@@ -164,7 +164,6 @@ class VerifyOTPAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
 class SetUpProfileAPIView(APIView):
     http_method_names = ["get","put", "patch"] 
     permission_classes = [permissions.IsAuthenticated]
@@ -191,43 +190,11 @@ class SetUpProfileAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    # def update(self, request, *args, **kwargs):
-    #     phone_number = request.data.get("phone_number")
-
-    #     if not phone_number:
-    #         raise ValidationError({"error": "Phone number is required."})
-
-    #     user = self.get_object(phone_number)
-    #     if not user:
-    #         raise ValidationError(
-    #             {"error": "User with this phone number does not exist."}
-    #         )
-    #     elif not user.is_phone_verified:
-    #         raise ValidationError({"error": "Phone number is not verified yet."})
-
-    #     # Partial update to allow updating only provided fields
-    #     # serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
-    #     serializer = SetUpProfileSerializer(
-    #         user, data=request.data, partial=True, context={"request": request}
-    #     )
-
-    #     serializer.is_valid(raise_exception=True)
-    #     serializer.save(is_profile_complete=True)
-
-    #     return Response(
-    #         {
-    #             "message": "Profile updated successfully",
-    #             "data": {"user": serializer.data},
-    #         },
-    #         status=status.HTTP_200_OK,
-    #     )
-
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
 
     def patch(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
-    
     
     def update(self, request, *args, **kwargs):
         phone_number = request.data.get("phone_number")
@@ -240,11 +207,28 @@ class SetUpProfileAPIView(APIView):
             raise ValidationError({"error": "User with this phone number does not exist."})
         elif not user.is_phone_verified:
             raise ValidationError({"error": "Phone number is not verified yet."})
+        
+        user_interests_data = request.data.pop("user_interests", [])
+        self.manage_user_interests(user, user_interests_data)
 
-        # Extract nested user_photos
         user_photos_data = request.data.pop("user_photos", [])
+        self.manage_user_photos(user, user_photos_data)
 
-        # Handle user photos manually
+        serializer = SetUpProfileSerializer(
+            user, data=request.data, partial=True, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(is_profile_complete=True)
+
+        return Response(
+            {
+                "message": "Profile updated successfully",
+                "data": {"user": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+    )
+    
+    def manage_user_photos(self, user, user_photos_data):
         for photo_data in user_photos_data:
             photo_id = photo_data.get("id")
             removed = photo_data.get("removed", False)
@@ -265,34 +249,49 @@ class SetUpProfileAPIView(APIView):
                         # Case 2: Mark as removed
                         photo_instance.removed = True
                         photo_instance.save()
+                        
+                    elif new_photo: 
+                        #Case 3: Updating the photo
+                        old_index = photo_instance.index  
 
-                    elif new_photo:
-                        # Case 3: Replace photo file
-                        photo_instance.photo = new_photo
-                        photo_instance.removed = False
+                       #move the existing photo to the end of the list
+                        photo_instance.removed = True
+                        photo_instance.index = UserPhotoAlbumModel.objects.filter(user=user).count()
                         photo_instance.save()
-                    # Case 4: No change → keep as is
+
+                        # Create a new photo with the original index
+                        UserPhotoAlbumModel.objects.create(
+                            user=user,
+                            photo=new_photo,
+                            removed=False,
+                            index=old_index
+                        )
 
                 except UserPhotoAlbumModel.DoesNotExist:
                     raise ValidationError({"error": f"Photo with id {photo_id} not found."})
+    
+    def manage_user_interests(self,user, user_interests_data):
+        
+        for interest_data in user_interests_data:
+            name = interest_data.get("name")
+            interest_id = interest_data.get("interest")
+            removed = interest_data.get("removed", False)
 
-        # Now update the rest of the user fields
-        serializer = SetUpProfileSerializer(
-            user, data=request.data, partial=True, context={"request": request}
-        )
-
-        serializer.is_valid(raise_exception=True)
-        serializer.save(is_profile_complete=True)
-
-        return Response(
-            {
-                "message": "Profile updated successfully",
-                "data": {"user": serializer.data},
-            },
-            status=status.HTTP_200_OK,
-        )
-
-
+            if not name:
+                continue  # skip invalid entries
+            
+            interest_exists = UserInterestModel.objects.filter(user=user, name=name).exists()
+            
+            if not interest_exists:
+            # Only add if this combination does not already exist
+                UserInterestModel.objects.create(
+                    user=user,
+                    name=name,
+                    interest_id=interest_id,
+                )
+            elif interest_exists and removed:
+                UserInterestModel.objects.filter(user=user, name=name).update(removed=True)
+                    
 class InterestsAPIView(APIView):
     http_method_names = ["get"]
     permission_classes = [AllowAny]
