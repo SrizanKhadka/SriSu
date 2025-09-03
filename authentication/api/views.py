@@ -252,21 +252,19 @@ class SetUpProfileAPIView(APIView):
                         
                     elif new_photo: 
                         #Case 3: Updating the photo
-                        old_index = photo_instance.index  
-
-                       #move the existing photo to the end of the list
-                        photo_instance.removed = True
-                        photo_instance.index = UserPhotoAlbumModel.objects.filter(user=user).count()
-                        photo_instance.save()
-
-                        # Create a new photo with the original index
+                        
+                        #Store the old photo in the album before replacing
                         UserPhotoAlbumModel.objects.create(
                             user=user,
-                            photo=new_photo,
-                            removed=False,
-                            index=old_index
+                            photo=photo_instance.photo,
+                            removed=True
                         )
 
+                        # Update the instance with new photo
+                        photo_instance.photo = new_photo
+                        photo_instance.created_date = now()
+                        photo_instance.save()
+                        
                 except UserPhotoAlbumModel.DoesNotExist:
                     raise ValidationError({"error": f"Photo with id {photo_id} not found."})
     
