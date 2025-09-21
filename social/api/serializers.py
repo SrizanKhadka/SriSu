@@ -3,6 +3,7 @@ from social.models import CoupleConnectionModel, CoupleModel, PhotoAlbumModel, S
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
 from authentication.models import UserModel
 from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
+from authentication.api.serializers import UserModelSerializer
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
 
@@ -54,6 +55,8 @@ class CoupleModelSerializer(serializers.ModelSerializer):
         return photos
 
 class SingleConnectionSerializer(serializers.ModelSerializer):
+    
+    receiver = serializers.SerializerMethodField()
     class Meta:
         model = SingleConnectionModel
         fields = "__all__"
@@ -81,6 +84,13 @@ class SingleConnectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
         
         return validated_data
+    
+    def get_receiver(self, obj):
+        try:
+            user = UserModel.objects.get(phone_number=obj.receiver_number)
+            return UserModelSerializer(user).data
+        except UserModel.DoesNotExist:
+            return None
 
 class UserSuggestionSerializer(serializers.ModelSerializer):
     user_interests = UserInterestSerializer(many=True, read_only=True)
