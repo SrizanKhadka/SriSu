@@ -5,6 +5,10 @@ class GenderChoices(TextChoices):
     MALE = "MALE", "Male"
     FEMALE = "FEMALE", "Female"
 
+class RelationshipStatusChoices(TextChoices):
+    SINGLE = "SINGLE", "Single"
+    MINGLED = "MINGLED", "Mingled"
+
 
 class ZodiacSignChoices(TextChoices):
     ARIES = "ARIES", "Aries"

@@ -2,7 +2,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from social.api.views import CoupleConnectionRequestView, CoupleConnectionView, CoupleAPIView, SingleConnectionView, SingleConnectionRequestView, UserPreferenceView, UserSuggestionView
+from social.api.views import CoupleConnectionRequestView, CoupleConnectionView, CoupleAPIView, SingleConnectionView, SingleConnectionRequestView, UserPreferenceView, UserSuggestionView, find_partner
 
 
 social_routers = DefaultRouter()
@@ -16,5 +16,7 @@ social_routers.register("user-preferences", UserPreferenceView, basename="user_p
 social_routers.register("user-suggestions", UserSuggestionView, basename="user_suggestions")
 
 urlpatterns = [
-    path("", include(social_routers.urls))
+    path("", include(social_routers.urls)),
+    path("find-partner/", find_partner, name="find-partner"),
+
 ]

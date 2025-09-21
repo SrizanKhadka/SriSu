@@ -13,7 +13,9 @@ from authentication.models import UserInterestModel
 from utils.choices import CoupleConnectionStatus, GenderChoices
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from authentication.api.serializers import UserModelSerializer
+from django.shortcuts import get_object_or_404
 from chat.utils.chatutils import *
 
 class CoupleConnectionView(ModelViewSet):
@@ -739,4 +741,42 @@ class UserSuggestionView(ModelViewSet):
                 "message": "User Suggestions fetched successfully.",
             }
         )
-
+        
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def find_partner(request):
+    phone_number = request.query_params.get("phone_number")
+    
+    if not phone_number:
+        return Response(
+            {"error": "Phone number is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        
+    if phone_number and not phone_number.startswith("+"):
+        phone_number = f"+{phone_number}"
+        
+    print("FIND PARTNER PHONE NUMBER = ", phone_number)
+            
+    try:
+        partner = UserModel.objects.get(phone_number=phone_number)
+        
+        if not partner:
+            return Response(
+                {"error": "Partner not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        else:
+            serializer = UserModelSerializer(partner, context={'request': request})
+            return Response(
+                {
+                    "message": "Partner found successfully.",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+    except Exception as e:
+        return Response(
+            {"error": "Partner not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )

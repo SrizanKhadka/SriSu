@@ -116,14 +116,4 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
         )    
     class Meta:
         model = UserPreferenceModel
-        # fields = [
-        #     "id",
-        #     "user",
-        #     "min_age",
-        #     "max_age",
-        #     "radius_km",
-        #     "city",
-        #     "zodiac_sign",
-        #     "country"
-        # ]
         fields = "__all__"
