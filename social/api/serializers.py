@@ -88,9 +88,11 @@ class SingleConnectionSerializer(serializers.ModelSerializer):
     def get_receiver(self, obj):
         try:
             user = UserModel.objects.get(phone_number=obj.receiver_number)
-            return UserModelSerializer(user).data
+            context = self.context  # get serializer context (includes request)
+            return UserModelSerializer(user, context=context).data
         except UserModel.DoesNotExist:
             return None
+
 
 class UserSuggestionSerializer(serializers.ModelSerializer):
     user_interests = UserInterestSerializer(many=True, read_only=True)

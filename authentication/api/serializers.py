@@ -166,13 +166,13 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
     
     def to_representation(self, instance):
         data = super().to_representation(instance)  # Default serialization
-        request = self.context.get("request")
+        # request = self.context.get("request")
         
         # Modify profile_photo to return absolute URL
-        if instance.profile_photo and request:
-            data['profile_photo'] = request.build_absolute_uri(instance.profile_photo.url)
-        else:
-            data['profile_photo'] = None
+        # if instance.profile_photo and request:
+        #     data['profile_photo'] = request.build_absolute_uri(instance.profile_photo.url)
+        # else:
+        #     data['profile_photo'] = None
         
         data['user_interests'] = [
         interest for interest in data.get('user_interests', [])
