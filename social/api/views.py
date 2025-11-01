@@ -362,7 +362,7 @@ class SingleConnectionView(ModelViewSet):
                 "message": "Crush request already exists.",
                 "data": self.serializer_class(connection).data,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     def perform_create(self, serializer):
@@ -375,6 +375,7 @@ class SingleConnectionView(ModelViewSet):
         
         sender_number = request.data["sender_number"]
         receiver_number = request.data["receiver_number"]
+        current_user_number = request.user.phone_number
         
         if not has_permission(
             request.user.phone_number, sender_number, receiver_number
@@ -397,7 +398,7 @@ class SingleConnectionView(ModelViewSet):
         
         
         # sender user can make it accept or reject but can cancel (nothing) the connection
-        if sender_number == connection.sender_number and connection_status in [
+        if current_user_number == connection.sender_number and connection_status in [
             CoupleConnectionStatus.ACCEPTED,
             CoupleConnectionStatus.REJECTED,
         ]:
@@ -406,10 +407,7 @@ class SingleConnectionView(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if (
-            connection
-            and connection.connection_status == SingleConnectionStatus.ACCEPTED
-        ) and connection_status == SingleConnectionStatus.REJECTED:
+        if ( connection and connection.connection_status == SingleConnectionStatus.ACCEPTED) and connection_status == SingleConnectionStatus.REJECTED:
             return Response(
                 {"error": "Unsupported operation."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -425,7 +423,7 @@ class SingleConnectionView(ModelViewSet):
 
             if connection:
                 if connection.connection_status == SingleConnectionStatus.REJECTED:
-                    message = "Sorry! Love request rejected."
+                    message = "Sorry! Crush request rejected."
                     return Response(
                         {
                             "message": message,
@@ -434,7 +432,7 @@ class SingleConnectionView(ModelViewSet):
                         status=status.HTTP_200_OK,
                     )
                 elif connection.connection_status == SingleConnectionStatus.NOTHING:
-                    message = "Love request cancelled."
+                    message = "Crush request cancelled."
                     return Response(
                         {
                             "message": message,
@@ -494,7 +492,7 @@ class SingleConnectionRequestView(ModelViewSet):
                     "previous": self.paginator.get_previous_link(),
                     "results": serializer.data,
                 },
-                "message": "User Suggestions fetched successfully.",
+                "message": "Rquests Sent fetched successfully.",
             }
             )
 
@@ -519,7 +517,17 @@ class SingleConnectionRequestView(ModelViewSet):
         
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return Response(
+            {
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data,
+                },
+                "message": "Request received fetched successfully.",
+            }
+            )
 
         serializer = self.get_serializer(received_requests, many=True)
         return Response(serializer.data)
@@ -649,8 +657,10 @@ class UserSuggestionView(ModelViewSet):
         )
 
         connection_sent = SingleConnectionModel.objects.filter(
-            sender_number=user.phone_number,
-            receiver_number=OuterRef("phone_number"),
+            Q(sender_number=user.phone_number, receiver_number=OuterRef("phone_number")) |
+            Q(receiver_number=user.phone_number, sender_number=OuterRef("phone_number"))
+        ).exclude(
+            connection_status__in=[SingleConnectionStatus.NOTHING, SingleConnectionStatus.REJECTED]
         )
 
         if not preferences:
@@ -755,15 +765,13 @@ def find_partner(request):
         
     if phone_number and not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
-        
-    print("FIND PARTNER PHONE NUMBER = ", phone_number)
-            
+                    
     try:
         partner = UserModel.objects.get(phone_number=phone_number)
         
         if not partner:
             return Response(
-                {"error": "Partner not found."},
+                {"message": "Partner not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         else:
@@ -777,6 +785,6 @@ def find_partner(request):
             )
     except Exception as e:
         return Response(
-            {"error": "Partner not found."},
+            {"message": "Partner not found."},
             status=status.HTTP_404_NOT_FOUND,
         )
