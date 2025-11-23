@@ -35,9 +35,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
     
 
     async def receive(self, text_data):
-        print(f"Received message: {text_data}")
         data = json.loads(text_data)
-        action = "delete_message"
+        action = data.get("action")
+        
+        print("INSIDE ON RECEIVE METHOD", data)
         
         if action == "send_message":
 
@@ -62,11 +63,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 ))
                         
         elif action == "fetch_messages":
+            print("Fetching messages...")
             messages = await handle_fetch_messages(
-                user=13,                 # user=self.user,
-                chat_room=self.chat_room,
+                user=97,                 # user=self.user,
+                chat_room="7fe512b9-548b-4a21-93cd-0a25d1aed5b4",
                 data=data
             )
+            
             
             if messages:
                 messageslist = []

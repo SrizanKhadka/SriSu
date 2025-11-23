@@ -6,7 +6,8 @@ from chat.utils.chatutils import is_number_valid, is_number_same, user_with_numb
 from authentication.api.serializers import UserModelSerializer
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
-
+    
+    user = serializers.SerializerMethodField()
     class Meta:
         model = CoupleConnectionModel
         fields = "__all__"
@@ -31,6 +32,25 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
 
         return validated_data
+    
+    def get_user(self, obj):
+        """
+        Returns the opposite user (partner) in the connection relative to the current request user.
+        """
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return None
+
+        current_user = request.user
+        try:
+            if current_user.phone_number == obj.sender_number:
+                partner_user = UserModel.objects.get(phone_number=obj.receiver_number)
+            else:
+                partner_user = UserModel.objects.get(phone_number=obj.sender_number)
+
+            return UserModelSerializer(partner_user, context=self.context).data
+        except UserModel.DoesNotExist:
+            return None
 
 
 
@@ -93,11 +113,11 @@ class SingleConnectionSerializer(serializers.ModelSerializer):
         current_user = request.user
         try:
             if current_user.phone_number == obj.sender_number:
-                partner_user = UserModel.objects.get(phone_number=obj.receiver_number)
+                user = UserModel.objects.get(phone_number=obj.receiver_number)
             else:
-                partner_user = UserModel.objects.get(phone_number=obj.sender_number)
+                user = UserModel.objects.get(phone_number=obj.sender_number)
 
-            return UserModelSerializer(partner_user, context=self.context).data
+            return UserModelSerializer(user, context=self.context).data
         except UserModel.DoesNotExist:
             return None
 

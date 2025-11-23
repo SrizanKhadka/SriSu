@@ -110,6 +110,8 @@ class CoupleConnectionView(ModelViewSet):
 
         sender_number = data["sender_number"]
         receiver_number = data["receiver_number"]
+        current_user_number = request.user.phone_number
+
 
         if not has_permission(
             request.user.phone_number, sender_number, receiver_number
@@ -131,7 +133,7 @@ class CoupleConnectionView(ModelViewSet):
             )
 
             # sender user can make it accept or reject but can cancel (nothing) the connection
-        if sender_number == connection.sender_number and connection_status in [
+        if current_user_number == connection.sender_number and connection_status in [
             CoupleConnectionStatus.ACCEPTED,
             CoupleConnectionStatus.REJECTED,
         ]:
@@ -279,7 +281,17 @@ class CoupleConnectionRequestView(ModelViewSet):
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return Response(
+            {
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data,
+                },
+                "message": "Love Requests Sent fetched successfully.",
+            } 
+         )
 
         serializer = self.get_serializer(sent_requests, many=True)
         return Response(serializer.data)
@@ -300,7 +312,17 @@ class CoupleConnectionRequestView(ModelViewSet):
         
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return Response(
+            {
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data,
+                },
+                "message": "Love Request received fetched successfully.",
+            }
+            )
 
         serializer = self.get_serializer(received_requests, many=True)
         return Response(serializer.data)
@@ -492,7 +514,7 @@ class SingleConnectionRequestView(ModelViewSet):
                     "previous": self.paginator.get_previous_link(),
                     "results": serializer.data,
                 },
-                "message": "Rquests Sent fetched successfully.",
+                "message": "Requests Sent fetched successfully.",
             }
             )
 
@@ -654,7 +676,7 @@ class UserSuggestionView(ModelViewSet):
             GenderChoices.MALE
             if user.gender == GenderChoices.FEMALE
             else GenderChoices.FEMALE
-        )
+        ) 
 
         connection_sent = SingleConnectionModel.objects.filter(
             Q(sender_number=user.phone_number, receiver_number=OuterRef("phone_number")) |

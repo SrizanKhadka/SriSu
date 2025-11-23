@@ -89,7 +89,7 @@ def serialize_message(message):
         "sender_id": str(message.sender.id),
         "text": message.text,
         "message_type": message.message_type,
-        "medias": [media.file.url for media in message.medias.all()] if message.medias.exists() else [],  # ✅ Fix here
+        "medias": [media.file.url for media in message.medias.all()] if message.medias.exists() else [],
         "reply_to": str(message.reply_to.id) if message.reply_to else None,
         "reaction": message.reactions,
         "delete_for": message.delete_for,
