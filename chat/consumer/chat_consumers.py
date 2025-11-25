@@ -57,24 +57,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         
         elif action == "fetch_messages":
             print("Fetching messages...")
-            messages = await handle_fetch_messages(
-                user=97,
-                chat_room="7fe512b9-548b-4a21-93cd-0a25d1aed5b4",
+            result = await handle_fetch_messages(
+                user=self.scope.get("user").id,  # Use actual user from scope
+                chat_room=self.chat_room_id,
                 data=data
             )
-            
-            if messages:
-                messageslist = []
-                for mgs in messages:
-                    print(f"message is available = {mgs.text}")
-                    serialized_message = await serialize_message(mgs)
-                    messageslist.append(serialized_message)
+        
+            if result["messages"]:
+                messages_list = []
+                for msg in result["messages"]:
+                    print(f"message is available = {msg.text}")
+                    serialized_message = await serialize_message(msg)
+                    messages_list.append(serialized_message)
                     
-                # Fetch only sends to requesting client
                 await self.send(text_data=json.dumps({
                     "action": "fetch_messages",
-                    "message": "message sent successfully!",
-                    "data": messageslist
+                    "message": "Messages fetched successfully!",
+                    "data": messages_list,
+                    "pagination": result["pagination"]
+                }))
+            else:
+                await self.send(text_data=json.dumps({
+                    "action": "fetch_messages",
+                    "message": "No messages found",
+                    "data": [],
+                    "pagination": result["pagination"]
                 }))
             
         elif action == "edit_message":
