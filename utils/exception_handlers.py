@@ -5,9 +5,6 @@ from rest_framework import exceptions
 
 def custom_exception_handler(exception, context):
     
-    print("INSIDE CUSTOM EXCEPTION HANDLER..")
-
-    
     response = exception_handler(exception, context)
 
     # print(response, response.data)

@@ -51,10 +51,10 @@ class MessageModel(models.Model):
     message_deletion_dict = models.JSONField(null=True, blank=True)  # Example: {"user_id_1": "delete_for_me", "user_id_2": "delete_for_everyone"}
     is_edited = models.BooleanField(default=False)
     
-    delete_for = models.JSONField(default=dict)
+    delete_for = models.JSONField(null=True, blank=True)  # Example: { "user": [ {"user_id": 1, "delete_option": "DELETE_FOR_ME"}, ... ] }
     
     #reactions
-    reactions = models.JSONField(default=dict)  # Example: { "user_id_1": "❤️", "user_id_2": "😂" }
+    reactions = models.JSONField(null=True,blank=True)  # Example: { "user_id_1": "❤️", "user_id_2": "😂" }
 
     #Timestamps
     timestamp = models.DateTimeField(auto_now_add=True)

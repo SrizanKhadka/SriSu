@@ -85,15 +85,51 @@ def delete_message(message):
 def serialize_message(message):
     return {
         "id": str(message.id),
-        "chat_room_id": str(message.chat_room.id),
-        "sender_id": str(message.sender.id),
-        "text": message.text,
+        
+        # Chat & connection info
+        "chat_room": str(message.chat_room.id) if message.chat_room else None,
+        "couple": message.couple.id if message.couple else None,
+        "singles": message.singles.id if message.singles else None,
+        
+        # Sender/receiver
+        "sender_id": message.sender.id,
+        "receiver_id": message.receiver.id if message.receiver else None,
+
+        # Message content
         "message_type": message.message_type,
-        "medias": [media.file.url for media in message.medias.all()] if message.medias.exists() else [],  # ✅ Fix here
-        "reply_to": str(message.reply_to.id) if message.reply_to else None,
-        "reaction": message.reactions,
-        "delete_for": message.delete_for,
+        "text": message.text,
+        "media": message.media.url if message.media else None,
+        "media_url": message.media_url,
+        "sticker_url": message.sticker_url,
+
+        # Multiple medias (ManyToMany)
+        "medias": [
+            media.file.url
+            for media in message.medias.all()
+        ],
+
+        # Reply
+        "reply_to": {
+            "id": message.reply_to.id,
+            "text": message.reply_to.text,
+            "sender_id": message.reply_to.sender.id
+        } if message.reply_to else None,
+
+        # Message status
+        "is_deleted": message.is_deleted,
         "is_read": message.is_read,
         "is_delivered": message.is_delivered,
+        "is_edited": message.is_edited,
+
+        # Delete settings
+        "deleted_message": message.deleted_message,
+        "delete_option": message.delete_option,
+        "delete_for": message.delete_for,
+        "message_deletion_dict": message.message_deletion_dict,
+
+        # Reactions
+        "reactions": message.reactions,
+
+        # Time
         "timestamp": message.timestamp.isoformat(),
     }

@@ -1,51 +1,61 @@
 
+import asyncio
 from asgiref.sync import sync_to_async
-from django.db.models import Q
 from chat.models import MessageModel
 from utils.choices import DeleteOption
+from django.db.models import Q
+from rest_framework.pagination import PageNumberPagination
+from chat.utils.chatutils import serialize_message
 
-async def handle_fetch_messages(user, chat_room, data):
-    page = int(data.get("page", 1))
-    page_size = int(data.get("page_size", 20))
-    messages = await get_paginated_messages(
-        chat_room, user, page, page_size
+
+class ChatMessagePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+async def get_paginated_messages(chat_room, user, page, page_size):
+    queryset = MessageModel.objects.filter(chat_room=chat_room).order_by("-timestamp")
+
+    queryset = queryset.exclude(
+        Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.DELETE_FOR_ME}])
+        | Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.CONVERSATION_DELETED}])
+    ).reverse()
+
+    paginator = ChatMessagePagination()
+    paginator.page_size = page_size
+
+    results_dict = await paginate_queryset(queryset, page, page_size, paginator)
+
+    return results_dict
+
+
+async def paginate_queryset(queryset, page, page_size, paginator):
+    class DummyRequest:
+        query_params = {"page": page, "page_size": page_size}
+
+    # Run pagination in a sync thread because it hits DB
+    page_obj = await sync_to_async(paginator.paginate_queryset, thread_sensitive=True)(
+        queryset,
+        DummyRequest(),
     )
-    
-    # on_message_fetched(messages)
-    return messages
 
-@sync_to_async
-def get_paginated_messages(chat_room, user, page, page_size):
-    offset = (page - 1) * page_size
+    # Serialize concurrently
+    results = await asyncio.gather(*(serialize_message(msg) for msg in page_obj))
 
-    all_messages = MessageModel.objects.filter(chat_room=chat_room).order_by("-timestamp")
+    count = await sync_to_async(lambda: paginator.page.paginator.count, thread_sensitive=True)()
+    next_page = await sync_to_async(
+        lambda: paginator.page.next_page_number() if paginator.page.has_next() else None,
+        thread_sensitive=True
+    )()
+    previous_page = await sync_to_async(
+        lambda: paginator.page.previous_page_number() if paginator.page.has_previous() else None,
+        thread_sensitive=True
+    )()
 
-    filtered_messages = []
-    deleted_for = []
-
-    for message in all_messages[offset : offset + page_size]:
-        skip = False
-        if message.delete_for:
-            deleted_for = message.delete_for[str(user)]
-            if isinstance(deleted_for, list):  # just to be safe
-                print('INSTANCE OF LIST')
-                for entry in deleted_for:
-                    print('ENTRY', entry)
-                    try:
-                        print('INSIDE OF TRY')
-                        if str(entry.get("user_id")) == str(user) and entry.get("delete_option") in [
-                            DeleteOption.DELETE_FOR_ME,
-                            DeleteOption.CONVERSATION_DELETED,
-                            # DeleteOption.DELETE_FOR_EVERYONE,  # optional
-                        ]:
-                            print('SKIPPING')
-                            skip = True
-                            break
-                    except Exception as e:
-                        print(f"Error parsing delete_for entry: {e}")
-                        continue
-                    
-        if not skip:
-            filtered_messages.append(message)
-
-    return filtered_messages
+    return {
+        "count": count,
+        "next_page": next_page,
+        "previous_page": previous_page,
+        "results": results,
+    }

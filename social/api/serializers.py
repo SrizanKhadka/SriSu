@@ -3,9 +3,11 @@ from social.models import CoupleConnectionModel, CoupleModel, PhotoAlbumModel, S
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
 from authentication.models import UserModel
 from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
+from authentication.api.serializers import UserModelSerializer
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
-
+    
+    user = serializers.SerializerMethodField()
     class Meta:
         model = CoupleConnectionModel
         fields = "__all__"
@@ -30,6 +32,25 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
 
         return validated_data
+    
+    def get_user(self, obj):
+        """
+        Returns the opposite user (partner) in the connection relative to the current request user.
+        """
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return None
+
+        current_user = request.user
+        try:
+            if current_user.phone_number == obj.sender_number:
+                partner_user = UserModel.objects.get(phone_number=obj.receiver_number)
+            else:
+                partner_user = UserModel.objects.get(phone_number=obj.sender_number)
+
+            return UserModelSerializer(partner_user, context=self.context).data
+        except UserModel.DoesNotExist:
+            return None
 
 
 
@@ -54,33 +75,52 @@ class CoupleModelSerializer(serializers.ModelSerializer):
         return photos
 
 class SingleConnectionSerializer(serializers.ModelSerializer):
+    partner = serializers.SerializerMethodField()
+
     class Meta:
         model = SingleConnectionModel
         fields = "__all__"
-    
+
     def validate(self, data):
         print("inside serializer validate")
         validated_data = super().validate(data)
         sender_number = validated_data["sender_number"]
         receiver_number = validated_data["receiver_number"]
 
-        print(f"SENDER_NUMBER = {sender_number}")
-        print("IS NUMBER VALID", is_number_valid(number=sender_number))
-
         if not is_number_valid(number=sender_number):
             raise serializers.ValidationError("Sender_number is Invalid!")
         elif not is_number_valid(number=receiver_number):
             raise serializers.ValidationError("Receiver_number is Invalid!")
-        
+
         if is_number_same(sender_number, receiver_number):
-            raise serializers.ValidationError("Sender and Receiver number can't be same.")
+            raise serializers.ValidationError("Sender and Receiver number can't be the same.")
 
         if not user_with_number_exists(number=sender_number):
-            raise serializers.ValidationError("User doesn't exists")
+            raise serializers.ValidationError("User doesn't exist.")
         elif not user_with_number_exists(number=receiver_number):
-            raise serializers.ValidationError("Your Partner doesn't have an account.")
-        
+            raise serializers.ValidationError("Your partner doesn't have an account.")
+
         return validated_data
+
+    def get_partner(self, obj):
+        """
+        Returns the opposite user (partner) in the connection relative to the current request user.
+        """
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return None
+
+        current_user = request.user
+        try:
+            if current_user.phone_number == obj.sender_number:
+                user = UserModel.objects.get(phone_number=obj.receiver_number)
+            else:
+                user = UserModel.objects.get(phone_number=obj.sender_number)
+
+            return UserModelSerializer(user, context=self.context).data
+        except UserModel.DoesNotExist:
+            return None
+
 
 class UserSuggestionSerializer(serializers.ModelSerializer):
     user_interests = UserInterestSerializer(many=True, read_only=True)
@@ -116,14 +156,4 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
         )    
     class Meta:
         model = UserPreferenceModel
-        # fields = [
-        #     "id",
-        #     "user",
-        #     "min_age",
-        #     "max_age",
-        #     "radius_km",
-        #     "city",
-        #     "zodiac_sign",
-        #     "country"
-        # ]
         fields = "__all__"

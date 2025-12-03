@@ -20,19 +20,31 @@ class UserPhotoSerializer(serializers.ModelSerializer):
         if existing_photos >= 10:
             raise serializers.ValidationError("You can only upload 10 photos.")
         return validated_data
+                        
 class UserInterestSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserInterestModel
         fields = "__all__"
-
+    
 
 class UserModelSerializer(serializers.ModelSerializer):
     
     user_interests = UserInterestSerializer(many=True, read_only=True)
     user_photos = UserPhotoSerializer(many=True, read_only=True)
+    profile_photo = serializers.SerializerMethodField()
     class Meta:
         model = UserModel
         fields = "__all__"
+    
+    def get_profile_photo(self, obj):
+        request = self.context.get('request')
+        print(f"Object: {obj}, Profile photo: {obj.profile_photo}, Request: {self.context.get('request')}")
+
+        if obj.profile_photo and request:
+            return request.build_absolute_uri(obj.profile_photo.url)
+        elif obj.profile_photo:
+            return obj.profile_photo.url
+        return None
 
 class UserSuggestionSerializer(serializers.ModelSerializer):
     user_interests = UserInterestSerializer(many=True, read_only=True)
@@ -104,13 +116,15 @@ class VerifyOtpSerializer(serializers.Serializer):
 
 class SetUpProfileSerializer(WritableNestedModelSerializer):
 
-    profile_photo = serializers.SerializerMethodField()
+    # profile_photo = serializers.SerializerMethodField()
     user_photos = UserPhotoSerializer(many=True, required=False)
     user_interests = UserInterestSerializer(many=True, required=False)
+    print(f"Setting up profile for user")  
 
     class Meta:
         model = UserModel
         fields = [
+            "id",
             "phone_number",
             "profile_photo",
             "full_name",
@@ -123,6 +137,9 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             "is_phone_verified",
             "user_interests",
             "user_photos",
+            "country",
+            "city",
+            "bio",
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
 
@@ -146,10 +163,41 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
                 )
 
         return validated_data
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)  # Default serialization
+        # request = self.context.get("request")
+        
+        # Modify profile_photo to return absolute URL
+        # if instance.profile_photo and request:
+        #     data['profile_photo'] = request.build_absolute_uri(instance.profile_photo.url)
+        # else:
+        #     data['profile_photo'] = None
+        
+        data['user_interests'] = [
+        interest for interest in data.get('user_interests', [])
+        if not interest.get('removed', False)
+        ]
+        
+        data['user_photos'] = sorted(
+            (
+                photo for photo in data.get('user_photos', [])
+                if not photo.get('removed', False)
+            ),
+            key=lambda x: x.get('id', 0) 
+        )
+        
+        return data
+    
+class InterestCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InterestCategory
+        fields = "__all__"
 
-    def get_profile_photo(self, obj):
-        request = self.context.get("request")
-        if obj.profile_photo:
-            return request.build_absolute_uri(obj.profile_photo.url)
-        return None
+class InterestSerializer(serializers.ModelSerializer):
+    category = InterestCategorySerializer(read_only=True)
+    class Meta:
+        model = InterestModel
+        fields = "__all__"
 
+    

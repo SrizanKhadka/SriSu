@@ -5,7 +5,8 @@ services:
     build:
       context: .            # Use the current directory as the build context
       dockerfile: Dockerfile # Specify the Dockerfile to use
-    command: python manage.py runserver 0.0.0.0:8000 # Command to start the Django development server
+    # command: python manage.py runserver 0.0.0.0:8000 # Command to start the Django development server
+    command: daphne -b 0.0.0.0 -p 8000 srisu.asgi:application
     volumes:
       - .:/app              # Mount the current directory into the container for live updates
     ports:
@@ -19,6 +20,10 @@ services:
       - DB_PASSWORD=srisuDB@123 # Database password
       - DB_HOST=srisu_db          # Database hostname (service name of PostgreSQL container)
       - DB_PORT=5432        # Database port
+      - DJANGO_SETTINGS_MODULE=srisu.settings
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
 
   # Database service (PostgreSQL)
   srisu_db:

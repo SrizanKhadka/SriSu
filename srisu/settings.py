@@ -153,19 +153,12 @@ CHANNEL_LAYERS = {
     "default":{
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts":[(config("REDIS_HOST", default="127.0.0.1"),config("REDIS_PORT", default=6379))],
+            "hosts":[(config("REDIS_HOST", default="redis"),config("REDIS_PORT", default=6379))],
         },
     },
 }
 
 AUTH_USER_MODEL = "authentication.UserModel"
-
-
-# CHANNEL_LAYERS = {
-#     "default": {
-#         "BACKEND": "channels.layers.InMemoryChannelLayer"
-#     }
-# }
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

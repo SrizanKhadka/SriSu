@@ -8,11 +8,11 @@ from rest_framework import permissions
 from django.conf import settings
 from twilio.rest import Client
 from rest_framework_simplejwt.tokens import RefreshToken
-from authentication.api.serializers import UserModelSerializer
+from authentication.api.serializers import UserModelSerializer, InterestSerializer
 from django.utils.timezone import now
 from datetime import timedelta
 from rest_framework.exceptions import ValidationError
-
+from rest_framework.permissions import AllowAny
 
 class SendOTPAPIView(APIView):
 
@@ -151,8 +151,8 @@ class VerifyOTPAPIView(APIView):
 
         response_data = self.generate_tokens(user=user)
 
-        user_data = UserModelSerializer(user).data
-
+        context = {'request': request}
+        user_data = UserModelSerializer(user, context=context).data
         return Response(
             {
                 "message": "Phone number verified successfully.",
@@ -164,40 +164,27 @@ class VerifyOTPAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
 class SetUpProfileAPIView(APIView):
-    http_method_names = ["put", "patch"]  # Allow PUT and PATCH for updates
+    http_method_names = ["get","put", "patch"] 
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self, phone_number):
         return UserModel.objects.filter(phone_number=phone_number).first()
-
-    def update(self, request, *args, **kwargs):
-        phone_number = request.data.get("phone_number")
-
-        if not phone_number:
-            raise ValidationError({"error": "Phone number is required."})
-
-        user = self.get_object(phone_number)
+    
+    def get(self, request, *args, **kwargs):
+        
+        user = request.user
+        
         if not user:
             raise ValidationError(
-                {"error": "User with this phone number does not exist."}
+                {"error": "User does not exist."}
             )
-        elif not user.is_phone_verified:
-            raise ValidationError({"error": "Phone number is not verified yet."})
-
-        # Partial update to allow updating only provided fields
-        # serializer = SetUpProfileSerializer(user, data=request.data, partial=True)
-        serializer = SetUpProfileSerializer(
-            user, data=request.data, partial=True, context={"request": request}
-        )
-
-        serializer.is_valid(raise_exception=True)
-        serializer.save(is_profile_complete=True)
+            
+        serializer = SetUpProfileSerializer(user, context={"request": request})
 
         return Response(
             {
-                "message": "Profile updated successfully",
+                "message": "User profile retrieved successfully",
                 "data": {"user": serializer.data},
             },
             status=status.HTTP_200_OK,
@@ -208,3 +195,112 @@ class SetUpProfileAPIView(APIView):
 
     def patch(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        phone_number = request.data.get("phone_number")
+
+        if not phone_number:
+            raise ValidationError({"error": "Phone number is required."})
+
+        user = self.get_object(phone_number)
+        if not user:
+            raise ValidationError({"error": "User with this phone number does not exist."})
+        elif not user.is_phone_verified:
+            raise ValidationError({"error": "Phone number is not verified yet."})
+        
+        user_interests_data = request.data.pop("user_interests", [])
+        self.manage_user_interests(user, user_interests_data)
+
+        user_photos_data = request.data.pop("user_photos", [])
+        self.manage_user_photos(user, user_photos_data)
+
+        serializer = SetUpProfileSerializer(
+            user, data=request.data, partial=True, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(is_profile_complete=True)
+
+        return Response(
+            {
+                "message": "Profile updated successfully",
+                "data": {"user": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+    )
+    
+    def manage_user_photos(self, user, user_photos_data):
+        for photo_data in user_photos_data:
+            photo_id = photo_data.get("id")
+            removed = photo_data.get("removed", False)
+            new_photo = photo_data.get("photo", None)
+
+            if not photo_id:
+                # Case 1: New photo upload
+                UserPhotoAlbumModel.objects.create(
+                    user=user,
+                    photo=new_photo,
+                    removed=False
+                )
+            else:
+                try:
+                    photo_instance = UserPhotoAlbumModel.objects.get(id=photo_id, user=user)
+
+                    if removed:
+                        # Case 2: Mark as removed
+                        photo_instance.removed = True
+                        photo_instance.save()
+                        
+                    elif new_photo: 
+                        #Case 3: Updating the photo
+                        
+                        #Store the old photo in the album before replacing
+                        UserPhotoAlbumModel.objects.create(
+                            user=user,
+                            photo=photo_instance.photo,
+                            removed=True
+                        )
+
+                        # Update the instance with new photo
+                        photo_instance.photo = new_photo
+                        photo_instance.created_date = now()
+                        photo_instance.save()
+                        
+                except UserPhotoAlbumModel.DoesNotExist:
+                    raise ValidationError({"error": f"Photo with id {photo_id} not found."})
+    
+    def manage_user_interests(self,user, user_interests_data):
+        
+        for interest_data in user_interests_data:
+            name = interest_data.get("name")
+            interest_id = interest_data.get("interest")
+            removed = interest_data.get("removed", False)
+
+            if not name:
+                continue  # skip invalid entries
+            
+            interest_exists = UserInterestModel.objects.filter(user=user, name=name).exists()
+            
+            if not interest_exists:
+            # Only add if this combination does not already exist
+                UserInterestModel.objects.create(
+                    user=user,
+                    name=name,
+                    interest_id=interest_id,
+                )
+            elif interest_exists and removed:
+                UserInterestModel.objects.filter(user=user, name=name).update(removed=True)
+                    
+class InterestsAPIView(APIView):
+    http_method_names = ["get"]
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        interests = InterestModel.objects.all()
+        serializer = InterestSerializer(interests, many=True)
+        return Response(
+            {
+                "message": "User interests retrieved successfully.",
+                "data": {"interests": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+        )

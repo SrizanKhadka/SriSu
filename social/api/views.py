@@ -13,7 +13,9 @@ from authentication.models import UserInterestModel
 from utils.choices import CoupleConnectionStatus, GenderChoices
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from authentication.api.serializers import UserModelSerializer
+from django.shortcuts import get_object_or_404
 from chat.utils.chatutils import *
 
 class CoupleConnectionView(ModelViewSet):
@@ -108,6 +110,8 @@ class CoupleConnectionView(ModelViewSet):
 
         sender_number = data["sender_number"]
         receiver_number = data["receiver_number"]
+        current_user_number = request.user.phone_number
+
 
         if not has_permission(
             request.user.phone_number, sender_number, receiver_number
@@ -129,7 +133,7 @@ class CoupleConnectionView(ModelViewSet):
             )
 
             # sender user can make it accept or reject but can cancel (nothing) the connection
-        if sender_number == connection.sender_number and connection_status in [
+        if current_user_number == connection.sender_number and connection_status in [
             CoupleConnectionStatus.ACCEPTED,
             CoupleConnectionStatus.REJECTED,
         ]:
@@ -277,7 +281,17 @@ class CoupleConnectionRequestView(ModelViewSet):
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return Response(
+            {
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data,
+                },
+                "message": "Love Requests Sent fetched successfully.",
+            } 
+         )
 
         serializer = self.get_serializer(sent_requests, many=True)
         return Response(serializer.data)
@@ -298,7 +312,17 @@ class CoupleConnectionRequestView(ModelViewSet):
         
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return Response(
+            {
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data,
+                },
+                "message": "Love Request received fetched successfully.",
+            }
+            )
 
         serializer = self.get_serializer(received_requests, many=True)
         return Response(serializer.data)
@@ -360,7 +384,7 @@ class SingleConnectionView(ModelViewSet):
                 "message": "Crush request already exists.",
                 "data": self.serializer_class(connection).data,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     def perform_create(self, serializer):
@@ -373,6 +397,7 @@ class SingleConnectionView(ModelViewSet):
         
         sender_number = request.data["sender_number"]
         receiver_number = request.data["receiver_number"]
+        current_user_number = request.user.phone_number
         
         if not has_permission(
             request.user.phone_number, sender_number, receiver_number
@@ -395,7 +420,7 @@ class SingleConnectionView(ModelViewSet):
         
         
         # sender user can make it accept or reject but can cancel (nothing) the connection
-        if sender_number == connection.sender_number and connection_status in [
+        if current_user_number == connection.sender_number and connection_status in [
             CoupleConnectionStatus.ACCEPTED,
             CoupleConnectionStatus.REJECTED,
         ]:
@@ -404,10 +429,7 @@ class SingleConnectionView(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if (
-            connection
-            and connection.connection_status == SingleConnectionStatus.ACCEPTED
-        ) and connection_status == SingleConnectionStatus.REJECTED:
+        if ( connection and connection.connection_status == SingleConnectionStatus.ACCEPTED) and connection_status == SingleConnectionStatus.REJECTED:
             return Response(
                 {"error": "Unsupported operation."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -423,7 +445,7 @@ class SingleConnectionView(ModelViewSet):
 
             if connection:
                 if connection.connection_status == SingleConnectionStatus.REJECTED:
-                    message = "Sorry! Love request rejected."
+                    message = "Sorry! Crush request rejected."
                     return Response(
                         {
                             "message": message,
@@ -432,7 +454,7 @@ class SingleConnectionView(ModelViewSet):
                         status=status.HTTP_200_OK,
                     )
                 elif connection.connection_status == SingleConnectionStatus.NOTHING:
-                    message = "Love request cancelled."
+                    message = "Crush request cancelled."
                     return Response(
                         {
                             "message": message,
@@ -484,7 +506,17 @@ class SingleConnectionRequestView(ModelViewSet):
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return Response(
+            {
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data,
+                },
+                "message": "Requests Sent fetched successfully.",
+            }
+            )
 
         serializer = self.get_serializer(sent_requests, many=True)
         return Response(serializer.data)
@@ -507,7 +539,17 @@ class SingleConnectionRequestView(ModelViewSet):
         
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            return Response(
+            {
+                "data": {
+                    "count": self.paginator.page.paginator.count,
+                    "next": self.paginator.get_next_link(),
+                    "previous": self.paginator.get_previous_link(),
+                    "results": serializer.data,
+                },
+                "message": "Request received fetched successfully.",
+            }
+            )
 
         serializer = self.get_serializer(received_requests, many=True)
         return Response(serializer.data)
@@ -634,11 +676,13 @@ class UserSuggestionView(ModelViewSet):
             GenderChoices.MALE
             if user.gender == GenderChoices.FEMALE
             else GenderChoices.FEMALE
-        )
+        ) 
 
         connection_sent = SingleConnectionModel.objects.filter(
-            sender_number=user.phone_number,
-            receiver_number=OuterRef("phone_number"),
+            Q(sender_number=user.phone_number, receiver_number=OuterRef("phone_number")) |
+            Q(receiver_number=user.phone_number, sender_number=OuterRef("phone_number"))
+        ).exclude(
+            connection_status__in=[SingleConnectionStatus.NOTHING, SingleConnectionStatus.REJECTED]
         )
 
         if not preferences:
@@ -668,9 +712,6 @@ class UserSuggestionView(ModelViewSet):
         zodiac_sign = preferences.zodiac_sign
 
         filtered_users = UserModel.objects.exclude(id=user.id)
-        
-        print("FILTERING USERS BASED ON PREFERENCES", filtered_users.count())
-        print("USER CITY PREF = ", preferences.city)
 
         if preferences.city:
             filtered_users = filtered_users.filter(city=preferences.city)
@@ -688,8 +729,6 @@ class UserSuggestionView(ModelViewSet):
                 dob__year__range=(min_birth_year, max_birth_year)
             )
             
-        print("FILTERED USERS = ", filtered_users.count())
-
         filtered_users = filtered_users.annotate(crushed=Exists(connection_sent))
 
         all_interest_qs = UserInterestModel.objects.filter(user__in=filtered_users)
@@ -713,7 +752,6 @@ class UserSuggestionView(ModelViewSet):
                 if user_interests
                 else 0
             )
-            print("SCORE = ", score)
             scored_users.append((candidate, score))
 
         strong = [user for user, score in scored_users if score >= 70]
@@ -721,10 +759,6 @@ class UserSuggestionView(ModelViewSet):
         weak = [user for user, score in scored_users if score < 40]
 
         sorted_users = strong + medium + weak
-        
-        print("STRONG USERS = ", len(strong))
-        print("MEDIUM USERS = ", len(medium))
-        print("WEAK USERS = ", len(weak))
 
         page = self.paginate_queryset(sorted_users)
         serializer = self.get_serializer(page, many=True)
@@ -739,4 +773,40 @@ class UserSuggestionView(ModelViewSet):
                 "message": "User Suggestions fetched successfully.",
             }
         )
-
+        
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def find_partner(request):
+    phone_number = request.query_params.get("phone_number")
+    
+    if not phone_number:
+        return Response(
+            {"error": "Phone number is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        
+    if phone_number and not phone_number.startswith("+"):
+        phone_number = f"+{phone_number}"
+                    
+    try:
+        partner = UserModel.objects.get(phone_number=phone_number)
+        
+        if not partner:
+            return Response(
+                {"message": "Partner not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        else:
+            serializer = UserModelSerializer(partner, context={'request': request})
+            return Response(
+                {
+                    "message": "Partner found successfully.",
+                    "data": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+    except Exception as e:
+        return Response(
+            {"message": "Partner not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )

@@ -21,25 +21,25 @@ async def test_websocket():
         print(f"Received: {response}")
 
 
-# asyncio.run(test_websocket())
+    # asyncio.run(test_websocket())
 
 async def send_message():
-    uri = "ws://localhost:8000/ws/chat/7091ea84-fddc-4ff8-a610-1488722d8760/"
+    uri = "ws://localhost:8000/ws/chat/7fe512b9-548b-4a21-93cd-0a25d1aed5b4/"
     async with websockets.connect(uri) as websocket:
         await websocket.send(json.dumps({
             "action": "send_message",
             "text": "I am fine!",
-            "sender_id": 13,
-            "receiver_id": 5,
-            "couple":4,
-            "chat_room": "7091ea84-fddc-4ff8-a610-1488722d8760",
+            "sender_id": 97,
+            "receiver_id": 95,
+            "couple":2,
+            "chat_room": "7fe512b9-548b-4a21-93cd-0a25d1aed5b4",
             "message_type": "text"
         }))
 
         response = await websocket.recv()
         print("Response:", response)
 
-# asyncio.run(send_message())
+    asyncio.run(send_message())
 
 async def editMessage():
     uri = "ws://localhost:8000/ws/chat/3d0504c6-21ac-40dc-963a-97fb75adf711/"
@@ -92,13 +92,13 @@ async def deleteMessage():
         response = await websocket.recv()
         print("Response:", response)
 
-asyncio.run(deleteMessage())
+# asyncio.run(deleteMessage())
 
 
-if __name__ == "deletemessage":
-    deleteMessage()
+# if __name__ == "deletemessage":
+#     deleteMessage()
 
-# if __name__ == "__send_message__":
-#     send_message()
+if __name__ == "__send_message__":
+    send_message()
     
     
