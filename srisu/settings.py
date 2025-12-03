@@ -149,31 +149,16 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 ASGI_APPLICATION = "srisu.asgi.application"
 
-# CHANNEL_LAYERS = {
-#     "default":{
-#         "BACKEND": "channels_redis.core.RedisChannelLayer",
-#         "CONFIG": {
-#             "hosts":[(config("REDIS_HOST", default="redis"),config("REDIS_PORT", default=6379))],
-#         },
-#     },
-# }
 CHANNEL_LAYERS = {
-    "default": {
+    "default":{
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("redis", 6379)],
+            "hosts":[(config("REDIS_HOST", default="redis"),config("REDIS_PORT", default=6379))],
         },
     },
 }
 
 AUTH_USER_MODEL = "authentication.UserModel"
-
-
-# CHANNEL_LAYERS = {
-#     "default": {
-#         "BACKEND": "channels.layers.InMemoryChannelLayer"
-#     }
-# }
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
