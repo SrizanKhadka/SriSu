@@ -5,8 +5,8 @@ services:
     build:
       context: .            # Use the current directory as the build context
       dockerfile: Dockerfile # Specify the Dockerfile to use
-    # command: python manage.py runserver 0.0.0.0:8000 # Command to start the Django development server
-    command: daphne -b 0.0.0.0 -p 8000 srisu.asgi:application
+    command: python manage.py runserver 0.0.0.0:8000 # Command to start the Django development server
+    # command: daphne -b 0.0.0.0 -p 8000 srisu.asgi:application
     volumes:
       - .:/app              # Mount the current directory into the container for live updates
     ports:

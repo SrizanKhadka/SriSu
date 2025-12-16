@@ -20,7 +20,7 @@ async def get_paginated_messages(chat_room, user, page, page_size):
     queryset = queryset.exclude(
         Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.DELETE_FOR_ME}])
         | Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.CONVERSATION_DELETED}])
-    ).reverse()
+    )
 
     paginator = ChatMessagePagination()
     paginator.page_size = page_size
