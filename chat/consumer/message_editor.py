@@ -6,7 +6,7 @@ from channels.db import database_sync_to_async
 from chat.utils.chatutils import *
 
 async def handle_edit_message(data):
-    message_id = data.get("message_id")
+    message_id = data.get("id")
     new_text = data.get("text")
     is_read = data.get("is_read", False)
 
