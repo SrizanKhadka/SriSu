@@ -15,11 +15,14 @@ class ChatMessagePagination(PageNumberPagination):
 
 
 async def get_paginated_messages(chat_room, user, page, page_size):
-    queryset = MessageModel.objects.filter(chat_room=chat_room).order_by("-timestamp")
-
-    queryset = queryset.exclude(
-        Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.DELETE_FOR_ME}])
-        | Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.CONVERSATION_DELETED}])
+    queryset = (
+        MessageModel.objects
+        .filter(chat_room=chat_room)
+        .exclude(
+            Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.DELETE_FOR_ME}])
+            | Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.CONVERSATION_DELETED}])
+        )
+        # .order_by("timestamp")   # oldest → newest
     )
 
     paginator = ChatMessagePagination()
