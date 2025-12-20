@@ -126,19 +126,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     }))
                     
             elif action == "delete_message":
-                deleted_msg_id = await handle_delete_message(data, on_message_deleted=lambda msg_id:  
-                    print('MESSAGES DELETED SUCCESSFULLY.')
-                )
-                
+                updated_message = await handle_delete_message(data)
+
+                serialized_message = await serialize_message(updated_message)
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
                         "type": "chat_message",
                         "action": "delete_message",
                         "message": "message deleted successfully",
-                        "data": {"message_id": data.get("message_id")}
+                        "data": serialized_message
                     }
                 )
+
                 
             elif action == "react_to_message":
                 reacted_message = await handle_react_to_message(data=data)

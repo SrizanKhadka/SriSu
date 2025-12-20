@@ -2,100 +2,123 @@
 from chat.models import MessageModel
 from channels.db import database_sync_to_async
 from utils.choices import DeleteOption, ChatTypeChoices
-import asyncio
 from chat.utils.chatutils import *
 
-async def handle_delete_for_me(data):
-    message_id = data.get("message_id")
-    user_id = str(data.get("user_id")) 
-    message = await get_message(message_id)
-
-    if message and not message.delete_for:
-        delete_entry = {
-            "user_id": user_id,
-            "delete_option": DeleteOption.DELETE_FOR_ME,
-            "deleted_message": None,
-        }
-
-        if not message.delete_for:
-            message.delete_for = {}
-
-        # Initialize list for this user if it doesn't exist
-        if user_id not in message.delete_for:
-            message.delete_for[user_id] = []
-
-        # Avoid adding duplicate entry
-        if delete_entry not in message.delete_for[user_id]:
-            message.delete_for[user_id].append(delete_entry)
-
-        await save_message(message)
-    else:
-        await save_message(message)
-
-
-
-
-async def handle_delete_for_everyone(data):
-    message_id = data.get("message_id")
-    user_id = str(data.get("user_id"))
-
-    message = await get_message(message_id)
+async def handle_delete_for_me(message, user_id):
+    user_id = str(user_id)
     
-    if message:
-        # print(f"Message ID: {message_id}, User ID: {user_id}")
-        # print(f"Message: {message.text}, Sender ID: {message.sender_id}")
-        sender_id = message.sender_idti
-        delete_message = (
-            "You deleted this message"
-            if sender_id == user_id
-            else "This message was deleted"
-        )
+    if not message.delete_for:
+        message.delete_for = {}
 
-        delete_entry = {
-            "user_id": user_id,
-            "option": DeleteOption.DELETE_FOR_EVERYONE,
-            "delete_message": delete_message,
-        }
+    if user_id not in message.delete_for:
+        message.delete_for[user_id] = []
 
-        if not message.delete_for:
-            message.delete_for = {}
+    delete_entry = {
+        "user_id": user_id,
+        "delete_option": DeleteOption.DELETE_FOR_ME,
+        "deleted_message": "This message was deleted",
+        "is_deleted": True,
+    }
 
-        # Initialize list for this user if it doesn't exist
-        if user_id not in message.delete_for:
-            message.delete_for[user_id] = []
+    # Avoid duplicate entries
+    if delete_entry not in message.delete_for[user_id]:
+        print(f"Adding 'delete for me' entry for user {user_id} on message {message.id}")
+        message.delete_for[user_id].append(delete_entry)
+        message.is_deleted = True
+        message.deleted_message = "This message was deleted"
 
-        # Avoid adding duplicate entry
-        if delete_entry not in message.delete_for[user_id]:
-            message.delete_for[user_id].append(delete_entry)
+    await save_message(message)
+    return message
 
-        await save_message(message)
-    else:
-        await save_message(message)
 
-async def handle_delete_message(data,on_message_deleted):
-    message_ids = data.get("message_id")
+async def handle_delete_for_everyone(message, user_id):
+    user_id = str(user_id)
+
+    if not message:
+        return None
+
+    sender_id = message.sender_id
+    displayed_text = (
+        "You deleted this message"
+        if str(sender_id) == user_id else 
+        "This message was deleted"
+    )
+
+    if not message.delete_for:
+        message.delete_for = {}
+
+    if user_id not in message.delete_for:
+        message.delete_for[user_id] = []
+
+    delete_entry = {
+        "user_id": user_id,
+        "option": DeleteOption.DELETE_FOR_EVERYONE,
+        "delete_message": displayed_text,
+    }
+
+    # Avoid duplicates
+    if delete_entry not in message.delete_for[user_id]:
+        message.delete_for[user_id].append(delete_entry)
+
+    await save_message(message)
+    return message
+
+
+async def handle_delete_message(data):
+    message_id = data.get("id")
     user_id = data.get("user_id")
     delete_option = data.get("delete_option")
 
-    messages = await get_messages(message_ids)  # Fetch messages in bulk
-    tasks = []  # Store async tasks for execution
+    if not message_id or not user_id or not delete_option:
+        print("Missing required data for deletion")
+        return None
 
-    for message in messages:
-        delete_data = {
-            "message_id": message.id,
-            "user_id": user_id,
-        }
+    message = await get_message(message_id)
 
-        if delete_option == DeleteOption.DELETE_FOR_ME:
-            tasks.append(handle_delete_for_me(delete_data))
-        else:
-            tasks.append(handle_delete_for_everyone(delete_data))
+    if not message:
+        print(f"Message {message_id} not found")
+        return None
 
-        # Run all delete tasks concurrently
-    await asyncio.gather(*tasks)
+    if delete_option == DeleteOption.DELETE_FOR_ME:
+        updated_message = await handle_delete_for_me(message, user_id)
+    else:  # DELETE_FOR_EVERYONE
+        updated_message = await handle_delete_for_everyone(message, user_id)
 
-        # Notify all users in the chat about bulk deletion
-    on_message_deleted(message_ids)
+    print('MESSAGE DELETED SUCCESSFULLY.')
+
+    return updated_message
+
+#Note: This function can be used in future for bulk deletion of messages.
+# async def handle_delete_message(data):
+#     message_ids = data.get("id")  # assuming this is a list for bulk, or single int
+#     user_id = data.get("user_id")
+#     delete_option = data.get("delete_option")
+
+#     # Handle single ID or list
+#     if not isinstance(message_ids, list):
+#         message_ids = [message_ids]
+
+#     # Fetch all messages in bulk
+#     messages = await get_messages(message_ids)  # assuming this returns list of MessageModel
+
+#     tasks = []
+#     for message in messages:
+#         if delete_option == DeleteOption.DELETE_FOR_ME:
+#             tasks.append(handle_delete_for_me(message, user_id))
+#         else:
+#             tasks.append(handle_delete_for_everyone(message, user_id))
+
+#     # Run concurrently and get updated messages
+#     updated_messages = await asyncio.gather(*tasks)
+
+#     # Filter out any None if needed
+#     updated_messages = [msg for msg in updated_messages if msg is not None]
+
+#     # Notify callback if you still want (e.g., for logging)
+#     print('MESSAGES DELETED SUCCESSFULLY.')
+
+#     return updated_messages  # Return full updated messages
+
 
 async def handle_delete_conversation(data):
     chat_type = data.get("chat_type")
