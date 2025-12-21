@@ -16,8 +16,6 @@ async def handle_delete_for_me(message, user_id):
     delete_entry = {
         "user_id": user_id,
         "delete_option": DeleteOption.DELETE_FOR_ME,
-        "deleted_message": "This message was deleted",
-        "is_deleted": True,
     }
 
     # Avoid duplicate entries
@@ -25,7 +23,6 @@ async def handle_delete_for_me(message, user_id):
         print(f"Adding 'delete for me' entry for user {user_id} on message {message.id}")
         message.delete_for[user_id].append(delete_entry)
         message.is_deleted = True
-        message.deleted_message = "This message was deleted"
 
     await save_message(message)
     return message
