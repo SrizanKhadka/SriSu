@@ -3,7 +3,7 @@ import traceback
 from chat.utils.chatutils import *
 from channels.generic.websocket import AsyncWebsocketConsumer
 from .message_sender import handle_send_message
-from .message_retriever import get_paginated_messages
+from .message_retriever import get_messages_before
 from .message_editor import handle_edit_message, handle_mark_messages_read, handle_react_to_message
 from .message_deleter import handle_delete_message
 
@@ -68,23 +68,28 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     }))
                             
             elif action == "fetch_messages":
-                
-                result = await get_paginated_messages(
+                """
+                Action: fetch_messages
+                Uses cursor-based pagination: before_id + limit
+                """
+                before_id = data.get("page")
+                limit = data.get("page_size", 20)
+
+                result = await get_messages_before(
                     chat_room=self.chat_room_id,
                     user=self.scope.get("user"),
-                    page=data.get("page", 1),
-                    page_size=data.get("page_size", 20)
+                    page=before_id,
+                    limit=limit
                 )
+                
+                # print("FETCH MESSAGES RESULT:", result)
 
-                # Only send to requesting client (not broadcast)
-                await self.send(
-                    text_data=json.dumps({
-                        "action": "fetch_messages",
-                        "message": "Messages fetched successfully" if result["results"] else "No messages found",
-                        "data": result,
-                        "success": True
-                    })
-                )
+                await self.send(text_data=json.dumps({
+                    "action": "fetch_messages",
+                    "message": "Messages fetched successfully" if result["messages"] else "No messages found",
+                    "data": result,
+                    "success": True
+                }))
                 
             elif action == "edit_message":
                 edited_message = await handle_edit_message(data=data)

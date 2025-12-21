@@ -16,7 +16,7 @@ class Command(BaseCommand):
         self.fake = Faker()
 
     def handle(self, *args, **options):
-        TOTAL_MESSAGES = 10_000   # change to 50_000 if needed
+        TOTAL_MESSAGES = 50   # change to 50_000 if needed
         BATCH_SIZE = 1_000        # bulk_create chunk size
 
         chat_room_id = "7fe512b9-548b-4a21-93cd-0a25d1aed5b4"
