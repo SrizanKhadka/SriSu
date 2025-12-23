@@ -19,6 +19,7 @@ django-filter = "*"
 faker = "*"
 drf-writable-nested = "*"
 drf-nested-forms = "*"
+watchfiles = "*
 
 [dev-packages]
 

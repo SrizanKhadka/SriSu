@@ -1,63 +1,43 @@
 
-from chat.models import MessageModel
+from chat.models import MessageModel,MessageDeletion
 from channels.db import database_sync_to_async
 from utils.choices import DeleteOption, ChatTypeChoices
 from chat.utils.chatutils import *
 
-async def handle_delete_for_me(message, user_id):
-    user_id = str(user_id)
-    
-    if not message.delete_for:
-        message.delete_for = {}
+async def handle_delete_for_me(message, user_id):    
+    #Avoid duplicate deletion rows
+    exists = await MessageDeletion.objects.filter(
+        messageModel=message,
+        user_id=user_id,
+        delete_option=DeleteOption.DELETE_FOR_ME
+    ).exists()
 
-    if user_id not in message.delete_for:
-        message.delete_for[user_id] = []
-
-    delete_entry = {
-        "user_id": user_id,
-        "delete_option": DeleteOption.DELETE_FOR_ME,
-    }
-
-    # Avoid duplicate entries
-    if delete_entry not in message.delete_for[user_id]:
-        print(f"Adding 'delete for me' entry for user {user_id} on message {message.id}")
-        message.delete_for[user_id].append(delete_entry)
-        message.is_deleted = True
-
-    await save_message(message)
+    if not exists:
+        await MessageDeletion.objects.create(
+            messageModel=message,
+            user_id=user_id,
+            delete_option=DeleteOption.DELETE_FOR_ME
+        )
+        
     return message
 
 
 async def handle_delete_for_everyone(message, user_id):
-    user_id = str(user_id)
-
-    if not message:
-        return None
-
-    sender_id = message.sender_id
-    displayed_text = (
-        "You deleted this message"
-        if str(sender_id) == user_id else 
-        "This message was deleted"
+    exists = await MessageDeletion.objects.filter(
+        messageModel=message,
+        user_id=user_id,
+        delete_option=DeleteOption.DELETE_FOR_EVERYONE
+    ).aexists()
+    
+    if exists:
+        return message
+    
+    await MessageDeletion.objects.create(
+        messageModel=message,
+        user_id=user_id,
+        delete_option=DeleteOption.DELETE_FOR_EVERYONE
     )
 
-    if not message.delete_for:
-        message.delete_for = {}
-
-    if user_id not in message.delete_for:
-        message.delete_for[user_id] = []
-
-    delete_entry = {
-        "user_id": user_id,
-        "option": DeleteOption.DELETE_FOR_EVERYONE,
-        "delete_message": displayed_text,
-    }
-
-    # Avoid duplicates
-    if delete_entry not in message.delete_for[user_id]:
-        message.delete_for[user_id].append(delete_entry)
-
-    await save_message(message)
     return message
 
 

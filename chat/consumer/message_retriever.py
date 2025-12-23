@@ -8,19 +8,23 @@ from django.db.models import Q
 from chat.utils.chatutils import serialize_message
 
 async def get_messages_before(chat_room, user, page=None, limit=20):
-    """
-    Fetch messages before a specific message id (cursor-based).
-    WhatsApp-like approach: newest messages first, supports infinite scroll.
-    """
+
     query_set = (
         MessageModel.objects
         .filter(chat_room=chat_room)
-        .exclude(
+            .exclude(
             Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.DELETE_FOR_ME}])
             | Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.CONVERSATION_DELETED}])
         )
-        .order_by("-id")  # newest first
+        .order_by("-id")
     )
+    
+    
+    
+    
+    
+    
+    
 
     if page:
         query_set = query_set.filter(id__lt=page)

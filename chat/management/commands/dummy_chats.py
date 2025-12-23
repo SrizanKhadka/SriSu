@@ -19,10 +19,10 @@ class Command(BaseCommand):
         TOTAL_MESSAGES = 50   # change to 50_000 if needed
         BATCH_SIZE = 1_000        # bulk_create chunk size
 
-        chat_room_id = "7fe512b9-548b-4a21-93cd-0a25d1aed5b4"
-        sender_id = 95
-        receiver_id = 97
-        couple_id = 2
+        chat_room_id = "e579dc98-5dbd-4aab-8a48-10985346d7fa"
+        sender_id = 2
+        receiver_id = 3
+        couple_id = 1
 
         sender = UserModel.objects.get(id=sender_id)
         receiver = UserModel.objects.get(id=receiver_id)

@@ -65,6 +65,19 @@ class MessageModel(models.Model):
     def __str__(self):
         return f"{self.couple.male_partner.full_name} - {self.couple.female_partner.full_name}"
 
+class MessageDeletion(models.Model):
+    messageModel = models.ForeignKey(
+        MessageModel, on_delete=models.CASCADE, related_name="deletions"
+    )
+
+    user_id = models.IntegerField()
+    delete_option = models.CharField(
+        max_length=20, choices=DeleteOption.choices, null=True, blank=True
+    )
+    
+    class Meta:
+        unique_together = ('messageModel', 'user_id','delete_option')
+
 class MessageReaction(models.Model):
     messageModel = models.ForeignKey(
         MessageModel, on_delete=models.CASCADE, related_name="messages"
