@@ -17,10 +17,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
         # Check if user is authenticated
         user = self.scope.get("user")
-        # if not user or user.is_anonymous:
-        #     print("User is anonymous, closing connection")
-        #     await self.close()
-        #     return
+        if not user or user.is_anonymous:
+            print("User is anonymous, closing connection")
+            await self.close()
+            return
             
         self.chat_room_id = self.scope["url_route"]["kwargs"]["room_id"]
         self.room_group_name = f"chat_{self.chat_room_id}"
@@ -68,12 +68,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     }))
                             
             elif action == "fetch_messages":
-                """
-                Action: fetch_messages
-                Uses cursor-based pagination: before_id + limit
-                """
                 before_id = data.get("page")
                 limit = data.get("page_size", 20)
+                print("FETCH MESSAGES USER:", self.scope.get("user"))
 
                 result = await get_messages_before(
                     chat_room=self.chat_room_id,

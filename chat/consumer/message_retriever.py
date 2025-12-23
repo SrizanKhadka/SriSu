@@ -8,23 +8,20 @@ from django.db.models import Q
 from chat.utils.chatutils import serialize_message
 
 async def get_messages_before(chat_room, user, page=None, limit=20):
-
+    
+    print("Fetching messages before cursor:", user.id)
     query_set = (
         MessageModel.objects
         .filter(chat_room=chat_room)
-            .exclude(
-            Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.DELETE_FOR_ME}])
-            | Q(delete_for__user__contains=[{"user_id": user.id, "delete_option": DeleteOption.CONVERSATION_DELETED}])
+        .exclude(
+            deletions__user_id=user.id,
+            deletions__delete_option__in=[
+                DeleteOption.DELETE_FOR_ME,
+                DeleteOption.CONVERSATION_DELETED,
+            ],
         )
-        .order_by("-id")
+        .order_by("-id").distinct()
     )
-    
-    
-    
-    
-    
-    
-    
 
     if page:
         query_set = query_set.filter(id__lt=page)
