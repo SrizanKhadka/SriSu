@@ -21,40 +21,47 @@ async def handle_edit_message(data):
         print(f"Message edited:  {message.text}")
         return message
 
-async def handle_mark_messages_read(data):
-    receiver_id = data.get("receiver_id")
-    print(f"Receiver ID: {receiver_id}")
+async def handle_mark_messages_read(data, current_user):
+    chat_room_id = data.get("chat_room_id")
 
-    if not receiver_id: #check if user_id is equal to receiver_id
+    if not chat_room_id:
         return None
 
-    # Get receiver as UserModel instance
     try:
-        receiver = await sync_to_async(UserModel.objects.get)(id=receiver_id)
-    except UserModel.DoesNotExist:
-        print("Receiver not found")
+        chat_room = await sync_to_async(ChatRoom.objects.get)(id=chat_room_id)
+    except ChatRoom.DoesNotExist:
         return None
 
-    # Get unread messages for this receiver
     unread_messages = await sync_to_async(
-        lambda: list(MessageModel.objects.filter(receiver=receiver, is_read=True).all())
+        lambda: list(
+            MessageModel.objects.filter(
+                chat_room=chat_room,
+                receiver=current_user,
+                is_read=False,
+                is_deleted=False
+            )
+        )
     )()
-    
-    # print("UN_READ MESSAGES: ", serialize_message(unread_messages))
 
-    if unread_messages:
-        for msg in unread_messages:
-            msg.is_read = True
-        
-        print("MESSAGES ARE READ: ")
-
-        await sync_to_async(MessageModel.objects.bulk_update)(unread_messages, ["is_read"])
-
-        # Notify participants
-        return unread_messages
-    else:
-        print("No unread messages found")
+    if not unread_messages:
         return None
+
+    # Mark as read
+    for msg in unread_messages:
+        msg.is_read = True
+
+    await sync_to_async(MessageModel.objects.bulk_update)(
+        unread_messages,
+        ["is_read"]
+    )
+
+    return {
+        "action": "messages_read",
+        "chat_room_id": str(chat_room.id),
+        "read_by": current_user.id,
+        "message_ids": [msg.id for msg in unread_messages],
+    }
+
         
 async def handle_react_to_message(data):
     message_id = data.get("message_id")

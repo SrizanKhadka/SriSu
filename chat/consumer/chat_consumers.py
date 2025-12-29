@@ -106,29 +106,29 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     )
                     
             elif action == "message_read":
-                read_messages = await handle_mark_messages_read(data=data)
-                read_messages_list = []
-                
-                if read_messages:
-                    for msg in read_messages:
-                        serialized_message = await serialize_message(msg)
-                        read_messages_list.append(serialized_message)
-                    
-                    await self.channel_layer.group_send(
-                        self.room_group_name,
-                        {
-                            "type": "chat_message",
-                            "action": "message_read",
-                            "message": "message read successfully!",
-                            "data": read_messages_list
-                        }
-                    )
-                else:
+                read_payload = await handle_mark_messages_read(
+                    data=data,
+                    current_user=self.scope.get("user")
+                )
+
+                if not read_payload:
                     await self.send(text_data=json.dumps({
                         "action": "message_read",
                         "message": "No unread messages found!",
                     }))
-                    
+                    return
+
+                # Broadcast read receipt to all users in the room
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        "type": "chat_message",
+                        "action": "message_read",
+                        "message": "Messages marked as read",
+                        "data": read_payload,
+                    }
+                )
+
             elif action == "delete_message":
                 updated_message = await handle_delete_message(data)
 
