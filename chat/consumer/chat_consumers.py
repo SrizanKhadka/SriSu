@@ -6,7 +6,7 @@ from .message_sender import handle_send_message
 from .message_retriever import get_messages_before
 from .message_editor import handle_edit_message, handle_mark_messages_read, handle_react_to_message
 from .message_deleter import handle_delete_message
-from .chat_room_operations import set_user_typing, get_typing_users
+from .chat_room_operations import set_user_typing
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -166,10 +166,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             
             # Inside receive:
             elif action == "typing":
+                
                 is_typing_flag = data.get("is_typing", False)
+                user_id = data.get("user_id")
 
                 # Update the typing status in DB
-                updated_typing_data = await set_user_typing(self.chat_room, self.scope["user"].id, is_typing_flag)
+                updated_typing_data = await set_user_typing(self.chat_room, user_id, is_typing_flag)
+                print(f"Updated typing data: {updated_typing_data}")
 
                 # Broadcast typing info to all users in room except sender
                 await self.channel_layer.group_send(
@@ -179,8 +182,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "action": "typing",
                         "message": f"{'started' if is_typing_flag else 'stopped'} typing",
                         "data": {
-                            "typing_users": list(updated_typing_data.keys()),
-                            "user_id": self.scope["user"].id,
+                            "typing_users": updated_typing_data,
                         },
                     }
                 )
