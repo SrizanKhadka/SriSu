@@ -4,7 +4,7 @@ from chat.utils.chatutils import *
 from channels.generic.websocket import AsyncWebsocketConsumer
 from .message_sender import handle_send_message
 from .message_retriever import get_messages_before
-from .message_editor import handle_edit_message, handle_mark_messages_read, handle_react_to_message
+from .message_editor import handle_edit_message, handle_mark_messages_read, handle_react_to_message, handle_mark_messages_delivered
 from .message_deleter import handle_delete_message
 from .chat_room_operations import set_user_typing
 
@@ -108,8 +108,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             elif action == "message_read":
                 read_payload = await handle_mark_messages_read(
                     data=data,
-                    current_user=self.scope.get("user")
                 )
+                
 
                 if not read_payload:
                     await self.send(text_data=json.dumps({
@@ -186,6 +186,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         },
                     }
                 )
+                
+            elif action == "message_delivered":
+                delivered_payload = await handle_mark_messages_delivered(
+                    data=data,
+                )
+
+                if not delivered_payload:
+                    return
+
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        "type": "chat_message",
+                        "action": "message_delivered",
+                        "message": "Messages delivered",
+                        "data": delivered_payload,
+                    }
+                )
+
 
                     
         except Exception as e:

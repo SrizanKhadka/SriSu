@@ -73,6 +73,7 @@ class MessageModel(models.Model):
     is_deleted = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
     is_delivered = models.BooleanField(default=False)
+    is_sent = models.BooleanField(default=False)
 
     # Message actions
     deleted_message = models.CharField(max_length=100, null=True, blank=True)

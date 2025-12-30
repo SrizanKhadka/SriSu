@@ -1,6 +1,7 @@
 from chat.models import ChatRoom
 from channels.db import database_sync_to_async
 from django.db import transaction
+from chat.models import MessageModel
 
 @database_sync_to_async
 def set_user_typing(chat_room: ChatRoom, user_id: int, is_typing: bool):
