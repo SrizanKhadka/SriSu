@@ -110,14 +110,25 @@ async def handle_mark_messages_delivered(data):
         
 async def handle_react_to_message(data):
     message_id = data.get("message_id")
+    user_id = str(data.get("user_id"))
     reaction = data.get("reaction")
 
-    message = await get_message(message_id)
-    if message:
-        message.reaction = reaction
-        await save_message(message)
-
-        return message
-    else:
-        print("Message not found")
+    if not all([message_id, user_id, reaction]):
         return None
+
+    message = await get_message(message_id)
+    if not message:
+        return None
+
+    reactions = message.reactions or {}
+
+    # Toggle logic:
+    if reactions.get(user_id) == reaction:
+        del reactions[user_id]   # remove reaction
+    else:
+        reactions["reaction"] = reaction
+
+    message.reactions = reactions
+    await save_message(message)
+
+    return message

@@ -92,7 +92,7 @@ class MessageModel(models.Model):
     # reactions
     reactions = models.JSONField(
         null=True, blank=True
-    )  # Example: { "user_id_1": "❤️", "user_id_2": "😂" }
+    )
 
     # Timestamps
     timestamp = models.DateTimeField(auto_now_add=True)

@@ -5,3 +5,4 @@ from chat.models import *
 
 admin.site.register(MessageModel)
 admin.site.register(ChatRoom)
+admin.site.register(MessageDeletion)

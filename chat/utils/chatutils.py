@@ -127,6 +127,7 @@ def serialize_message(message):
         "delete_option": message.delete_option,
         "delete_for": message.delete_for,
         "message_deletion_dict": message.message_deletion_dict,
+        "reactions": message.reactions,
 
         # Reactions
         "reactions": message.reactions,
