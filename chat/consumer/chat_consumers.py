@@ -3,9 +3,11 @@ import traceback
 from chat.utils.chatutils import *
 from channels.generic.websocket import AsyncWebsocketConsumer
 from .message_sender import handle_send_message
-from .message_retriever import get_paginated_messages
-from .message_editor import handle_edit_message, handle_mark_messages_read, handle_react_to_message
+from .message_retriever import get_messages_before
+from .message_editor import handle_edit_message, handle_mark_messages_read, handle_react_to_message, handle_mark_messages_delivered
 from .message_deleter import handle_delete_message
+from .chat_room_operations import set_user_typing
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -17,10 +19,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         
         # Check if user is authenticated
         user = self.scope.get("user")
-        # if not user or user.is_anonymous:
-        #     print("User is anonymous, closing connection")
-        #     await self.close()
-        #     return
+        if not user or user.is_anonymous:
+            print("User is anonymous, closing connection")
+            await self.close()
+            return
             
         self.chat_room_id = self.scope["url_route"]["kwargs"]["room_id"]
         self.room_group_name = f"chat_{self.chat_room_id}"
@@ -68,23 +70,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     }))
                             
             elif action == "fetch_messages":
-                
-                result = await get_paginated_messages(
+                before_id = data.get("page")
+                limit = data.get("page_size", 20)
+                print("FETCH MESSAGES USER:", self.scope.get("user"))
+
+                result = await get_messages_before(
                     chat_room=self.chat_room_id,
                     user=self.scope.get("user"),
-                    page=data.get("page", 1),
-                    page_size=data.get("page_size", 20)
+                    page=before_id,
+                    limit=limit
                 )
+                
+                # print("FETCH MESSAGES RESULT:", result)
 
-                # Only send to requesting client (not broadcast)
-                await self.send(
-                    text_data=json.dumps({
-                        "action": "fetch_messages",
-                        "message": "Messages fetched successfully" if result["results"] else "No messages found",
-                        "data": result,
-                        "success": True
-                    })
-                )
+                await self.send(text_data=json.dumps({
+                    "action": "fetch_messages",
+                    "message": "Messages fetched successfully" if result["messages"] else "No messages found",
+                    "data": result,
+                    "success": True
+                }))
                 
             elif action == "edit_message":
                 edited_message = await handle_edit_message(data=data)
@@ -102,29 +106,29 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     )
                     
             elif action == "message_read":
-                read_messages = await handle_mark_messages_read(data=data)
-                read_messages_list = []
+                read_payload = await handle_mark_messages_read(
+                    data=data,
+                )
                 
-                if read_messages:
-                    for msg in read_messages:
-                        serialized_message = await serialize_message(msg)
-                        read_messages_list.append(serialized_message)
-                    
-                    await self.channel_layer.group_send(
-                        self.room_group_name,
-                        {
-                            "type": "chat_message",
-                            "action": "message_read",
-                            "message": "message read successfully!",
-                            "data": read_messages_list
-                        }
-                    )
-                else:
+
+                if not read_payload:
                     await self.send(text_data=json.dumps({
                         "action": "message_read",
                         "message": "No unread messages found!",
                     }))
-                    
+                    return
+
+                # Broadcast read receipt to all users in the room
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        "type": "chat_message",
+                        "action": "message_read",
+                        "message": "Messages marked as read",
+                        "data": read_payload,
+                    }
+                )
+
             elif action == "delete_message":
                 updated_message = await handle_delete_message(data)
 
@@ -159,6 +163,49 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "action": "react_to_message",
                         "message": "message reaction failed",
                     }))
+            
+            # Inside receive:
+            elif action == "typing":
+                
+                is_typing_flag = data.get("is_typing", False)
+                user_id = data.get("user_id")
+
+                # Update the typing status in DB
+                updated_typing_data = await set_user_typing(self.chat_room, user_id, is_typing_flag)
+                print(f"Updated typing data: {updated_typing_data}")
+
+                # Broadcast typing info to all users in room except sender
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        "type": "chat_message",
+                        "action": "typing",
+                        "message": f"{'started' if is_typing_flag else 'stopped'} typing",
+                        "data": {
+                            "typing_users": updated_typing_data,
+                        },
+                    }
+                )
+                
+            elif action == "message_delivered":
+                delivered_payload = await handle_mark_messages_delivered(
+                    data=data,
+                )
+
+                if not delivered_payload:
+                    return
+
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        "type": "chat_message",
+                        "action": "message_delivered",
+                        "message": "Messages delivered",
+                        "data": delivered_payload,
+                    }
+                )
+
+
                     
         except Exception as e:
             print(f"Error in receive: {e}")

@@ -120,12 +120,14 @@ def serialize_message(message):
         "is_read": message.is_read,
         "is_delivered": message.is_delivered,
         "is_edited": message.is_edited,
+        "is_sent": message.is_sent,
 
         # Delete settings
         "deleted_message": message.deleted_message,
         "delete_option": message.delete_option,
         "delete_for": message.delete_for,
         "message_deletion_dict": message.message_deletion_dict,
+        "reactions": message.reactions,
 
         # Reactions
         "reactions": message.reactions,

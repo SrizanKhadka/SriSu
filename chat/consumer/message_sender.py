@@ -37,7 +37,7 @@ async def handle_send_message(
         receiver=receiver,
         message_type=message_type,
         text=text,
-        is_delivered=True,
+        is_sent=True,
         timestamp=timestamp,
         medias=medias,
         reply_to=reply_to,

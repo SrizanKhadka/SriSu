@@ -1,8 +1,5 @@
 
-from channels.generic.websocket import AsyncWebsocketConsumer
-from django.db.models import Q
 from chat.models import MessageModel
-from channels.db import database_sync_to_async
 from chat.utils.chatutils import *
 
 async def handle_edit_message(data):
@@ -22,50 +19,116 @@ async def handle_edit_message(data):
         return message
 
 async def handle_mark_messages_read(data):
-    receiver_id = data.get("receiver_id")
-    print(f"Receiver ID: {receiver_id}")
+    chat_room_id = data.get("chat_room")
+    current_user = data.get("user_id")
 
-    if not receiver_id: #check if user_id is equal to receiver_id
+    if not chat_room_id:
         return None
 
-    # Get receiver as UserModel instance
     try:
-        receiver = await sync_to_async(UserModel.objects.get)(id=receiver_id)
-    except UserModel.DoesNotExist:
-        print("Receiver not found")
+        chat_room = await sync_to_async(ChatRoom.objects.get)(id=chat_room_id)
+    except ChatRoom.DoesNotExist:
         return None
 
-    # Get unread messages for this receiver
     unread_messages = await sync_to_async(
-        lambda: list(MessageModel.objects.filter(receiver=receiver, is_read=True).all())
+        lambda: list(
+            MessageModel.objects.filter(
+                chat_room=chat_room,
+                receiver=current_user,
+                is_read=False,
+                is_deleted=False
+            )
+        )
     )()
-    
-    # print("UN_READ MESSAGES: ", serialize_message(unread_messages))
 
-    if unread_messages:
-        for msg in unread_messages:
-            msg.is_read = True
-        
-        print("MESSAGES ARE READ: ")
-
-        await sync_to_async(MessageModel.objects.bulk_update)(unread_messages, ["is_read"])
-
-        # Notify participants
-        return unread_messages
-    else:
-        print("No unread messages found")
+    if not unread_messages:
+        print('No unread messages found')
         return None
+
+    # Mark as read
+    for msg in unread_messages:
+        msg.is_read = True
+
+    await sync_to_async(MessageModel.objects.bulk_update)(
+        unread_messages,
+        ["is_read"]
+    )
+    
+    print('All messages marked as read')
+
+    return {
+        "action": "messages_read",
+        "chat_room_id": str(chat_room.id),
+        "read_by": current_user,
+        "message_ids": [msg.id for msg in unread_messages],
+    }
+
+async def handle_mark_messages_delivered(data):
+    chat_room_id = data.get("chat_room")
+    current_user = data.get("user_id")
+
+    if not chat_room_id:
+        return None
+
+    try:
+        chat_room = await sync_to_async(ChatRoom.objects.get)(id=chat_room_id)
+    except ChatRoom.DoesNotExist:
+        return None
+
+    undelivered_message = await sync_to_async(
+        lambda: list(
+            MessageModel.objects.filter(
+                chat_room=chat_room,
+                receiver=current_user,
+                is_delivered=False,
+                is_deleted=False
+            )
+        )
+    )()
+
+    if not undelivered_message:
+        print('No undelivered messages found')
+        return None
+
+    # Mark as read
+    for msg in undelivered_message:
+        msg.is_delivered = True
+
+    await sync_to_async(MessageModel.objects.bulk_update)(
+        undelivered_message,
+        ["is_delivered"]
+    )
+
+    print('All messages marked as delivered')
+    return {
+        "action": "messages_delivered",
+        "chat_room_id": str(chat_room.id),
+        "delivered_to": current_user,
+        "message_ids": [msg.id for msg in undelivered_message],
+    }
+
         
 async def handle_react_to_message(data):
     message_id = data.get("message_id")
+    user_id = str(data.get("user_id"))
     reaction = data.get("reaction")
 
-    message = await get_message(message_id)
-    if message:
-        message.reaction = reaction
-        await save_message(message)
-
-        return message
-    else:
-        print("Message not found")
+    if not all([message_id, user_id, reaction]):
         return None
+
+    message = await get_message(message_id)
+    if not message:
+        return None
+
+    reactions = message.reactions or {}
+
+    # Toggle logic:
+    if reactions.get(user_id) == reaction:
+        del reactions[user_id]   # remove reaction
+    else:
+        reactions["reaction"] = reaction
+
+    message.reactions = reactions
+    await save_message(message)
+
+    return message

@@ -1,64 +1,94 @@
 
-from chat.models import MessageModel
+from chat.models import MessageModel,MessageDeletion
 from channels.db import database_sync_to_async
 from utils.choices import DeleteOption, ChatTypeChoices
 from chat.utils.chatutils import *
+from django.db import IntegrityError
 
 async def handle_delete_for_me(message, user_id):
-    user_id = str(user_id)
-    
+
+    user_id_str = str(user_id)
+
+    try:
+        await MessageDeletion.objects.acreate(
+            messageModel=message,
+            user_id=user_id,
+            delete_option=DeleteOption.DELETE_FOR_ME,
+        )
+        deletion_created = True
+    except IntegrityError:
+        deletion_created = False
+
     if not message.delete_for:
         message.delete_for = {}
 
-    if user_id not in message.delete_for:
-        message.delete_for[user_id] = []
+    user_entries = message.delete_for.setdefault(user_id_str, [])
 
     delete_entry = {
-        "user_id": user_id,
+        "user_id": user_id_str,
         "delete_option": DeleteOption.DELETE_FOR_ME,
     }
 
-    # Avoid duplicate entries
-    if delete_entry not in message.delete_for[user_id]:
-        print(f"Adding 'delete for me' entry for user {user_id} on message {message.id}")
-        message.delete_for[user_id].append(delete_entry)
-        message.is_deleted = True
+    if delete_entry not in user_entries:
+        user_entries.append(delete_entry)
 
-    await save_message(message)
+    if deletion_created or delete_entry in user_entries:
+        await save_message(message)
+
     return message
 
-
 async def handle_delete_for_everyone(message, user_id):
-    user_id = str(user_id)
-
     if not message:
         return None
 
-    sender_id = message.sender_id
+    user_id_str = str(user_id)
+    sender_id_str = str(message.sender_id)
+
     displayed_text = (
         "You deleted this message"
-        if str(sender_id) == user_id else 
-        "This message was deleted"
+        if sender_id_str == user_id_str
+        else "This message was deleted"
     )
+
+    try:
+        await MessageDeletion.objects.acreate(
+            messageModel=message,
+            user_id=user_id,
+            delete_option=DeleteOption.DELETE_FOR_EVERYONE,
+        )
+        deletion_created = True
+    except IntegrityError:
+        deletion_created = False
 
     if not message.delete_for:
         message.delete_for = {}
 
-    if user_id not in message.delete_for:
-        message.delete_for[user_id] = []
+    user_entries = message.delete_for.setdefault(user_id_str, [])
 
     delete_entry = {
-        "user_id": user_id,
-        "option": DeleteOption.DELETE_FOR_EVERYONE,
+        "user_id": user_id_str,
+        "delete_option": DeleteOption.DELETE_FOR_EVERYONE,
         "delete_message": displayed_text,
     }
 
-    # Avoid duplicates
-    if delete_entry not in message.delete_for[user_id]:
-        message.delete_for[user_id].append(delete_entry)
+    # Upgrade DELETE_FOR_ME → DELETE_FOR_EVERYONE if needed
+    upgraded = False
+    for entry in user_entries:
+        if entry.get("user_id") == user_id_str:
+            if entry.get("delete_option") != DeleteOption.DELETE_FOR_EVERYONE:
+                entry["delete_option"] = DeleteOption.DELETE_FOR_EVERYONE
+                entry["delete_message"] = displayed_text
+                upgraded = True
+            break
+    else:
+        user_entries.append(delete_entry)
+        upgraded = True
 
-    await save_message(message)
+    if deletion_created or upgraded:
+        await save_message(message)
+
     return message
+
 
 
 async def handle_delete_message(data):
