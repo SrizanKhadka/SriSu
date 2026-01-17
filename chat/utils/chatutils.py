@@ -81,8 +81,17 @@ def delete_message(message):
     except Exception as e:
         print(f"Error in delete_message: {e}")
 
+def get_base_url(scope):
+    scheme = scope.get("scheme", "http")
+    headers = dict(scope.get("headers", []))
+    host = headers.get(b"host", b"").decode()
+    return f"{scheme}://{host}"
+
+
 @sync_to_async
-def serialize_message(message):
+def serialize_message(message, scope):
+    base_url = get_base_url(scope)
+
     return {
         "id": str(message.id),
         
@@ -104,9 +113,14 @@ def serialize_message(message):
 
         # Multiple medias (ManyToMany)
         "medias": [
-            media.file.url
+            {
+                "id": media.id,
+                "media_url": f"{base_url}{media.file.url}",
+                "uploaded_at": media.uploaded_at.isoformat()
+            }
             for media in message.medias.all()
         ],
+
 
         # Reply
         "reply_to": {
