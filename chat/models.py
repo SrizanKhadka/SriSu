@@ -129,10 +129,23 @@ class MessageReaction(models.Model):
 
 
 class ChatRoom(models.Model):
-
     id = models.UUIDField(
-        primary_key=True, unique=True, default=uuid.uuid4, editable=False
+        primary_key=True, default=uuid.uuid4, editable=False
     )
+
+    user_one = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="chat_rooms_as_user_one",
+        null=True, blank=True,
+    )
+    user_two = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="chat_rooms_as_user_two",
+        null=True, blank=True,
+    )
+
     chat_type = models.CharField(
         max_length=10, choices=ChatTypeChoices, default="single"
     )
@@ -144,6 +157,7 @@ class ChatRoom(models.Model):
         null=True,
         blank=True,
     )
+
     singles = models.ForeignKey(
         SingleConnectionModel,
         on_delete=models.CASCADE,
@@ -152,34 +166,24 @@ class ChatRoom(models.Model):
         blank=True,
     )
 
-    # Messages
     messages = models.ManyToManyField(
         MessageModel, related_name="chat_rooms", blank=True
     )
 
-    # Chat metadata
     last_message = models.ForeignKey(
         MessageModel,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="last_message_chat",
-        default="",
     )
-    unread_count = models.JSONField(
-        default=dict, blank=True, null=True
-    )  # Example: {"user_1": 5, "user_2": 3}
 
-    # Extra features
-    is_typing = models.JSONField(
-        default=dict, blank=True, null=True
-    )  # Example: {"user_1": True, "user_2": False}
+    unread_count = models.JSONField(default=dict, blank=True)
+    is_typing = models.JSONField(default=dict, blank=True)
     pinned_messages = models.ManyToManyField(
         MessageModel, blank=True, related_name="pinned_in_chat"
     )
-    settings = models.JSONField(
-        default=dict, blank=True, null=True
-    )  # Example: {"muted": True, "archived": False}
+    settings = models.JSONField(default=dict, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -188,3 +192,12 @@ class ChatRoom(models.Model):
         ordering = ["-created_at"]
         verbose_name = "ChatRoom"
         verbose_name_plural = "ChatRooms"
+
+        # Prevent duplicate rooms between same users
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user_one", "user_two"],
+                name="unique_chatroom_users"
+            )
+        ]
+
