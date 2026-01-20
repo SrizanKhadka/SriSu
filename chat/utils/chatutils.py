@@ -126,7 +126,8 @@ def serialize_message(message, scope):
         "reply_to": {
             "id": message.reply_to.id,
             "text": message.reply_to.text,
-            "sender_id": message.reply_to.sender.id
+            "sender_id": message.reply_to.sender.id,
+            "message_type": message.reply_to.message_type,
         } if message.reply_to else None,
 
         # Message status
