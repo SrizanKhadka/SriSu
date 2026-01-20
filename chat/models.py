@@ -4,11 +4,8 @@ from utils.choices import *
 from social.models import (
     CoupleModel,
     SingleConnectionModel,
-    CoupleConnectionModel,
-    PhotoAlbumModel,
 )
 import uuid
-
 
 class MediaModel(models.Model):
     file = models.FileField(upload_to="chats_media/")

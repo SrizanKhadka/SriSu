@@ -7,7 +7,7 @@ from utils.choices import DeleteOption
 from django.db.models import Q
 from chat.utils.chatutils import serialize_message
 
-async def get_messages_before(chat_room, user, page=None, limit=20):
+async def get_messages_before(scope,chat_room, user, page=None, limit=20):
     
     print("Fetching messages before cursor:", user.id)
     query_set = (
@@ -30,7 +30,7 @@ async def get_messages_before(chat_room, user, page=None, limit=20):
     messages = await sync_to_async(list)(query_set)
 
     # Serialize concurrently
-    results = await asyncio.gather(*(serialize_message(m) for m in messages))
+    results = await asyncio.gather(*(serialize_message(m,scope=scope) for m in messages))
 
     return {
         "messages": results,

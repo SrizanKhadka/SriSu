@@ -10,15 +10,14 @@ async def handle_send_message(
     singles = data.get("single")
     sender_id = data.get("sender_id")
     receiver_id = data.get("receiver_id")
+    
     text = data.get("text", "")
     message_type = data.get("message_type", "text")
     medias = data.get("medias")
-    reply_to_id = data.get("reply_to")
+
+    reply_to = data.get("reply_to")
+    reply_to_id = reply_to.get("id") if reply_to else None
     timestamp = data.get("timestamp")
-    
-    print(f"Sender ID: {sender_id}")
-    print(f"Receiver ID: {receiver_id}")
-    print(f"Text: {text}")
 
     sender = await get_user(sender_id)
     receiver = await get_user(receiver_id)
@@ -26,9 +25,22 @@ async def handle_send_message(
     
     if not sender or not chat_room:
         return
-
+    
     reply_to = await get_message(reply_to_id) if reply_to_id else None
+    
+    media_ids = [
+    m["id"]
+    for m in data.get("medias", [])
+    if "id" in m
+]
 
+
+    media_objects = []
+    if media_ids:
+        media_objects = await sync_to_async(list)(
+            MediaModel.objects.filter(id__in=media_ids)
+        )
+    
     new_message = await create_message(
         chat_room=chat_room,
         couple=couple,
@@ -39,14 +51,14 @@ async def handle_send_message(
         text=text,
         is_sent=True,
         timestamp=timestamp,
-        medias=medias,
         reply_to=reply_to,
     )
     
+        # IMPORTANT: ManyToMany must be set AFTER save
+    if media_objects:
+        await sync_to_async(new_message.medias.set)(media_objects)
+    
     return new_message
-
-    if new_message:
-        on_message_created(new_message)
     
     
         

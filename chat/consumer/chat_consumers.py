@@ -53,7 +53,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if action == "send_message":
                 message = await handle_send_message(data, self.chat_room)
                 if message:
-                    serialized_message = await serialize_message(message)                    
+                    serialized_message = await serialize_message(message,self.scope)                    
                     # BROADCAST to all clients in the room group
                     await self.channel_layer.group_send(
                         self.room_group_name,
@@ -75,6 +75,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 print("FETCH MESSAGES USER:", self.scope.get("user"))
 
                 result = await get_messages_before(
+                    scope = self.scope,
                     chat_room=self.chat_room_id,
                     user=self.scope.get("user"),
                     page=before_id,
@@ -93,7 +94,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             elif action == "edit_message":
                 edited_message = await handle_edit_message(data=data)
                 if edited_message:
-                    serialized_message = await serialize_message(edited_message)
+                    serialized_message = await serialize_message(edited_message,self.scope)
                     
                     await self.channel_layer.group_send(
                         self.room_group_name,
@@ -132,7 +133,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             elif action == "delete_message":
                 updated_message = await handle_delete_message(data)
 
-                serialized_message = await serialize_message(updated_message)
+                serialized_message = await serialize_message(updated_message,self.scope)
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {
@@ -147,7 +148,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             elif action == "react_to_message":
                 reacted_message = await handle_react_to_message(data=data)
                 if reacted_message:
-                    serialized_message = await serialize_message(reacted_message)
+                    serialized_message = await serialize_message(reacted_message,self.scope)
                     
                     await self.channel_layer.group_send(
                         self.room_group_name,
@@ -191,6 +192,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 delivered_payload = await handle_mark_messages_delivered(
                     data=data,
                 )
+
 
                 if not delivered_payload:
                     return
