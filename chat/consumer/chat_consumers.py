@@ -36,10 +36,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         print(f"Chat room ID: {self.chat_room_id}")
         print(f"Chat room: {self.chat_room}")
 
-        if not self.chat_room:
-            print("Chat room not found, closing connection")
-            await self.close()
-            return
+        # if not self.chat_room:
+        #     print("Chat room not found, closing connection")
+        #     await self.close()
+        #     return
 
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
@@ -54,6 +54,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             action = data.get("action")
+
 
             print("INSIDE ON RECEIVE METHOD", data)
 
@@ -243,17 +244,28 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 user = self.scope["user"]
                 limit = int(data.get("limit", 20))
                 last_updated = data.get("last_updated")  # ISO string from client, optional
+                
+                print("Inside get_chat_rooms action")
 
                 response = await get_and_serialize_chat_rooms(
                     user,
                     limit=limit,
-                    last_updated=last_updated
+                    last_updated=last_updated,
+                    scope=self.scope,
                 )
 
                 await self.send(text_data=json.dumps({
                     "action": "get_chat_rooms",
                     "data": response
                 }))
+            else:
+                await self.send(
+                    text_data=json.dumps(
+                        {
+                            "message": f"Unknown action: {action}",
+                        }
+                    )
+                )
 
 
         except Exception as e:

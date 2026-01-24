@@ -1,7 +1,7 @@
 from chat.models import *
 from channels.db import database_sync_to_async
 from asgiref.sync import sync_to_async
-
+from utils.helpers import get_base_url
 
 def is_number_valid(number):
     return number.startswith("+") and len(number) > 11
@@ -80,12 +80,6 @@ def delete_message(message):
         message.delete()
     except Exception as e:
         print(f"Error in delete_message: {e}")
-
-def get_base_url(scope):
-    scheme = scope.get("scheme", "http")
-    headers = dict(scope.get("headers", []))
-    host = headers.get(b"host", b"").decode()
-    return f"{scheme}://{host}"
 
 
 @sync_to_async

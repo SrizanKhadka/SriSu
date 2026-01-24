@@ -1,12 +1,13 @@
 from datetime import datetime
 from authentication.models import UserModel
-from authentication.api.serializers import UserModelSerializer as UserSerializer
+from authentication.api.serializers import UserModelSerializer
 from chat.models import ChatRoom
 from channels.db import database_sync_to_async
 from django.db import transaction
 from chat.models import MessageModel
 from chat.api.serializers import ChatRoomSerializer
 from django.db.models import Q
+from chat.utils.chatutils import serialize_message
 
 def get_other_user(chat_room, me):
     if chat_room.user_one_id == me.id:
@@ -15,24 +16,36 @@ def get_other_user(chat_room, me):
         return chat_room.user_one
     return None
 
-def serialize_chat_rooms_sync(chat_rooms, me):
+def serialize_chat_rooms_sync(chat_rooms, me, scope=None):
     data = []
 
     for room in chat_rooms:
         other_user = get_other_user(room, me)
         if not other_user:
             continue
+        
+        messages = room.message_models.all()
+
+        last_message = (
+            room.message_models
+            .order_by("-timestamp")
+            .first()
+        )
+        
+        unread_count = messages.filter(is_read=False).exclude(sender=me).count()
+        room.unread_count = {str(me.id): unread_count}
 
         data.append({
             "chat_room": ChatRoomSerializer(room).data,
-            "other_user": UserSerializer(other_user).data,
-            # "last_message": (
-            #     MessageSerializer(room.last_message).data
-            #     if room.last_message else None
-            # ),
+            "other_user": UserModelSerializer(
+                other_user, context={"scope": scope}
+            ).data,
+            "last_message": last_message, 
         })
 
     return data
+
+
 
 
 def get_chat_rooms_for_user_sync(user, limit=20, last_updated: str | None = None):
@@ -70,22 +83,39 @@ get_chat_rooms_for_user = database_sync_to_async(
 serialize_chat_rooms = database_sync_to_async(
     serialize_chat_rooms_sync
 )
-
-@database_sync_to_async
-def get_and_serialize_chat_rooms(user, limit=20, last_updated: str | None = None):
-    rooms = get_chat_rooms_for_user_sync(user, limit=limit, last_updated=last_updated)
-    data = serialize_chat_rooms_sync(rooms, user)
     
-    # Determine the next cursor
-    next_cursor = None
-    if rooms:
-        next_cursor = rooms[-1].updated_at.isoformat()
+async def get_and_serialize_chat_rooms(
+    user, limit=20, scope=None, last_updated: str | None = None
+):
+    rooms = await get_chat_rooms_for_user(
+        user, limit=limit, last_updated=last_updated
+    )
+
+    raw_data = await serialize_chat_rooms(
+        rooms, user, scope=scope
+    )
+
+    for item in raw_data:
+        last_message = item.pop("last_message", None)
+
+        if last_message:
+            serialized = await serialize_message(last_message, scope)
+        else:
+            serialized = None
+
+        # inject into chat_room payload
+        item["chat_room"]["last_message"] = serialized
+
+    next_cursor = rooms[-1].updated_at.isoformat() if rooms else None
 
     return {
-        "chat_rooms": data,
+        "chat_rooms": raw_data,
         "next_cursor": next_cursor,
-        "limit": limit
+        "limit": limit,
     }
+
+
+
 
 @database_sync_to_async
 def set_user_typing(chat_room: ChatRoom, user_id: int, is_typing: bool):
