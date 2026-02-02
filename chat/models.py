@@ -23,7 +23,7 @@ class MessageModel(models.Model):
         blank=True,
     )
     couple = models.ForeignKey(
-        CoupleModel, on_delete=models.CASCADE, related_name="message_models"
+        CoupleModel, on_delete=models.CASCADE, related_name="message_models", null=True, blank=True,
     )
     singles = models.ForeignKey(
         SingleConnectionModel,
@@ -98,7 +98,18 @@ class MessageModel(models.Model):
         ordering = ["-timestamp"]
 
     def __str__(self):
-        return f"{self.couple.male_partner.full_name} - {self.couple.female_partner.full_name}"
+        if self.couple:
+            male = getattr(self.couple.male_partner, "full_name", "Unknown")
+            female = getattr(self.couple.female_partner, "full_name", "Unknown")
+            return f"{male} - {female}"
+
+        if self.singles:
+            user_one = self.singles.sender_number
+            user_two = self.singles.receiver_number
+            return f"{user_one} - {user_two}"
+
+        return f"Message {self.id}"
+
 
 
 class MessageDeletion(models.Model):
@@ -200,4 +211,7 @@ class ChatRoom(models.Model):
                 name="unique_chatroom_users"
             )
         ]
+    
+    def __str__(self):
+        return f"ChatRoom {self.id} - {self.user_one.full_name} and {self.user_two.full_name}"
 

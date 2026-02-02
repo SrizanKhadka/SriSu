@@ -1,13 +1,16 @@
 from chat.utils.chatutils import *
 from chat.models import MessageModel
 from asgiref.sync import sync_to_async
+from chat.consumer.chat_room_operations import update_chat_room_last_message
 
 async def handle_send_message(
+    me,
+    scope,
     data, 
     chat_room,
 ):
     couple = data.get("couple")
-    singles = data.get("single")
+    singles = data.get("singles")
     sender_id = data.get("sender_id")
     receiver_id = data.get("receiver_id")
     
@@ -22,6 +25,7 @@ async def handle_send_message(
     sender = await get_user(sender_id)
     receiver = await get_user(receiver_id)
     couple = await get_couple(couple)
+    singles = await get_single(singles)
     
     if not sender or not chat_room:
         return
@@ -58,7 +62,10 @@ async def handle_send_message(
     if media_objects:
         await sync_to_async(new_message.medias.set)(media_objects)
     
-    return new_message
+    #updating the related chat room's last message and updated_at
+    chat_room =  await update_chat_room_last_message(me=me,scope=scope, chat_room_id=chat_room.id, last_message=new_message)
+    
+    return new_message, chat_room
     
     
         

@@ -7,7 +7,8 @@ from django.db import transaction
 from chat.models import MessageModel
 from chat.api.serializers import ChatRoomSerializer
 from django.db.models import Q
-from chat.utils.chatutils import serialize_message
+from chat.utils.chatutils import serialize_message,serialize_message_sync
+
 
 def get_other_user(chat_room, me):
     if chat_room.user_one_id == me.id:
@@ -15,6 +16,27 @@ def get_other_user(chat_room, me):
     if chat_room.user_two_id == me.id:
         return chat_room.user_one
     return None
+
+def update_unread_count(chat_room):
+    messages = chat_room.message_models.all()
+
+    unread_count = {}
+
+    for user in (chat_room.user_one, chat_room.user_two):
+        if not user:
+            continue
+
+        unread_count[str(user.id)] = (
+            messages
+            .filter(is_read=False)
+            .exclude(sender=user)
+            .count()
+        )
+
+    chat_room.unread_count = unread_count
+    chat_room.save(update_fields=["unread_count"])
+
+
 
 def serialize_chat_rooms_sync(chat_rooms, me, scope=None):
     data = []
@@ -32,8 +54,9 @@ def serialize_chat_rooms_sync(chat_rooms, me, scope=None):
             .first()
         )
         
-        unread_count = messages.filter(is_read=False).exclude(sender=me).count()
-        room.unread_count = {str(me.id): unread_count}
+        # unread_count = messages.filter(is_read=False).exclude(sender=me).count()
+        # room.unread_count = {str(me.id): unread_count}
+        update_unread_count(room)
 
         data.append({
             "chat_room": ChatRoomSerializer(room).data,
@@ -113,6 +136,33 @@ async def get_and_serialize_chat_rooms(
         "next_cursor": next_cursor,
         "limit": limit,
     }
+    
+@database_sync_to_async
+def update_chat_room_last_message(
+    scope,
+    me,
+    chat_room_id,
+    last_message: MessageModel
+):
+    
+    chat_room = ChatRoom.objects.get(id=chat_room_id)
+    chat_room.last_message = last_message
+    messages = chat_room.message_models.all()
+    # my_id = str(me.id) == chat_room.user_one_id and chat_room.user_one_id or chat_room.user_two_id
+    # unread_count = messages.filter(is_read=False).exclude(r=my_id).count()
+    # chat_room.unread_count = {str(me.id): unread_count}
+    update_unread_count(chat_room)
+    chat_room.updated_at = datetime.now()
+    chat_room.save(
+        update_fields=["last_message", "updated_at"]
+    )
+    
+    chat_room_data = ChatRoomSerializer(chat_room).data
+    serialized_last_message = serialize_message_sync(
+        last_message, scope
+    )
+    chat_room_data["last_message"] = serialized_last_message
+    return chat_room_data
 
 
 

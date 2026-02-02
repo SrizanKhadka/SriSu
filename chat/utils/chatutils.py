@@ -40,6 +40,13 @@ def get_couple(couple_id):
     except Exception as e:
         print(f"Error in get_couple: {e}")
         return None
+@sync_to_async
+def get_single(single_id):
+    try:
+        return SingleConnectionModel.objects.filter(id=single_id).first()
+    except Exception as e:
+        print(f"Error in get_single: {e}")
+        return None
 
 @sync_to_async
 def get_message(message_id):
@@ -80,10 +87,8 @@ def delete_message(message):
         message.delete()
     except Exception as e:
         print(f"Error in delete_message: {e}")
-
-
-@sync_to_async
-def serialize_message(message, scope):
+        
+def serialize_message_sync(message, scope):
     base_url = get_base_url(scope)
 
     return {
@@ -144,3 +149,8 @@ def serialize_message(message, scope):
         # Time
         "timestamp": message.timestamp.isoformat(),
     }
+    
+
+@sync_to_async    
+def serialize_message(message, scope):
+    return serialize_message_sync(message, scope)

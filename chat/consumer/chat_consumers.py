@@ -33,8 +33,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f"chat_{self.chat_room_id}"
         self.chat_room = await get_chat_room(self.chat_room_id)
 
-        print(f"Chat room ID: {self.chat_room_id}")
-        print(f"Chat room: {self.chat_room}")
+        # print(f"Chat room ID: {self.chat_room_id}")
+        # print(f"Chat room: {self.chat_room}")
 
         # if not self.chat_room:
         #     print("Chat room not found, closing connection")
@@ -59,7 +59,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             print("INSIDE ON RECEIVE METHOD", data)
 
             if action == "send_message":
-                message = await handle_send_message(data, self.chat_room)
+                message, chat_room = await handle_send_message(self.scope.get("user"),self.scope,data, self.chat_room)
                 if message:
                     serialized_message = await serialize_message(message, self.scope)
                     # BROADCAST to all clients in the room group
@@ -70,7 +70,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                             "action": "send_message",
                             "message": "message_sent successfully",
                             "data": serialized_message,
-                        },
+                            "updated_chat_room": chat_room
+                        }
                     )
                 else:
                     await self.send(
@@ -258,6 +259,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "action": "get_chat_rooms",
                     "data": response
                 }))
+            
+            elif action == "chat_room_updated":
+                pass
             else:
                 await self.send(
                     text_data=json.dumps(
@@ -279,6 +283,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "action": event["action"],
                     "message": event["message"],
                     "data": event.get("data"),
+                    "updated_chat_room": event.get("updated_chat_room"),
                 }
             )
         )
