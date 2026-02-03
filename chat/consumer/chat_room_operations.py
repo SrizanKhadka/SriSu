@@ -46,16 +46,12 @@ def serialize_chat_rooms_sync(chat_rooms, me, scope=None):
         if not other_user:
             continue
         
-        messages = room.message_models.all()
-
         last_message = (
             room.message_models
             .order_by("-timestamp")
             .first()
         )
         
-        # unread_count = messages.filter(is_read=False).exclude(sender=me).count()
-        # room.unread_count = {str(me.id): unread_count}
         update_unread_count(room)
 
         data.append({
@@ -147,10 +143,6 @@ def update_chat_room_last_message(
     
     chat_room = ChatRoom.objects.get(id=chat_room_id)
     chat_room.last_message = last_message
-    messages = chat_room.message_models.all()
-    # my_id = str(me.id) == chat_room.user_one_id and chat_room.user_one_id or chat_room.user_two_id
-    # unread_count = messages.filter(is_read=False).exclude(r=my_id).count()
-    # chat_room.unread_count = {str(me.id): unread_count}
     update_unread_count(chat_room)
     chat_room.updated_at = datetime.now()
     chat_room.save(

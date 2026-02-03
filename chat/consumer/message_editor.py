@@ -23,6 +23,7 @@ async def handle_mark_messages_read(data):
     current_user = data.get("user_id")
 
     if not chat_room_id:
+        print("No ChatRoom ID Provided")
         return None
 
     try:

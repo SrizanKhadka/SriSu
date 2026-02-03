@@ -2,6 +2,7 @@ from chat.utils.chatutils import *
 from chat.models import MessageModel
 from asgiref.sync import sync_to_async
 from chat.consumer.chat_room_operations import update_chat_room_last_message
+from datetime import datetime
 
 async def handle_send_message(
     me,
@@ -20,7 +21,6 @@ async def handle_send_message(
 
     reply_to = data.get("reply_to")
     reply_to_id = reply_to.get("id") if reply_to else None
-    timestamp = data.get("timestamp")
 
     sender = await get_user(sender_id)
     receiver = await get_user(receiver_id)
@@ -54,7 +54,7 @@ async def handle_send_message(
         message_type=message_type,
         text=text,
         is_sent=True,
-        timestamp=timestamp,
+        timestamp=datetime.now(),
         reply_to=reply_to,
     )
     
