@@ -5,7 +5,6 @@ from chat.consumer.chat_room_operations import update_chat_room_last_message
 from datetime import datetime
 
 async def handle_send_message(
-    me,
     scope,
     data, 
     chat_room,
@@ -63,7 +62,7 @@ async def handle_send_message(
         await sync_to_async(new_message.medias.set)(media_objects)
     
     #updating the related chat room's last message and updated_at
-    chat_room =  await update_chat_room_last_message(me=me,scope=scope, chat_room_id=chat_room.id, last_message=new_message)
+    chat_room =  await update_chat_room_last_message(scope=scope, chat_room_id=chat_room.id, last_message=new_message)
     
     return new_message, chat_room
     

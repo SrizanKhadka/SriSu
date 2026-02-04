@@ -136,12 +136,12 @@ async def get_and_serialize_chat_rooms(
 @database_sync_to_async
 def update_chat_room_last_message(
     scope,
-    me,
     chat_room_id,
     last_message: MessageModel
 ):
     
     chat_room = ChatRoom.objects.get(id=chat_room_id)
+    print("Updating chat room last message:", chat_room)
     chat_room.last_message = last_message
     update_unread_count(chat_room)
     chat_room.updated_at = datetime.now()
@@ -160,7 +160,7 @@ def update_chat_room_last_message(
 
 
 @database_sync_to_async
-def set_user_typing(chat_room: ChatRoom, user_id: int, is_typing: bool):
+def set_user_typing(chat_room, user_id: int, is_typing: bool):
     user_id_str = str(user_id)
 
     # Start an atomic database transaction
@@ -168,7 +168,7 @@ def set_user_typing(chat_room: ChatRoom, user_id: int, is_typing: bool):
     with transaction.atomic():
 
         # Re-fetch and LOCK the chat room row to prevent concurrent overwrites
-        chat_room = ChatRoom.objects.select_for_update().get(id=chat_room.id)
+        chat_room = ChatRoom.objects.select_for_update().get(id=chat_room)
         typing_data = chat_room.is_typing or {}
 
         if is_typing:

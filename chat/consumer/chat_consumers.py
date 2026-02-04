@@ -29,9 +29,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        self.chat_room_id = self.scope["url_route"]["kwargs"]["room_id"]
-        self.room_group_name = f"chat_{self.chat_room_id}"
-        self.chat_room = await get_chat_room(self.chat_room_id)
+        self.chat_room_id = self.scope["url_route"]
+        self.room_group_name = f"chat_websocket_room"
+        # self.chat_room = await get_chat_room(self.chat_room_id)
 
         # print(f"Chat room ID: {self.chat_room_id}")
         # print(f"Chat room: {self.chat_room}")
@@ -59,7 +59,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             print("INSIDE ON RECEIVE METHOD", data)
 
             if action == "send_message":
-                message, chat_room = await handle_send_message(self.scope.get("user"),self.scope,data, self.chat_room)
+                chat_room_id = data.get("chat_room")
+                chat_room = await get_chat_room(chat_room_id)
+                message, chat_room = await handle_send_message(self.scope,data, chat_room=chat_room)
                 if message:
                     serialized_message = await serialize_message(message, self.scope)
                     # BROADCAST to all clients in the room group
@@ -85,11 +87,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
             elif action == "fetch_messages":
                 before_id = data.get("page")
                 limit = data.get("page_size", 20)
+                chat_room = data.get("chat_room_id")
                 print("FETCH MESSAGES USER:", self.scope.get("user"))
 
                 result = await get_messages_before(
                     scope=self.scope,
-                    chat_room=self.chat_room_id,
+                    chat_room=chat_room,
                     user=self.scope.get("user"),
                     page=before_id,
                     limit=limit,
@@ -203,10 +206,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
                 is_typing_flag = data.get("is_typing", False)
                 user_id = data.get("user_id")
+                chat_room_id = data.get("chat_room_id")
 
                 # Update the typing status in DB
                 updated_typing_data = await set_user_typing(
-                    self.chat_room, user_id, is_typing_flag
+                    chat_room_id, user_id, is_typing_flag
                 )
                 print(f"Updated typing data: {updated_typing_data}")
 
@@ -219,6 +223,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         "message": f"{'started' if is_typing_flag else 'stopped'} typing",
                         "data": {
                             "typing_users": updated_typing_data,
+                            "chat_room_id": chat_room_id
                         },
                     },
                 )
