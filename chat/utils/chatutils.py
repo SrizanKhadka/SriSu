@@ -127,6 +127,7 @@ def serialize_message_sync(message, scope):
             "text": message.reply_to.text,
             "sender_id": message.reply_to.sender.id,
             "message_type": message.reply_to.message_type,
+            "message_owner_name": message.reply_to.sender.full_name if message.reply_to.sender else None,
         } if message.reply_to else None,
 
         # Message status
