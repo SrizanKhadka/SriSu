@@ -1,7 +1,7 @@
 from chat.models import *
 from channels.db import database_sync_to_async
 from asgiref.sync import sync_to_async
-
+from utils.helpers import get_base_url
 
 def is_number_valid(number):
     return number.startswith("+") and len(number) > 11
@@ -39,6 +39,13 @@ def get_couple(couple_id):
         return CoupleModel.objects.filter(id=couple_id).first()
     except Exception as e:
         print(f"Error in get_couple: {e}")
+        return None
+@sync_to_async
+def get_single(single_id):
+    try:
+        return SingleConnectionModel.objects.filter(id=single_id).first()
+    except Exception as e:
+        print(f"Error in get_single: {e}")
         return None
 
 @sync_to_async
@@ -80,16 +87,8 @@ def delete_message(message):
         message.delete()
     except Exception as e:
         print(f"Error in delete_message: {e}")
-
-def get_base_url(scope):
-    scheme = scope.get("scheme", "http")
-    headers = dict(scope.get("headers", []))
-    host = headers.get(b"host", b"").decode()
-    return f"{scheme}://{host}"
-
-
-@sync_to_async
-def serialize_message(message, scope):
+        
+def serialize_message_sync(message, scope):
     base_url = get_base_url(scope)
 
     return {
@@ -128,6 +127,7 @@ def serialize_message(message, scope):
             "text": message.reply_to.text,
             "sender_id": message.reply_to.sender.id,
             "message_type": message.reply_to.message_type,
+            "message_owner_name": message.reply_to.sender.full_name if message.reply_to.sender else None,
         } if message.reply_to else None,
 
         # Message status
@@ -150,3 +150,8 @@ def serialize_message(message, scope):
         # Time
         "timestamp": message.timestamp.isoformat(),
     }
+    
+
+@sync_to_async    
+def serialize_message(message, scope):
+    return serialize_message_sync(message, scope)

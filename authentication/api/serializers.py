@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.utils.timezone import now
 from utils.choices import OtpStatusChoices
 from drf_writable_nested import WritableNestedModelSerializer
+from utils.helpers import get_base_url
 
 class UserPhotoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -43,7 +44,8 @@ class UserModelSerializer(serializers.ModelSerializer):
         if obj.profile_photo and request:
             return request.build_absolute_uri(obj.profile_photo.url)
         elif obj.profile_photo:
-            return obj.profile_photo.url
+            base_url = get_base_url(self.context.get('scope', {}))
+            return f"{base_url}{obj.profile_photo.url}"
         return None
 
 class UserSuggestionSerializer(serializers.ModelSerializer):
