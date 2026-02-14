@@ -5,7 +5,7 @@ import random
 from rest_framework import permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.viewsets import ModelViewSet
-from datetime import date
+from datetime import date, datetime
 from collections import defaultdict
 from django.db.models import OuterRef, Exists
 from social.models import *
@@ -216,7 +216,7 @@ class CoupleConnectionView(ModelViewSet):
                         user_two=couple.female_partner,
                         chat_type=ChatTypeChoices.COUPLE,
                         couple=couple,
-                        updated_at=timezone.now(),
+                        updated_at=datetime.now(),
                     )
                     
                     
@@ -480,7 +480,7 @@ class SingleConnectionView(ModelViewSet):
                         user_two=UserModel.objects.get(phone_number=receiver_number),
                         chat_type=ChatTypeChoices.SINGLE,
                         singles=connection,
-                        updated_at=timezone.now(),
+                        updated_at=datetime.now(),
                     )
                     return Response(
                         {
