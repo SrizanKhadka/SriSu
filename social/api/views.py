@@ -15,9 +15,8 @@ from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from authentication.api.serializers import UserModelSerializer
-from django.shortcuts import get_object_or_404
 from chat.utils.chatutils import *
-
+from chat.models import ChatRoom
 class CoupleConnectionView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
     queryset = CoupleConnectionModel.objects.all()
@@ -210,6 +209,17 @@ class CoupleConnectionView(ModelViewSet):
                         },
                         status=status.HTTP_200_OK,
                     )
+                    
+                    #updating the chat rooms for both users
+                    ChatRoom.objects.create(
+                        user_one=couple.male_partner,
+                        user_two=couple.female_partner,
+                        chat_type=ChatTypeChoices.COUPLE,
+                        couple=couple,
+                        updated_at=timezone.now(),
+                    )
+                    
+                    
                 else:
                     connection.connection_status = CoupleConnectionStatus.PENDING
                     connection.save()
@@ -465,6 +475,13 @@ class SingleConnectionView(ModelViewSet):
                 
                 elif connection.connection_status == SingleConnectionStatus.ACCEPTED:
                     message = "Crush request accepted!"
+                    ChatRoom.objects.create(
+                        user_one=UserModel.objects.get(phone_number=sender_number),
+                        user_two=UserModel.objects.get(phone_number=receiver_number),
+                        chat_type=ChatTypeChoices.SINGLE,
+                        singles=connection,
+                        updated_at=timezone.now(),
+                    )
                     return Response(
                         {
                             "message": message,

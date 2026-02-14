@@ -31,15 +31,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         self.chat_room_id = self.scope["url_route"]
         self.room_group_name = f"chat_websocket_room"
-        # self.chat_room = await get_chat_room(self.chat_room_id)
-
-        # print(f"Chat room ID: {self.chat_room_id}")
-        # print(f"Chat room: {self.chat_room}")
-
-        # if not self.chat_room:
-        #     print("Chat room not found, closing connection")
-        #     await self.close()
-        #     return
 
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
@@ -54,8 +45,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             action = data.get("action")
-
-
             print("INSIDE ON RECEIVE METHOD", data)
 
             if action == "send_message":
