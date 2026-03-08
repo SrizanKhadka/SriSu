@@ -790,7 +790,33 @@ class UserSuggestionView(ModelViewSet):
                 "message": "User Suggestions fetched successfully.",
             }
         )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_user_profile_by_id(request):
+    try:
+        user_id = request.query_params.get("user_id")
+        if not user_id:
+            return Response(
+                {"message": "User ID is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         
+        user = UserModel.objects.get(id=user_id)
+        serializer = UserModelSerializer(user, context={'request': request})
+        return Response(
+            {
+                "message": "User profile fetched successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+    except UserModel.DoesNotExist:
+        return Response(
+            {"message": "User not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def find_partner(request):
