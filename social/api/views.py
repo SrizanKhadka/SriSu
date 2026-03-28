@@ -17,6 +17,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from authentication.api.serializers import UserModelSerializer
 from chat.utils.chatutils import *
 from chat.models import ChatRoom
+from django.utils import timezone
 class CoupleConnectionView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
     queryset = CoupleConnectionModel.objects.all()

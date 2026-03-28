@@ -52,7 +52,8 @@ class Command(BaseCommand):
         full_name = self.fake.first_name() + " " + self.fake.last_name()
 
         gender = random.choice([GenderChoices.MALE, GenderChoices.FEMALE])
-        profile_photo = self.generate_unsplash_url(query=f"{gender.lower()} portrait")
+        person = "men" if gender == GenderChoices.MALE else "women"
+        profile_photo = self.generate_unsplash_url(query=person)
         zodiac_sign = random.choice([z for z in ZodiacSignChoices])
         mood = random.choice([m for m in MoodChoices])
 
@@ -82,5 +83,5 @@ class Command(BaseCommand):
             user = self.create_fake_user()
             self.stdout.write(self.style.SUCCESS(f"✅ Created user: {user.full_name} ({user.phone_number})"))
 
-    def generate_unsplash_url(self, query="person", width=300, height=300):
-        return f"https://source.unsplash.com/{width}x{height}/?{query}"
+    def generate_unsplash_url(self, query="men"):
+        return f"https://randomuser.me/api/portraits/{query}/{random.randint(1, 500)}.jpg"
