@@ -40,6 +40,7 @@ class UserModel(AbstractUser):
     # Only override where needed safely.
     username = models.CharField(max_length=150, null=True, blank=True, unique=False)
     email = models.EmailField(null=True, blank=True)
+    password = models.CharField(max_length=128, null=True, blank=True)
 
     bio = models.TextField(null=True, blank=True)
     full_name = models.CharField(max_length=100, null=True, blank=True)
