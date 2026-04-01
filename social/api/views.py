@@ -24,26 +24,20 @@ from authentication.api.serializers import UserModelSerializer
 from chat.utils.chatutils import *
 from chat.models import ChatRoom
 
-
 def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
     """
     Keep one chat room per user pair and attach the latest social relation to it.
     """
     ordered_users = sorted([user_one, user_two], key=lambda user: user.id)
-    chat_room = ChatRoom.objects.filter(
-        Q(user_one=ordered_users[0], user_two=ordered_users[1])
-        | Q(user_one=ordered_users[1], user_two=ordered_users[0])
-    ).first()
-
-    if not chat_room:
-        chat_room = ChatRoom.objects.create(
-            user_one=ordered_users[0],
-            user_two=ordered_users[1],
-            chat_type=chat_type,
-            couple=couple,
-            singles=singles,
-        )
-        return chat_room
+    chat_room, _ = ChatRoom.objects.get_or_create(
+        user_one=ordered_users[0],
+        user_two=ordered_users[1],
+        defaults={
+            "chat_type": chat_type,
+            "couple": couple,
+            "singles": singles,
+        },
+    )
 
     updates = []
 
@@ -345,8 +339,6 @@ class CoupleConnectionRequestView(ModelViewSet):
             sender_number=phone_number, connection_status=CoupleConnectionStatus.PENDING
         )
         
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
         page = self.paginate_queryset(sent_requests)
 
         if page is not None:
@@ -376,8 +368,6 @@ class CoupleConnectionRequestView(ModelViewSet):
             receiver_number=phone_number,
             connection_status=CoupleConnectionStatus.PENDING,
         )
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
         page = self.paginate_queryset(received_requests)
         
         if page is not None:

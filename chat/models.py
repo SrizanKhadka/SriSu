@@ -211,6 +211,11 @@ class ChatRoom(models.Model):
                 name="unique_chatroom_users"
             )
         ]
+
+    def save(self, *args, **kwargs):
+        if self.user_one_id and self.user_two_id and self.user_one_id > self.user_two_id:
+            self.user_one, self.user_two = self.user_two, self.user_one
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"ChatRoom {self.id} - {self.user_one.full_name} and {self.user_two.full_name}"
