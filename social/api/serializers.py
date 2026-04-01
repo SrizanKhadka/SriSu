@@ -1,9 +1,13 @@
+from django.db.models import Q
 from rest_framework import serializers
 from social.models import CoupleConnectionModel, CoupleModel, PhotoAlbumModel, SingleConnectionModel, UserPreferenceModel
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
 from authentication.models import UserModel
 from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
 from authentication.api.serializers import UserModelSerializer
+from datetime import date
+from utils.choices import SingleConnectionStatus
+
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
     
@@ -125,27 +129,68 @@ class SingleConnectionSerializer(serializers.ModelSerializer):
 class UserSuggestionSerializer(serializers.ModelSerializer):
     user_interests = UserInterestSerializer(many=True, read_only=True)
     user_photos = UserPhotoSerializer(many=True, read_only=True)
-    crushed = serializers.BooleanField(read_only=True)
+    has_active_connection = serializers.SerializerMethodField()
+    age = serializers.SerializerMethodField()
 
     class Meta:
         model = UserModel
         fields = [
             "id",
-            "phone_number",
             "full_name",
+            "phone_number",
             "username",
             "user_interests",
             "user_photos",
             "profile_photo",
             "city",
             "country",
-            "dob",
+            "age",
             "gender",
             "zodiac_sign",
             "mood",
             "bio",
-            "crushed"
+            "has_active_connection",
         ]
+        read_only_fields = fields
+
+    def get_age(self, obj):
+        if not obj.dob:
+            return None
+
+        today = date.today()
+        return today.year - obj.dob.year - (
+            (today.month, today.day) < (obj.dob.month, obj.dob.day)
+        )
+
+    def get_has_active_connection(self, obj):
+        annotated_value = getattr(obj, "has_active_connection", None)
+        if annotated_value is not None:
+            return annotated_value
+
+        request = self.context.get("request")
+        if not request or not getattr(request, "user", None) or not request.user.is_authenticated:
+            return False
+
+        current_user_number = request.user.phone_number
+        if not current_user_number or not obj.phone_number:
+            return False
+
+        return SingleConnectionModel.objects.filter(
+            Q(
+                sender_number=current_user_number,
+                receiver_number=obj.phone_number,
+            )
+            | Q(
+                receiver_number=current_user_number,
+                sender_number=obj.phone_number,
+            )
+        ).exclude(
+            connection_status__in=[
+                SingleConnectionStatus.NOTHING,
+                SingleConnectionStatus.REJECTED,
+            ]
+        ).exists()
+
 
 
 class UserPreferenceSerializer(serializers.ModelSerializer):
@@ -157,3 +202,4 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserPreferenceModel
         fields = "__all__"
+

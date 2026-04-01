@@ -20,6 +20,7 @@ faker = "*"
 drf-writable-nested = "*"
 drf-nested-forms = "*"
 pillow-heif = "*"
+python-dateutil = "*"
 
 [dev-packages]
 
