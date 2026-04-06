@@ -1,0 +1,17 @@
+class SuggestionScore:
+    INTEREST_SIMILARITY = 60
+    SAME_CITY = 15
+    SAME_COUNTRY = 10
+    SAME_ZODIAC = 10
+    NO_ACTIVE_CONNECTION = 5
+
+
+class SuggestionBucket:
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+HIGH_SCORE_THRESHOLD = 70
+MEDIUM_SCORE_THRESHOLD = 40
+DEFAULT_CANDIDATE_LIMIT = 500

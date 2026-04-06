@@ -1,23 +1,72 @@
 from .serializers import *
 from rest_framework import status
 from rest_framework.response import Response
-import random
 from rest_framework import permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.viewsets import ModelViewSet
-from datetime import date
-from collections import defaultdict
-from django.db.models import OuterRef, Exists
+from django.db import transaction
 from social.models import *
-from authentication.models import UserInterestModel
-from utils.choices import CoupleConnectionStatus, GenderChoices
+from utils.choices import (
+    CoupleConnectionStatus,
+    GenderChoices,
+    SingleConnectionStatus,
+    ChatTypeChoices,
+)
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from authentication.api.serializers import UserModelSerializer
 from chat.utils.chatutils import *
 from chat.models import ChatRoom
-from django.utils import timezone
+from rest_framework.generics import ListAPIView
+from social.services.suggestion_service import UserSuggestionService
+from social.api.serializers import UserSuggestionSerializer
+
+
+def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
+    """
+    Keep one chat room per user pair and attach the latest social relation to it.
+    """
+    ordered_users = sorted([user_one, user_two], key=lambda user: user.id)
+    chat_room, _ = ChatRoom.objects.get_or_create(
+        user_one=ordered_users[0],
+        user_two=ordered_users[1],
+        defaults={
+            "chat_type": chat_type,
+            "couple": couple,
+            "singles": singles,
+        },
+    )
+
+    updates = []
+
+    if chat_room.user_one_id != ordered_users[0].id:
+        chat_room.user_one = ordered_users[0]
+        updates.append("user_one")
+
+    if chat_room.user_two_id != ordered_users[1].id:
+        chat_room.user_two = ordered_users[1]
+        updates.append("user_two")
+
+    if chat_room.chat_type != chat_type:
+        chat_room.chat_type = chat_type
+        updates.append("chat_type")
+
+    if chat_room.couple_id != getattr(couple, "id", None):
+        chat_room.couple = couple
+        updates.append("couple")
+
+    if chat_room.singles_id != getattr(singles, "id", None):
+        chat_room.singles = singles
+        updates.append("singles")
+
+    if updates:
+        updates.append("updated_at")
+        chat_room.save(update_fields=updates)
+
+    return chat_room
+
+
 class CoupleConnectionView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
     queryset = CoupleConnectionModel.objects.all()
@@ -157,77 +206,80 @@ class CoupleConnectionView(ModelViewSet):
             CoupleConnectionStatus.BREAKUP,
             CoupleConnectionStatus.NOTHING,  # NOTHING is used to cancel the request
         ]:
-            connection.connection_status = connection_status
-            connection.save()
+            with transaction.atomic():
+                connection.connection_status = connection_status
+                connection.save(update_fields=["connection_status", "updated_at"])
 
-            if (
-                connection
-                and connection.connection_status == CoupleConnectionStatus.REJECTED
-            ):
-                message = "Sorry! Love request rejected"
-                return Response(
-                    {
-                        "message": message,
-                        "couple_connection": self.serializer_class(connection).data,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            elif (
-                connection
-                and connection.connection_status == CoupleConnectionStatus.BREAKUP
-            ):
-                message = "Sorry For your break-up. But no worries, You can have better choices."
-                return Response(
-                    {
-                        "message": message,
-                        "couple_connection": self.serializer_class(connection).data,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            elif (
-                connection
-                and connection.connection_status == CoupleConnectionStatus.NOTHING
-            ):
-                message = "Love request cancelled."
-                return Response(
-                    {
-                        "message": message,
-                        "couple_connection": self.serializer_class(connection).data,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-
-            if connection and connection_status == CoupleConnectionStatus.ACCEPTED:
-
-                couple = self.createCouple(couple_connection=connection)
-
-                if couple:
+                if (
+                    connection
+                    and connection.connection_status == CoupleConnectionStatus.REJECTED
+                ):
+                    message = "Sorry! Love request rejected"
                     return Response(
                         {
-                            "message": "Love request accepted!",
+                            "message": message,
                             "couple_connection": self.serializer_class(connection).data,
-                            "couple": CoupleModelSerializer(couple).data,
                         },
                         status=status.HTTP_200_OK,
                     )
-                    
-                    #updating the chat rooms for both users
-                    ChatRoom.objects.create(
-                        user_one=couple.male_partner,
-                        user_two=couple.female_partner,
-                        chat_type=ChatTypeChoices.COUPLE,
-                        couple=couple,
-                        updated_at=timezone.now(),
-                    )
-                    
-                    
-                else:
-                    connection.connection_status = CoupleConnectionStatus.PENDING
-                    connection.save()
+                elif (
+                    connection
+                    and connection.connection_status == CoupleConnectionStatus.BREAKUP
+                ):
+                    message = "Sorry For your break-up. But no worries, You can have better choices."
                     return Response(
-                        {"error": "Couple connection failed."},
-                        status=status.HTTP_400_BAD_REQUEST,
+                        {
+                            "message": message,
+                            "couple_connection": self.serializer_class(connection).data,
+                        },
+                        status=status.HTTP_200_OK,
                     )
+                elif (
+                    connection
+                    and connection.connection_status == CoupleConnectionStatus.NOTHING
+                ):
+                    message = "Love request cancelled."
+                    return Response(
+                        {
+                            "message": message,
+                            "couple_connection": self.serializer_class(connection).data,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+
+                if connection and connection_status == CoupleConnectionStatus.ACCEPTED:
+                    try:
+                        couple = self.createCouple(couple_connection=connection)
+                    except ValueError as exc:
+                        connection.connection_status = CoupleConnectionStatus.PENDING
+                        connection.save(update_fields=["connection_status", "updated_at"])
+                        return Response(
+                            {"error": str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
+                    if couple:
+                        sync_chat_room(
+                            user_one=couple.male_partner,
+                            user_two=couple.female_partner,
+                            chat_type=ChatTypeChoices.COUPLE,
+                            couple=couple,
+                        )
+                        return Response(
+                            {
+                                "message": "Love request accepted!",
+                                "couple_connection": self.serializer_class(connection).data,
+                                "couple": CoupleModelSerializer(couple).data,
+                            },
+                            status=status.HTTP_200_OK,
+                        )
+                    else:
+                        connection.connection_status = CoupleConnectionStatus.PENDING
+                        connection.save(update_fields=["connection_status", "updated_at"])
+                        return Response(
+                            {"error": "Couple connection failed."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
         return Response(
             {"message": "Unsupported operation."},
@@ -286,8 +338,6 @@ class CoupleConnectionRequestView(ModelViewSet):
             sender_number=phone_number, connection_status=CoupleConnectionStatus.PENDING
         )
         
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
         page = self.paginate_queryset(sent_requests)
 
         if page is not None:
@@ -318,8 +368,6 @@ class CoupleConnectionRequestView(ModelViewSet):
             connection_status=CoupleConnectionStatus.PENDING,
         )
         page = self.paginate_queryset(received_requests)
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
         
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -432,8 +480,8 @@ class SingleConnectionView(ModelViewSet):
         
         # sender user can make it accept or reject but can cancel (nothing) the connection
         if current_user_number == connection.sender_number and connection_status in [
-            CoupleConnectionStatus.ACCEPTED,
-            CoupleConnectionStatus.REJECTED,
+            SingleConnectionStatus.ACCEPTED,
+            SingleConnectionStatus.REJECTED,
         ]:
             return Response(
                 {"message": "Unsupported operation."},
@@ -451,10 +499,10 @@ class SingleConnectionView(ModelViewSet):
             SingleConnectionStatus.REJECTED,
             SingleConnectionStatus.NOTHING,  # NOTHING is used to cancel the request
         ]:
-            connection.connection_status = connection_status
-            connection.save()
+            with transaction.atomic():
+                connection.connection_status = connection_status
+                connection.save(update_fields=["connection_status", "updated_at"])
 
-            if connection:
                 if connection.connection_status == SingleConnectionStatus.REJECTED:
                     message = "Sorry! Crush request rejected."
                     return Response(
@@ -473,15 +521,14 @@ class SingleConnectionView(ModelViewSet):
                         },
                         status=status.HTTP_200_OK,
                     )
-                
+
                 elif connection.connection_status == SingleConnectionStatus.ACCEPTED:
                     message = "Crush request accepted!"
-                    ChatRoom.objects.create(
+                    sync_chat_room(
                         user_one=UserModel.objects.get(phone_number=sender_number),
                         user_two=UserModel.objects.get(phone_number=receiver_number),
                         chat_type=ChatTypeChoices.SINGLE,
                         singles=connection,
-                        updated_at=timezone.now(),
                     )
                     return Response(
                         {
@@ -490,13 +537,6 @@ class SingleConnectionView(ModelViewSet):
                         },
                         status=status.HTTP_200_OK,
                     )
-            else:
-                connection.connection_status = CoupleConnectionStatus.PENDING
-                connection.save()
-                return Response(
-                    {"message": "Crush connection failed."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
 
         return Response(
             {"message": "Unsupported operation."},
@@ -680,106 +720,19 @@ class UserSuggestionPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class UserSuggestionView(ModelViewSet):
-    queryset = UserModel.objects.all()
+class UserSuggestionView(ListAPIView):
     serializer_class = UserSuggestionSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = UserSuggestionPagination
-    http_method_names = ["get"]
+
+    def get_queryset(self):
+        return UserSuggestionService(user=self.request.user).get_ranked_user_list()
 
     def list(self, request, *args, **kwargs):
-        user = self.request.user
-        preferences = UserPreferenceModel.objects.filter(user=user).first()
-        gender = (
-            GenderChoices.MALE
-            if user.gender == GenderChoices.FEMALE
-            else GenderChoices.FEMALE
-        ) 
-
-        connection_sent = SingleConnectionModel.objects.filter(
-            Q(sender_number=user.phone_number, receiver_number=OuterRef("phone_number")) |
-            Q(receiver_number=user.phone_number, sender_number=OuterRef("phone_number"))
-        ).exclude(
-            connection_status__in=[SingleConnectionStatus.NOTHING, SingleConnectionStatus.REJECTED]
-        )
-
-        if not preferences:
-            all_users = UserModel.objects.exclude(id=user.id).filter(gender=gender)
-            all_users = list(all_users.annotate(crushed=Exists(connection_sent)))
-
-            random.seed(request.user.id)
-            random.shuffle(all_users)
-
-            page = self.paginate_queryset(all_users)
-            serializer = self.get_serializer(page, many=True)
-            return Response(
-                {
-                    "data": {
-                        "count": self.paginator.page.paginator.count,
-                        "next": self.paginator.get_next_link(),
-                        "previous": self.paginator.get_previous_link(),
-                        "results": serializer.data,
-                    },
-                    "message": "User Suggestions fetched successfully.",
-                }
-            )
-
-        today = date.today()
-        min_birth_year = today.year - preferences.max_age
-        max_birth_year = today.year - preferences.min_age
-        zodiac_sign = preferences.zodiac_sign
-
-        filtered_users = UserModel.objects.exclude(id=user.id)
-
-        if preferences.city:
-            filtered_users = filtered_users.filter(city=preferences.city)
-        elif preferences.country:
-            filtered_users = filtered_users.filter(country=preferences.country)
-
-        if gender:
-            filtered_users = filtered_users.filter(gender=gender)
-
-        if zodiac_sign:
-            filtered_users = filtered_users.filter(zodiac_sign=zodiac_sign)
-
-        if min_birth_year and max_birth_year:
-            filtered_users = filtered_users.filter(
-                dob__year__range=(min_birth_year, max_birth_year)
-            )
-            
-        filtered_users = filtered_users.annotate(crushed=Exists(connection_sent))
-
-        all_interest_qs = UserInterestModel.objects.filter(user__in=filtered_users)
-
-        # Build a dictionary {user_id: set of interests}
-        user_interest_map = defaultdict(set)
-        for obj in all_interest_qs:
-            user_interest_map[obj.user_id].add(obj.name)
-
-        user_interests = set(
-            UserInterestModel.objects.filter(user=user).values_list("name", flat=True)
-        )
-
-        scored_users = []
-        for candidate in filtered_users:
-            candidate_interests = user_interest_map.get(candidate.id, set())
-            intersection = user_interests & candidate_interests
-
-            score = (
-                int((len(intersection) / len(user_interests)) * 100)
-                if user_interests
-                else 0
-            )
-            scored_users.append((candidate, score))
-
-        strong = [user for user, score in scored_users if score >= 70]
-        medium = [user for user, score in scored_users if 40 <= score < 70]
-        weak = [user for user, score in scored_users if score < 40]
-
-        sorted_users = strong + medium + weak
-
-        page = self.paginate_queryset(sorted_users)
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(page, many=True)
+
         return Response(
             {
                 "data": {
@@ -788,8 +741,28 @@ class UserSuggestionView(ModelViewSet):
                     "previous": self.paginator.get_previous_link(),
                     "results": serializer.data,
                 },
-                "message": "User Suggestions fetched successfully.",
+                "message": "User suggestions fetched successfully.",
             }
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_suggestion_profile_by_id(request):
+    try:
+        user_id = request.query_params.get("user_id")
+        user = UserModel.objects.get(id=user_id)
+        serializer = UserSuggestionSerializer(user, context={'request': request})
+        return Response(
+            {
+                "message": "Suggestion profile fetched successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+    except UserModel.DoesNotExist:
+        return Response(
+            {"message": "User not found."},
+            status=status.HTTP_404_NOT_FOUND,
         )
         
 @api_view(['GET'])
