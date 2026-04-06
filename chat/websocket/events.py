@@ -1,0 +1,10 @@
+class ChatSocketEvents:
+    MESSAGE_CREATED = "message_created"
+    MESSAGE_UPDATED = "message_updated"
+    MESSAGE_DELETED = "message_deleted"
+    MESSAGE_READ = "message_read"
+    MESSAGE_DELIVERED = "message_delivered"
+    MESSAGE_REACTED = "message_reacted"
+    TYPING_UPDATED = "typing_updated"
+    CHAT_ROOMS_FETCHED = "chat_rooms_fetched"
+    CHAT_ROOM_UPDATED = "chat_room_updated"
