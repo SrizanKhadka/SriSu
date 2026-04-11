@@ -194,9 +194,9 @@ class MessageModel(models.Model):
     )
 
     # Keep temporarily for backward compatibility
-    message_deletion_dict = models.JSONField(null=True, blank=True)
-    delete_for = models.JSONField(null=True, blank=True)
-    reactions = models.JSONField(null=True, blank=True)
+    message_deletion_dict = models.JSONField(null=True, blank=True,default=dict)
+    delete_for = models.JSONField(null=True, blank=True,default=dict)
+    reactions = models.JSONField(null=True, blank=True,default=dict)
 
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -226,6 +226,7 @@ class MessageDeletion(models.Model):
         UserModel,
         on_delete=models.CASCADE,
         related_name="message_deletions",
+        default=None,
     )
     delete_option = models.CharField(
         max_length=20,

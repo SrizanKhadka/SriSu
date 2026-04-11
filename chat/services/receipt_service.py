@@ -7,7 +7,6 @@ from django.db import transaction
 from authentication.models import UserModel
 from chat.models import MessageModel
 from chat.selectors.chat_room_selectors import get_chat_room_for_user
-from chat.services.chat_room_service import update_room_after_messages_read
 from chat.websocket.exceptions import ChatRoomNotFoundError
 
 
@@ -100,11 +99,6 @@ def mark_messages_read(
         MessageModel.objects.bulk_update(
             unread_messages,
             ["is_read", "is_delivered"],
-        )
-
-        update_room_after_messages_read(
-            chat_room=chat_room,
-            user=user,
         )
 
     return ReceiptResult(
