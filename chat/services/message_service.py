@@ -161,11 +161,9 @@ def _delete_message_for_me(*, user: UserModel, message: MessageModel) -> Message
     """
     Hide the message only for the requesting user.
     """
-    MessageDeletion.objects.update_or_create(
-        message=message,
-        user=user,
-        defaults={"delete_option": DeleteOption.DELETE_FOR_ME},
-    )
+    
+    message.delete_option = DeleteOption.DELETE_FOR_ME
+    message.save(update_fields=["delete_option"])
     return message
 
 

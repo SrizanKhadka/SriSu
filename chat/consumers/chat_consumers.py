@@ -58,6 +58,11 @@ class ChatConsumer(ChatSocketHandlerMixin, AsyncWebsocketConsumer):
     @staticmethod
     def get_user_group_name(user_id: int) -> str:
         return f"chat_user_{user_id}"
+    
+    async def ensure_room_subscription(self, chat_room_id: str):
+        room_group_name = self.get_room_group_name(chat_room_id)
+        print(f"Adding {self.channel_name} to room group {room_group_name}")
+        await self.channel_layer.group_add(room_group_name, self.channel_name)
 
     async def broadcast_to_room(self, *, chat_room_id: str, event: dict):
         await self.channel_layer.group_send(
@@ -91,6 +96,20 @@ class ChatConsumer(ChatSocketHandlerMixin, AsyncWebsocketConsumer):
                     "data": room_payload,
                 },
             )
+    
+    async def broadcast_message_sent_to_all_clients(self, chat_room_id: str, message_payload: dict):
+        await self.channel_layer.group_send(
+            self.get_room_group_name(chat_room_id),
+            {
+                "type": "chat.broadcast",
+                "payload": {
+                    "type": "event",
+                    "action": "message_created",
+                    "message": "New message created",
+                    "data": message_payload,
+                },
+            }
+        )
 
     async def chat_broadcast(self, event):
         await self.send_json(event["payload"])

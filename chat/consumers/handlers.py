@@ -110,12 +110,15 @@ class ChatSocketHandlerMixin:
             payload["chat_room_id"],
             user,
         )
+        
         if not chat_room:
             return socket_error(
                 action=ChatSocketActions.FETCH_MESSAGES,
                 message="Chat room not found or access denied",
                 request_id=request_id,
             )
+            
+        await self.ensure_room_subscription(str(chat_room.id))
 
         messages, has_more, next_cursor = await database_sync_to_async(get_paginated_messages_before)(
             chat_room=chat_room,
@@ -177,6 +180,8 @@ class ChatSocketHandlerMixin:
         )
 
         message_data = await self.serialize_message(message)
+        print("Deleted message data:", message_data)
+        
 
         await self.broadcast_to_room(
             chat_room_id=str(message.chat_room_id),
@@ -289,7 +294,7 @@ class ChatSocketHandlerMixin:
             "was_removed": reaction_result.was_removed,
         }
 
-        await self.broadcast_to_room(
+        await self.broadcast_to_room( #why this is not working? 
             chat_room_id=str(message.chat_room_id),
             event=socket_event(
                 action=ChatSocketEvents.MESSAGE_REACTED,
@@ -307,6 +312,9 @@ class ChatSocketHandlerMixin:
 
     async def _handle_set_typing(self, *, payload: dict, request_id: str | None):
         user = self.scope["user"]
+        
+        self.ensure_room_subscription(str(payload["chat_room_id"]))
+        
         result = await database_sync_to_async(set_typing_status)(
             user=user,
             chat_room_id=payload["chat_room_id"],
