@@ -61,7 +61,7 @@ class ChatSocketHandlerMixin:
     async def _handle_send_message(self, *, payload: dict, request_id: str | None):
         user = self.scope["user"]
 
-        message = await database_sync_to_async(send_message)(
+        message,updated_room = await database_sync_to_async(send_message)(
             user=user,
             payload=SendMessageInput(
                 chat_room_id=payload["chat_room_id"],
@@ -75,7 +75,7 @@ class ChatSocketHandlerMixin:
         )
 
         message_data = await self.serialize_message(message)
-        room_payload = await self.serialize_chat_room_preview(message.chat_room)
+        room_payload = await self.serialize_chat_room_preview(updated_room)
 
         await self.broadcast_to_room(
             chat_room_id=str(message.chat_room_id),
@@ -118,7 +118,7 @@ class ChatSocketHandlerMixin:
                 request_id=request_id,
             )
             
-        await self.ensure_room_subscription(str(chat_room.id))
+        # await self.ensure_room_subscription(str(chat_room.id))
 
         messages, has_more, next_cursor = await database_sync_to_async(get_paginated_messages_before)(
             chat_room=chat_room,
@@ -143,7 +143,7 @@ class ChatSocketHandlerMixin:
 
     async def _handle_edit_message(self, *, payload: dict, request_id: str | None):
         user = self.scope["user"]
-        message = await database_sync_to_async(edit_message)(
+        message, updated_room = await database_sync_to_async(edit_message)(
             user=user,
             payload=EditMessageInput(
                 message_id=payload["message_id"],
@@ -152,13 +152,18 @@ class ChatSocketHandlerMixin:
         )
 
         message_data = await self.serialize_message(message)
+        room_payload = await self.serialize_chat_room_preview(updated_room)
+
 
         await self.broadcast_to_room(
             chat_room_id=str(message.chat_room_id),
             event=socket_event(
                 action=ChatSocketEvents.MESSAGE_UPDATED,
                 message="Message edited",
-                data={"message": message_data},
+                data={
+                    "message": message_data
+                    ,"chat_room": room_payload
+                    },
             ),
         )
 
@@ -171,7 +176,7 @@ class ChatSocketHandlerMixin:
 
     async def _handle_delete_message(self, *, payload: dict, request_id: str | None):
         user = self.scope["user"]
-        message = await database_sync_to_async(delete_message)(
+        message,updated_room = await database_sync_to_async(delete_message)(
             user=user,
             payload=DeleteMessageInput(
                 message_id=payload["message_id"],
@@ -195,7 +200,7 @@ class ChatSocketHandlerMixin:
         return socket_success(
             action=ChatSocketActions.DELETE_MESSAGE,
             message="Message deleted successfully",
-            data={"message": message_data},
+            data={"message": message_data,"chat_room": await self.serialize_chat_room_preview(updated_room)},
             request_id=request_id,
         )
 
@@ -313,7 +318,7 @@ class ChatSocketHandlerMixin:
     async def _handle_set_typing(self, *, payload: dict, request_id: str | None):
         user = self.scope["user"]
         
-        self.ensure_room_subscription(str(payload["chat_room_id"]))
+        print(f"Handling set typing: user={user}, payload={payload}")
         
         result = await database_sync_to_async(set_typing_status)(
             user=user,
@@ -353,6 +358,7 @@ class ChatSocketHandlerMixin:
         serialized_rooms = []
         for room in rooms:
             serialized_rooms.append(await self.serialize_chat_room_list_item(room))
+            await self.ensure_room_subscription(str(room.id))
 
         next_cursor = rooms[-1].updated_at.isoformat() if rooms else None
 

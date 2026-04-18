@@ -87,6 +87,7 @@ def mark_messages_read(
             is_deleted=False,
         ).only("id", "is_read")
     )
+    
 
     if not unread_messages:
         return None
@@ -100,6 +101,9 @@ def mark_messages_read(
             unread_messages,
             ["is_read", "is_delivered"],
         )
+        
+    chat_room.unread_count[str(user.id)] = 0
+    chat_room.save(update_fields=["unread_count", "updated_at"])
 
     return ReceiptResult(
         chat_room_id=str(chat_room.id),

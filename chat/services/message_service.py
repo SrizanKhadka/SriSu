@@ -94,13 +94,17 @@ def send_message(*, user: UserModel, payload: SendMessageInput) -> MessageModel:
 
         if media_objects:
             message.medias.set(media_objects)
-
-        update_room_after_message_created(
+            
+        print("Inside send_message Core: ", message.text)
+        updated_room = update_room_after_message_created(
             chat_room=chat_room,
             message=message,
+            is_message_sent=True,
+            
         )
+        print("Updated room last message to:", updated_room.last_message.text)
 
-    return message
+    return message,updated_room
 
 
 
@@ -131,8 +135,13 @@ def edit_message(*, user: UserModel, payload: EditMessageInput) -> MessageModel:
     message.text = new_text
     message.is_edited = True
     message.save(update_fields=["text", "is_edited"])
+    
+    updated_room = update_room_after_message_created(
+        chat_room=message.chat_room,
+        message=message,
+    )
 
-    return message
+    return message, updated_room
 
 
 def delete_message(*, user: UserModel, payload: DeleteMessageInput) -> MessageModel:
@@ -164,7 +173,12 @@ def _delete_message_for_me(*, user: UserModel, message: MessageModel) -> Message
     
     message.delete_option = DeleteOption.DELETE_FOR_ME
     message.save(update_fields=["delete_option"])
-    return message
+    
+    updated_room = update_room_after_message_created(
+        chat_room=message.chat_room,
+        message=message,
+    )
+    return message, updated_room
 
 
 def _delete_message_for_everyone(
@@ -203,8 +217,13 @@ def _delete_message_for_everyone(
             "is_edited",
         ]
     )
+    
+    updated_room = update_room_after_message_created(
+        chat_room=message.chat_room,
+        message=message,
+    )
 
-    return message
+    return message, updated_room
 
 
 def _validate_send_payload(payload: SendMessageInput) -> None:

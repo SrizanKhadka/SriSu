@@ -56,6 +56,7 @@ def get_chat_rooms_for_user(
     Returns:
         List of ChatRoom instances ordered by most recently updated first.
     """
+    
     queryset = get_user_chat_rooms_queryset(user)
 
     cursor_dt = _parse_iso_datetime(last_updated)

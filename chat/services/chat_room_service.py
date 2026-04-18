@@ -8,41 +8,11 @@ from django.db.models import Q
 from authentication.models import UserModel
 from chat.models import ChatRoom, MessageModel
 
-
 def update_room_after_message_created(
     *,
     chat_room: ChatRoom,
     message: MessageModel,
-) -> ChatRoom:
-    """
-    Update room metadata after a new message is created.
-
-    Responsibilities:
-    - set last_message
-    - increment unread count for the receiver
-    - persist room changes
-
-    Notes:
-    - updated_at will be handled automatically by auto_now on save()
-    """
-    unread_count = dict(chat_room.unread_count or {})
-
-    receiver = message.receiver
-    if receiver:
-        receiver_key = str(receiver.id)
-        unread_count[receiver_key] = unread_count.get(receiver_key, 0) + 1
-
-    chat_room.last_message = message
-    chat_room.unread_count = unread_count
-    chat_room.save(update_fields=["last_message", "unread_count", "updated_at"])
-
-    return chat_room
-
-
-def update_room_after_message_created(
-    *,
-    chat_room: ChatRoom,
-    message: MessageModel,
+    is_message_sent: bool = False,
 ) -> ChatRoom:
     with transaction.atomic():
         locked_room = ChatRoom.objects.select_for_update().get(id=chat_room.id)
@@ -50,11 +20,12 @@ def update_room_after_message_created(
         unread_count = dict(locked_room.unread_count or {})
         receiver = message.receiver
 
-        if receiver:
+        if receiver and is_message_sent:
             receiver_key = str(receiver.id)
             unread_count[receiver_key] = unread_count.get(receiver_key, 0) + 1
 
         locked_room.last_message = message
+        print("Last message updated to:", message.text)
         locked_room.unread_count = unread_count
         locked_room.save(update_fields=["last_message", "unread_count", "updated_at"])
 

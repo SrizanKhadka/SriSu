@@ -32,6 +32,7 @@ def update_unread_count(chat_room):
             .exclude(sender=user)
             .count()
         )
+    print("Updated unread count:", unread_count)
 
     chat_room.unread_count = unread_count
     chat_room.save(update_fields=["unread_count"])
