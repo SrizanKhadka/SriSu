@@ -1,0 +1,10 @@
+class ChatSocketActions:
+    SEND_MESSAGE = "send_message"
+    FETCH_MESSAGES = "fetch_messages"
+    EDIT_MESSAGE = "edit_message"
+    DELETE_MESSAGE = "delete_message"
+    MARK_READ = "mark_read"
+    MARK_DELIVERED = "mark_delivered"
+    REACT_TO_MESSAGE = "react_to_message"
+    SET_TYPING = "set_typing"
+    GET_CHAT_ROOMS = "get_chat_rooms"
