@@ -12,6 +12,7 @@ from social.api.views import (
     UserSuggestionView,
     find_partner,
     get_suggestion_profile_by_id,
+    have_couple_connection_requested,
 )
 
 social_routers = DefaultRouter()
@@ -27,5 +28,6 @@ urlpatterns = [
     path("", include(social_routers.urls)),
     path("user-suggestions/", UserSuggestionView.as_view(), name="user_suggestions"),
     path("find-partner/", find_partner, name="find-partner"),
+    path("have-couple-connection-requested/", have_couple_connection_requested, name="have-couple-connection-requested"),
     path("get-suggestion-profile/", get_suggestion_profile_by_id, name="get-suggestion-profile"),
 ]

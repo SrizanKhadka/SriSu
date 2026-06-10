@@ -11,7 +11,7 @@ from utils.choices import SingleConnectionStatus
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
     
-    user = serializers.SerializerMethodField()
+    partner = serializers.SerializerMethodField()
     class Meta:
         model = CoupleConnectionModel
         fields = "__all__"
@@ -37,12 +37,15 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
 
         return validated_data
     
-    def get_user(self, obj):
+    def get_partner(self, obj):
         """
-        Returns the opposite user (partner) in the connection relative to the current request user.
+        Returns the opposite user partner in the connection relative to the current request user.
         """
         request = self.context.get("request")
+        print("Request in get_partner:", request)
+        print("User in request:", getattr(request, "user", None))
         if not request or not hasattr(request, "user"):
+            print("No request or user in context")
             return None
 
         current_user = request.user
@@ -54,6 +57,7 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
 
             return UserModelSerializer(partner_user, context=self.context).data
         except UserModel.DoesNotExist:
+            print("Partner user not found")
             return None
 
 

@@ -53,7 +53,7 @@ class UserModelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserModel
-        fields = "__all__"
+        exclude = ["password", "last_login", "is_superuser", "is_staff", "is_active", "date_joined", "groups", "user_permissions","first_name", "last_name"]
 
     def get_profile_photo(self, obj):
         request = self.context.get("request")

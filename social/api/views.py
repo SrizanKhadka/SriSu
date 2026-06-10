@@ -101,8 +101,10 @@ class CoupleConnectionView(ModelViewSet):
 
         sender_number = data["sender_number"]
         receiver_number = data["receiver_number"]
-        
-        if not is_user_valid(user_number=request.user.phone_number, sender_number=sender_number):
+
+        if not is_user_valid(
+            user_number=request.user.phone_number, sender_number=sender_number
+        ):
             return Response(
                 {"message": "You don't have permission to perform this operation."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -117,9 +119,7 @@ class CoupleConnectionView(ModelViewSet):
             raise ValidationError({"message": "You are already engaged!"})
 
         if is_receiver_engaged:
-            raise ValidationError(
-                {"message": "Requested Person is already engaged!"}
-            )
+            raise ValidationError({"message": "Requested Person is already engaged!"})
 
         if not connection or connection.connection_status in [
             CoupleConnectionStatus.REJECTED,
@@ -135,7 +135,7 @@ class CoupleConnectionView(ModelViewSet):
             return Response(
                 {
                     "message": "Love request sent.",
-                    "data": self.serializer_class(connection).data,
+                    "data": self.get_serializer(connection).data,
                 },
                 status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
             )
@@ -143,7 +143,7 @@ class CoupleConnectionView(ModelViewSet):
         return Response(
             {
                 "message": "Love request already exists.",
-                "data": self.serializer_class(connection).data,
+                "data": self.get_serializer(connection).data,
             },
             status=status.HTTP_200_OK,
         )
@@ -160,7 +160,6 @@ class CoupleConnectionView(ModelViewSet):
         sender_number = data["sender_number"]
         receiver_number = data["receiver_number"]
         current_user_number = request.user.phone_number
-
 
         if not has_permission(
             request.user.phone_number, sender_number, receiver_number
@@ -218,7 +217,7 @@ class CoupleConnectionView(ModelViewSet):
                     return Response(
                         {
                             "message": message,
-                            "couple_connection": self.serializer_class(connection).data,
+                            "couple_connection": self.get_serializer(connection).data,
                         },
                         status=status.HTTP_200_OK,
                     )
@@ -230,7 +229,7 @@ class CoupleConnectionView(ModelViewSet):
                     return Response(
                         {
                             "message": message,
-                            "couple_connection": self.serializer_class(connection).data,
+                            "couple_connection": self.get_serializer(connection).data,
                         },
                         status=status.HTTP_200_OK,
                     )
@@ -242,7 +241,7 @@ class CoupleConnectionView(ModelViewSet):
                     return Response(
                         {
                             "message": message,
-                            "couple_connection": self.serializer_class(connection).data,
+                            "couple_connection": self.get_serializer(connection).data,
                         },
                         status=status.HTTP_200_OK,
                     )
@@ -252,7 +251,9 @@ class CoupleConnectionView(ModelViewSet):
                         couple = self.createCouple(couple_connection=connection)
                     except ValueError as exc:
                         connection.connection_status = CoupleConnectionStatus.PENDING
-                        connection.save(update_fields=["connection_status", "updated_at"])
+                        connection.save(
+                            update_fields=["connection_status", "updated_at"]
+                        )
                         return Response(
                             {"error": str(exc)},
                             status=status.HTTP_400_BAD_REQUEST,
@@ -268,14 +269,18 @@ class CoupleConnectionView(ModelViewSet):
                         return Response(
                             {
                                 "message": "Love request accepted!",
-                                "couple_connection": self.serializer_class(connection).data,
+                                "couple_connection": self.get_serializer(
+                                    connection
+                                ).data,
                                 "couple": CoupleModelSerializer(couple).data,
                             },
                             status=status.HTTP_200_OK,
                         )
                     else:
                         connection.connection_status = CoupleConnectionStatus.PENDING
-                        connection.save(update_fields=["connection_status", "updated_at"])
+                        connection.save(
+                            update_fields=["connection_status", "updated_at"]
+                        )
                         return Response(
                             {"error": "Couple connection failed."},
                             status=status.HTTP_400_BAD_REQUEST,
@@ -290,9 +295,6 @@ class CoupleConnectionView(ModelViewSet):
         couple_connection_model = couple_connection
         sender_number = couple_connection.sender_number
         receiver_number = couple_connection.receiver_number
-
-        print("SENDER NUMBER = ", sender_number)
-        print("RECEIVER_NUMBER = ", receiver_number)
 
         try:
             # Fetch the male partner
@@ -323,6 +325,44 @@ class CoupleConnectionView(ModelViewSet):
             raise ValueError(f"Unexpected error occurred: {str(e)}")
 
 
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def have_couple_connection_requested(request):
+    sender_number = getattr(request.user, "phone_number", None)
+
+    if not sender_number:
+        return Response(
+            {"error": "Phone number is missing."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    connection = (
+        CoupleConnectionModel.objects.filter(
+            sender_number=sender_number,
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+    connection_data = (
+        CoupleConnectionSerializer(connection, context={"request": request}).data
+        if connection
+        else None
+    )
+
+    return Response(
+        {
+            "message": "Connection request check completed.",
+            "data": {
+                "connection_requested": connection is not None,
+                "connection": connection_data
+            },
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 class CoupleConnectionRequestView(ModelViewSet):
 
     serializer_class = CoupleConnectionSerializer
@@ -331,36 +371,47 @@ class CoupleConnectionRequestView(ModelViewSet):
     pagination_class = PageNumberPagination
 
     @action(detail=False, methods=["GET"], url_path="sent-requests")
-    def retrieve_coupleConnection_sent_list(self, request, *args, **kwargs): #this will provide all the list of sent requests
+    def retrieve_coupleConnection_sent_list(
+        self, request, *args, **kwargs
+    ):  # this will provide all the list of sent requests
 
         phone_number = request.user.phone_number
         sent_requests = CoupleConnectionModel.objects.filter(
             sender_number=phone_number, connection_status=CoupleConnectionStatus.PENDING
         )
-        
+
         page = self.paginate_queryset(sent_requests)
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return Response(
+                {
+                    "data": {
+                        "count": self.paginator.page.paginator.count,
+                        "next": self.paginator.get_next_link(),
+                        "previous": self.paginator.get_previous_link(),
+                        "results": serializer.data,
+                    },
+                    "message": "Love Requests Sent fetched successfully.",
+                }
+            )
+
+        return Response(
             {
                 "data": {
-                    "count": self.paginator.page.paginator.count,
-                    "next": self.paginator.get_next_link(),
-                    "previous": self.paginator.get_previous_link(),
-                    "results": serializer.data,
+                    "count": None,
+                    "next": None,
+                    "previous": None,
+                    "results": self.get_serializer(sent_requests, many=True).data,
                 },
                 "message": "Love Requests Sent fetched successfully.",
-            } 
-         )
+            }
+        )
 
-        serializer = self.get_serializer(sent_requests, many=True)
-        return Response(serializer.data)
-
-    @action(
-        detail=False, methods=["GET"], url_path="received-requests"
-    )
-    def retrieve_couple_connection_request_list(self, request, *args, **kwargs): #this will provide all the list of received requests
+    @action(detail=False, methods=["GET"], url_path="received-requests")
+    def retrieve_couple_connection_request_list(
+        self, request, *args, **kwargs
+    ):  # this will provide all the list of received requests
 
         phone_number = request.user.phone_number
         received_requests = CoupleConnectionModel.objects.filter(
@@ -368,23 +419,31 @@ class CoupleConnectionRequestView(ModelViewSet):
             connection_status=CoupleConnectionStatus.PENDING,
         )
         page = self.paginate_queryset(received_requests)
-        
+
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return Response(
+                {
+                    "data": {
+                        "count": self.paginator.page.paginator.count,
+                        "next": self.paginator.get_next_link(),
+                        "previous": self.paginator.get_previous_link(),
+                        "results": serializer.data,
+                    },
+                    "message": "Love Request received fetched successfully.",
+                }
+            )
+        return Response(
             {
                 "data": {
-                    "count": self.paginator.page.paginator.count,
-                    "next": self.paginator.get_next_link(),
-                    "previous": self.paginator.get_previous_link(),
-                    "results": serializer.data,
+                    "count": None,
+                    "next": None,
+                    "previous": None,
+                    "results": self.get_serializer(received_requests, many=True).data,
                 },
-                "message": "Love Request received fetched successfully.",
+                "message": "Love Requests Received fetched successfully.",
             }
-            )
-
-        serializer = self.get_serializer(received_requests, many=True)
-        return Response(serializer.data)
+        )
 
 
 class SingleConnectionView(ModelViewSet):
@@ -411,8 +470,10 @@ class SingleConnectionView(ModelViewSet):
 
         sender_number = request.data["sender_number"]
         receiver_number = request.data["receiver_number"]
-        
-        if not is_user_valid(user_number=request.user.phone_number, sender_number=sender_number):
+
+        if not is_user_valid(
+            user_number=request.user.phone_number, sender_number=sender_number
+        ):
             return Response(
                 {"message": "You don't have permission to perform this operation."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -453,11 +514,11 @@ class SingleConnectionView(ModelViewSet):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         sender_number = request.data["sender_number"]
         receiver_number = request.data["receiver_number"]
         current_user_number = request.user.phone_number
-        
+
         if not has_permission(
             request.user.phone_number, sender_number, receiver_number
         ):
@@ -476,8 +537,7 @@ class SingleConnectionView(ModelViewSet):
                 {"error": "Connection does not exist."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
-        
+
         # sender user can make it accept or reject but can cancel (nothing) the connection
         if current_user_number == connection.sender_number and connection_status in [
             SingleConnectionStatus.ACCEPTED,
@@ -488,7 +548,10 @@ class SingleConnectionView(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if ( connection and connection.connection_status == SingleConnectionStatus.ACCEPTED) and connection_status == SingleConnectionStatus.REJECTED:
+        if (
+            connection
+            and connection.connection_status == SingleConnectionStatus.ACCEPTED
+        ) and connection_status == SingleConnectionStatus.REJECTED:
             return Response(
                 {"error": "Unsupported operation."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -543,6 +606,7 @@ class SingleConnectionView(ModelViewSet):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+
 class SingleConnectionRequestView(ModelViewSet):
 
     serializer_class = SingleConnectionSerializer
@@ -559,29 +623,27 @@ class SingleConnectionRequestView(ModelViewSet):
         )
         page_size = request.query_params.get("page_size", 10)
         self.pagination_class.page_size = int(page_size)
-        
+
         page = self.paginate_queryset(sent_requests)
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return Response(
-            {
-                "data": {
-                    "count": self.paginator.page.paginator.count,
-                    "next": self.paginator.get_next_link(),
-                    "previous": self.paginator.get_previous_link(),
-                    "results": serializer.data,
-                },
-                "message": "Requests Sent fetched successfully.",
-            }
+                {
+                    "data": {
+                        "count": self.paginator.page.paginator.count,
+                        "next": self.paginator.get_next_link(),
+                        "previous": self.paginator.get_previous_link(),
+                        "results": serializer.data,
+                    },
+                    "message": "Requests Sent fetched successfully.",
+                }
             )
 
         serializer = self.get_serializer(sent_requests, many=True)
         return Response(serializer.data)
 
-    @action(
-        detail=False, methods=["GET"], url_path="received-requests"
-    )
+    @action(detail=False, methods=["GET"], url_path="received-requests")
     def retrieve_single_connection_request_list(self, request, *args, **kwargs):
 
         phone_number = request.user.phone_number
@@ -589,28 +651,29 @@ class SingleConnectionRequestView(ModelViewSet):
             receiver_number=phone_number,
             connection_status=SingleConnectionStatus.PENDING,
         )
-        
+
         page_size = request.query_params.get("page_size", 10)
         self.pagination_class.page_size = int(page_size)
-        
+
         page = self.paginate_queryset(received_requests)
-        
+
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return Response(
-            {
-                "data": {
-                    "count": self.paginator.page.paginator.count,
-                    "next": self.paginator.get_next_link(),
-                    "previous": self.paginator.get_previous_link(),
-                    "results": serializer.data,
-                },
-                "message": "Request received fetched successfully.",
-            }
+                {
+                    "data": {
+                        "count": self.paginator.page.paginator.count,
+                        "next": self.paginator.get_next_link(),
+                        "previous": self.paginator.get_previous_link(),
+                        "results": serializer.data,
+                    },
+                    "message": "Request received fetched successfully.",
+                }
             )
 
         serializer = self.get_serializer(received_requests, many=True)
         return Response(serializer.data)
+
 
 class CoupleAPIView(ModelViewSet):
     serializer_class = CoupleModelSerializer
@@ -642,6 +705,7 @@ class CoupleAPIView(ModelViewSet):
             for photo in photo_album_data:
                 PhotoAlbumModel.objects.create(couple=instance, photo=photo)
 
+
 class UserPreferenceView(ModelViewSet):
     queryset = UserPreferenceModel.objects.all()
     serializer_class = UserPreferenceSerializer
@@ -669,12 +733,10 @@ class UserPreferenceView(ModelViewSet):
         instance = self.queryset.filter(user=request.user).first()
         data = self.get_serializer(instance).data if instance else None
         return Response(
-            {
-                "message": "User preference returned successfully.",
-                "data": data
-            },
-            status=status.HTTP_200_OK
+            {"message": "User preference returned successfully.", "data": data},
+            status=status.HTTP_200_OK,
         )
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -745,13 +807,14 @@ class UserSuggestionView(ListAPIView):
             }
         )
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def get_suggestion_profile_by_id(request):
     try:
         user_id = request.query_params.get("user_id")
         user = UserModel.objects.get(id=user_id)
-        serializer = UserSuggestionSerializer(user, context={'request': request})
+        serializer = UserSuggestionSerializer(user, context={"request": request})
         return Response(
             {
                 "message": "Suggestion profile fetched successfully.",
@@ -764,31 +827,32 @@ def get_suggestion_profile_by_id(request):
             {"message": "User not found."},
             status=status.HTTP_404_NOT_FOUND,
         )
-        
-@api_view(['GET'])
+
+
+@api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def find_partner(request):
     phone_number = request.query_params.get("phone_number")
-    
+
     if not phone_number:
         return Response(
             {"error": "Phone number is required."},
             status=status.HTTP_400_BAD_REQUEST,
         )
-        
+
     if phone_number and not phone_number.startswith("+"):
         phone_number = f"+{phone_number}"
-                    
+
     try:
         partner = UserModel.objects.get(phone_number=phone_number)
-        
+
         if not partner:
             return Response(
                 {"message": "Partner not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         else:
-            serializer = UserModelSerializer(partner, context={'request': request})
+            serializer = UserModelSerializer(partner, context={"request": request})
             return Response(
                 {
                     "message": "Partner found successfully.",
