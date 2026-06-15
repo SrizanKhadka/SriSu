@@ -249,6 +249,9 @@ class CoupleConnectionView(ModelViewSet):
                 if connection and connection_status == CoupleConnectionStatus.ACCEPTED:
                     try:
                         couple = self.createCouple(couple_connection=connection)
+                        UserModel.objects.filter(phone_number=connection.sender_number).update(is_engaged=True)
+                        UserModel.objects.filter(phone_number=connection.receiver_number).update(is_engaged=True)
+                        
                     except ValueError as exc:
                         connection.connection_status = CoupleConnectionStatus.PENDING
                         connection.save(
@@ -362,25 +365,58 @@ def have_couple_connection_requested(request):
         status=status.HTTP_200_OK,
     )
 
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def is_couple_connection_accepted(request):
+    sender_number = getattr(request.user, "phone_number", None)
 
-class CoupleConnectionRequestView(ModelViewSet):
-
-    serializer_class = CoupleConnectionSerializer
-    queryset = CoupleConnectionModel.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = PageNumberPagination
-
-    @action(detail=False, methods=["GET"], url_path="sent-requests")
-    def retrieve_coupleConnection_sent_list(
-        self, request, *args, **kwargs
-    ):  # this will provide all the list of sent requests
-
-        phone_number = request.user.phone_number
-        sent_requests = CoupleConnectionModel.objects.filter(
-            sender_number=phone_number, connection_status=CoupleConnectionStatus.PENDING
+    if not sender_number:
+        return Response(
+            {"error": "Phone number is missing."},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-        page = self.paginate_queryset(sent_requests)
+    connection = (
+        CoupleConnectionModel.objects.filter(
+            sender_number=sender_number,
+            connection_status=CoupleConnectionStatus.ACCEPTED,
+        )
+        .first()
+    )
+
+    connection_data = (
+        CoupleConnectionSerializer(connection, context={"request": request}).data
+        if connection
+        else None
+    )
+
+    return Response(
+        {
+            "message": "Request Accepted",
+            "data": {
+                "connection_requested": connection is not None,
+                "connection": connection_data
+            },
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+
+class CoupleConnectionPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class CoupleConnectionRequestView(ModelViewSet):
+    serializer_class = CoupleConnectionSerializer
+    queryset = CoupleConnectionModel.objects.all().order_by("-id")
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = CoupleConnectionPagination
+
+    def get_paginated_response_data(self, queryset, message):
+        page = self.paginate_queryset(queryset)
 
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -392,59 +428,50 @@ class CoupleConnectionRequestView(ModelViewSet):
                         "previous": self.paginator.get_previous_link(),
                         "results": serializer.data,
                     },
-                    "message": "Love Requests Sent fetched successfully.",
+                    "message": message,
                 }
             )
 
+        serializer = self.get_serializer(queryset, many=True)
         return Response(
             {
                 "data": {
-                    "count": None,
+                    "count": queryset.count(),
                     "next": None,
                     "previous": None,
-                    "results": self.get_serializer(sent_requests, many=True).data,
+                    "results": serializer.data,
                 },
-                "message": "Love Requests Sent fetched successfully.",
+                "message": message,
             }
+        )
+
+    @action(detail=False, methods=["GET"], url_path="sent-requests")
+    def retrieve_couple_connection_sent_list(self, request, *args, **kwargs):
+        phone_number = request.user.phone_number
+
+        sent_requests = CoupleConnectionModel.objects.filter(
+            sender_number=phone_number,
+            connection_status=CoupleConnectionStatus.PENDING,
+        ).order_by("-id")
+
+        return self.get_paginated_response_data(
+            sent_requests,
+            "Love Requests Sent fetched successfully.",
         )
 
     @action(detail=False, methods=["GET"], url_path="received-requests")
-    def retrieve_couple_connection_request_list(
-        self, request, *args, **kwargs
-    ):  # this will provide all the list of received requests
-
+    def retrieve_couple_connection_request_list(self, request, *args, **kwargs):
         phone_number = request.user.phone_number
+
         received_requests = CoupleConnectionModel.objects.filter(
             receiver_number=phone_number,
             connection_status=CoupleConnectionStatus.PENDING,
-        )
-        page = self.paginate_queryset(received_requests)
+        ).order_by("-id")
 
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return Response(
-                {
-                    "data": {
-                        "count": self.paginator.page.paginator.count,
-                        "next": self.paginator.get_next_link(),
-                        "previous": self.paginator.get_previous_link(),
-                        "results": serializer.data,
-                    },
-                    "message": "Love Request received fetched successfully.",
-                }
-            )
-        return Response(
-            {
-                "data": {
-                    "count": None,
-                    "next": None,
-                    "previous": None,
-                    "results": self.get_serializer(received_requests, many=True).data,
-                },
-                "message": "Love Requests Received fetched successfully.",
-            }
+        return self.get_paginated_response_data(
+            received_requests,
+            "Love Requests Received fetched successfully.",
         )
-
 
 class SingleConnectionView(ModelViewSet):
     serializer_class = SingleConnectionSerializer

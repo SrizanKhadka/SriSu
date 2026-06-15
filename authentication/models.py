@@ -49,6 +49,8 @@ class UserModel(AbstractUser):
     zodiac_sign = models.CharField(max_length=20, choices=ZodiacSignChoices, null=True, blank=True)
     dob = models.DateField(null=True, blank=True)
     mood = models.CharField(max_length=50, choices=MoodChoices, null=True, blank=True)
+    
+    is_engaged = models.BooleanField(default=False,null=True, blank=True)
 
     is_profile_complete = models.BooleanField(default=False)
     is_phone_verified = models.BooleanField(default=False)
