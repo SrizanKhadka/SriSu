@@ -367,35 +367,23 @@ def have_couple_connection_requested(request):
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
-def is_couple_connection_accepted(request):
-    sender_number = getattr(request.user, "phone_number", None)
+def is_engaged(request):
+    user_number = getattr(request.user, "phone_number", None)
 
-    if not sender_number:
+    if not user_number:
         return Response(
             {"error": "Phone number is missing."},
             status=status.HTTP_400_BAD_REQUEST,
         )
-
-    connection = (
-        CoupleConnectionModel.objects.filter(
-            sender_number=sender_number,
-            connection_status=CoupleConnectionStatus.ACCEPTED,
-        )
-        .first()
-    )
-
-    connection_data = (
-        CoupleConnectionSerializer(connection, context={"request": request}).data
-        if connection
-        else None
-    )
+    
+    user = UserModel.objects.filter(phone_number=user_number).first()
+    is_engaged = user.is_engaged if user else False
 
     return Response(
         {
-            "message": "Request Accepted",
+            "message": "User Engagement Details",
             "data": {
-                "connection_requested": connection is not None,
-                "connection": connection_data
+                "is_engaged": is_engaged
             },
         },
         status=status.HTTP_200_OK,
