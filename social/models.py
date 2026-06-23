@@ -31,32 +31,44 @@ class CoupleConnectionModel(models.Model):
 
 
 class CoupleModel(models.Model):
-    couple_connection_model = models.ForeignKey(
+    couple_connection = models.OneToOneField(
         CoupleConnectionModel,
         on_delete=models.CASCADE,
-        related_name="couple_connection_model",
+        related_name="couple",
+        null=True,
+        blank=True
     )
 
     male_partner = models.ForeignKey(
-        UserModel, on_delete=models.CASCADE, related_name="male_partner"
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="couples_as_male"
     )
 
     female_partner = models.ForeignKey(
-        UserModel, on_delete=models.CASCADE, related_name="female_partner"
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="couples_as_female"
     )
+
     anniversary_date = models.DateField(null=True, blank=True)
-    shared_dreams = models.JSONField(null=True, blank=True)
-    shared_interests = models.JSONField(null=True, blank=True)
-    relationship_tagline = models.CharField(max_length=30, null=True, blank=True)
-    photo_album = models.JSONField(null=True, blank=True)
+
+    shared_dreams = models.JSONField(default=list, blank=True)
+    shared_interests = models.JSONField(default=list, blank=True)
+
+    relationship_tagline = models.CharField(max_length=80, null=True, blank=True)
+
     nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
     nickname_for_female = models.CharField(max_length=30, null=True, blank=True)
-    created_at = models.DateTimeField(
-        auto_now_add=True, help_text="Timestamp when the couple was created."
+
+    couple_profile_photo = models.ImageField(
+        upload_to="couples/profile_photos/",
+        null=True,
+        blank=True
     )
-    updated_at = models.DateTimeField(
-        auto_now=True, help_text="Timestamp when the couple data was last updated."
-    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -66,8 +78,91 @@ class CoupleModel(models.Model):
     def __str__(self):
         return f"{self.male_partner} ❤️ {self.female_partner}"
 
+class CoupleMomentModel(models.Model):
+    couple = models.ForeignKey(
+        CoupleModel,
+        on_delete=models.CASCADE,
+        related_name="moments"
+    )
 
-class PhotoAlbumModel(models.Model):
+    created_by = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="created_couple_moments"
+    )
+
+    title = models.CharField(max_length=100, null=True, blank=True)
+
+    caption = models.TextField(max_length=1000)
+
+    moment_date = models.DateField()
+
+    mood = models.CharField(
+        max_length=30,
+        choices=MomentMood.choices,
+        null=True,
+        blank=True
+    )
+
+    location_name = models.CharField(max_length=120, null=True, blank=True)
+
+    visibility = models.CharField(
+        max_length=20,
+        choices=MomentVisibility.choices,
+        default=MomentVisibility.PRIVATE
+    )
+
+    tags = models.JSONField(default=list, blank=True)
+
+    partner_memory = models.TextField(
+        max_length=1000,
+        null=True,
+        blank=True,
+        help_text="Partner's perspective on this moment."
+    )
+
+    is_time_capsule = models.BooleanField(default=False)
+
+    unlock_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="If time capsule, moment unlocks on this date."
+    )
+
+    is_archived = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-moment_date", "-created_at"]
+        verbose_name = "Couple Moment"
+        verbose_name_plural = "Couple Moments"
+
+    def __str__(self):
+        return f"{self.couple} - {self.title or self.moment_date}"
+
+class CoupleMomentPhotoModel(models.Model):
+    moment = models.ForeignKey(
+        CoupleMomentModel,
+        on_delete=models.CASCADE,
+        related_name="photos"
+    )
+
+    image = models.ImageField(upload_to="couples/moments/")
+
+    order = models.PositiveSmallIntegerField(default=0)
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "uploaded_at"]
+
+    def __str__(self):
+        return f"Photo for {self.moment}"
+
+# @deprecated("Use the new CoupleMomentPhotoModel instead.")
+class PhotoAlbumModel(models.Model): #This model is now deprecated and will be removed in future releases. Please use CoupleMomentPhotoModel instead.
     couple = models.ForeignKey(
         CoupleModel, on_delete=models.CASCADE, related_name="couple_photo_album"
     )

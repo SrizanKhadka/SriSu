@@ -12,6 +12,7 @@ from utils.choices import (
     SingleConnectionStatus,
     ChatTypeChoices,
 )
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
@@ -460,6 +461,129 @@ class CoupleConnectionRequestView(ModelViewSet):
             received_requests,
             "Love Requests Received fetched successfully.",
         )
+
+class CoupleMomentView(ModelViewSet):
+    serializer_class = CoupleMomentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        return CoupleMomentModel.objects.filter(
+            models.Q(couple__male_partner=user) | 
+            models.Q(couple__female_partner=user)
+        ).prefetch_related("photos").order_by("-moment_date")
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        photos = request.FILES.getlist("photos")
+        
+        if len(photos) > 5:
+            return Response(
+                {"message": "You can upload a maximum of 5 photos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        moment = serializer.save(created_by=request.user)
+        
+        for index, photo in enumerate(photos):
+            CoupleMomentPhotoModel.objects.create(
+                moment=moment,
+                image=photo,
+                order=index,
+            )
+        
+        response_serializer = self.get_serializer(moment)
+        return Response(
+            {
+                "message": "Couple moment created successfully.",
+                "data": response_serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        
+        photos = request.FILES.getlist("photos")
+        replace_photos = request.data.get("replace_photos", "false").lower() == "true"
+        
+        if photos and len(photos) > 5:
+            return Response(
+                {"message": "You can upload a maximum of 5 photos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        serializer = self.get_serializer(
+            instance
+            , data=request.data, partial=partial)
+        
+        serializer.is_valid(raise_exception=True)
+        
+        moment = serializer.save()
+        
+        if replace_photos:
+            instance.photos.all().delete()
+            
+            if len(photos) > 5:
+                return Response(
+                    {"message": "You can upload a maximum of 5 photos."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            for index, photo in enumerate(photos):
+                CoupleMomentPhotoModel.objects.create(
+                    moment=moment,
+                    image=photo,
+                    order=index,
+                )
+        elif photos:
+            existing_photo_count = instance.photos.count()
+            
+            if existing_photo_count + len(photos) > 5:
+                return Response(
+                    {"message": "You can upload a maximum of 5 photos."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            
+            for index, photo in enumerate(photos,start=existing_photo_count):
+                CoupleMomentPhotoModel.objects.create(
+                    moment=moment,
+                    image=photo,
+                    order=index,
+                )
+        
+        response_serializer = self.get_serializer(moment)
+        
+        return Response(
+            {
+                "message": "Couple moment updated successfully.",
+                "data": response_serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+        
+    @transaction.atomic
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+
+        return Response(
+            {"message": "Couple moment deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
+
 
 class SingleConnectionView(ModelViewSet):
     serializer_class = SingleConnectionSerializer

@@ -105,3 +105,19 @@ class InterestCategoryChoices(TextChoices):
     CULTURE = "CULTURE", "Culture"
     EDUCATION = "EDUCATION", "Education"
     OTHER = "OTHER", "Other"
+
+
+class MomentVisibility(TextChoices):
+    PRIVATE = "private", "Private"
+    PUBLIC = "public", "Public"
+    FRIENDS = "friends", "Friends"
+
+
+class MomentMood(TextChoices):
+    HAPPY = "happy", "Happy"
+    ROMANTIC = "romantic", "Romantic"
+    FUNNY = "funny", "Funny"
+    EMOTIONAL = "emotional", "Emotional"
+    ADVENTURE = "adventure", "Adventure"
+    GRATEFUL = "grateful", "Grateful"
+    SPECIAL = "special", "Special"

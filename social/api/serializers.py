@@ -1,6 +1,6 @@
 from django.db.models import Q
 from rest_framework import serializers
-from social.models import CoupleConnectionModel, CoupleModel, PhotoAlbumModel, SingleConnectionModel, UserPreferenceModel
+from social.models import CoupleConnectionModel, CoupleModel, CoupleMomentModel, CoupleMomentPhotoModel, PhotoAlbumModel, SingleConnectionModel, UserPreferenceModel
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
 from authentication.models import UserModel
 from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
@@ -59,29 +59,7 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         except UserModel.DoesNotExist:
             print("Partner user not found")
             return None
-
-
-
-class CouplePhotoAlbumSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = PhotoAlbumModel
-        fields = "__all__"
-
-
-class CoupleModelSerializer(serializers.ModelSerializer):
-
-    couple_photo_album = CouplePhotoAlbumSerializer(many=True, required=False)
-
-    class Meta:
-        model = CoupleModel
-        fields = "__all__"
-
-    def validate_couple_photo_album(self, photos):
-        if photos and len(photos) > 10:
-            raise serializers.ValidationError("You can only upload 10 photos.")
-        return photos
-
+        
 class SingleConnectionSerializer(serializers.ModelSerializer):
     partner = serializers.SerializerMethodField()
 
@@ -195,8 +173,6 @@ class UserSuggestionSerializer(serializers.ModelSerializer):
             ]
         ).exists()
 
-
-
 class UserPreferenceSerializer(serializers.ModelSerializer):
     
     user = serializers.PrimaryKeyRelatedField(
@@ -206,4 +182,58 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserPreferenceModel
         fields = "__all__"
+class CouplePhotoAlbumSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PhotoAlbumModel
+        fields = "__all__"
+
+class CoupleModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CoupleModel
+        fields = "__all__"   
+
+class CoupleMomentPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CoupleMomentPhotoModel
+        fields = ["id", "image", "order", "uploaded_at"]
+        read_only_fields = ["id", "uploaded_at"]
+
+
+class CoupleMomentSerializer(serializers.ModelSerializer):
+    photos = CoupleMomentPhotoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CoupleMomentModel
+        fields = [
+            "id",
+            "couple",
+            "created_by",
+            "title",
+            "caption",
+            "moment_date",
+            "mood",
+            "location_name",
+            "visibility",
+            "tags",
+            "partner_memory",
+            "photos",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "created_by"]
+    
+    def validate(self, data):
+        request = self.context.get("request")
+        couple = data.get("couple") or getattr(self.instance, "couple", None)
+        
+        if couple and request:
+            user = request.user
+            if user not in [couple.male_partner, couple.female_partner]:
+                raise serializers.ValidationError("You are not allowed to create or update moment for this couple.")
+        
+        return data
+                
+    
+
 
