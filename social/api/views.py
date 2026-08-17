@@ -1,3 +1,5 @@
+import json
+
 from .serializers import *
 from rest_framework import status
 from rest_framework.response import Response
@@ -462,10 +464,17 @@ class CoupleConnectionRequestView(ModelViewSet):
             "Love Requests Received fetched successfully.",
         )
 
+class CoupleMomentPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 class CoupleMomentView(ModelViewSet):
     serializer_class = CoupleMomentSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    pagination_class = CoupleMomentPagination
     
     def get_queryset(self):
         user = self.request.user
@@ -474,6 +483,39 @@ class CoupleMomentView(ModelViewSet):
             models.Q(couple__male_partner=user) | 
             models.Q(couple__female_partner=user)
         ).prefetch_related("photos").order_by("-moment_date")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return Response(
+                {
+                    "data": {
+                        "count": self.paginator.page.paginator.count,
+                        "next": self.paginator.get_next_link(),
+                        "previous": self.paginator.get_previous_link(),
+                        "results": serializer.data,
+                    },
+                    "message": "Couple moments fetched successfully.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(
+            {
+                "data": {
+                    "count": queryset.count(),
+                    "next": None,
+                    "previous": None,
+                    "results": serializer.data,
+                },
+                "message": "Couple moments fetched successfully.",
+            },
+            status=status.HTTP_200_OK,
+        )
     
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -509,58 +551,60 @@ class CoupleMomentView(ModelViewSet):
     @transaction.atomic
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
-        instance = self.get_object()
+        moment = self.get_object()
+
+        new_photos = request.FILES.getlist("photos")
+        replace_photos = request.data.get("replace_photos", "false") == "true"
+
+        deleted_photo_ids_raw = request.data.get("deleted_photo_ids", "[]")
+        deleted_photo_ids = []
         
-        photos = request.FILES.getlist("photos")
-        replace_photos = request.data.get("replace_photos", "false").lower() == "true"
-        
-        if photos and len(photos) > 5:
+        if deleted_photo_ids_raw != "[]":
+            try:
+                deleted_photo_ids = json.loads(deleted_photo_ids_raw)
+            except (TypeError, json.JSONDecodeError):
+                return Response(
+                    {"message": "deleted_photo_ids must be a valid JSON array."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not isinstance(deleted_photo_ids, list):
+                return Response(
+                    {"message": "deleted_photo_ids must be a list."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        serializer = self.get_serializer(
+            moment,
+            data=request.data,
+            partial=partial
+        )
+        serializer.is_valid(raise_exception=True)
+        moment = serializer.save()
+
+        if replace_photos:
+            moment.photos.all().delete()
+
+        elif deleted_photo_ids:
+            moment.photos.filter(id__in=deleted_photo_ids).delete()
+
+        current_photo_count = moment.photos.count()
+
+        if current_photo_count + len(new_photos) > 5:
             return Response(
-                {"message": "You can upload a maximum of 5 photos."},
+                {"message": "One moment can have maximum 5 photos."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        serializer = self.get_serializer(
-            instance
-            , data=request.data, partial=partial)
-        
-        serializer.is_valid(raise_exception=True)
-        
-        moment = serializer.save()
-        
-        if replace_photos:
-            instance.photos.all().delete()
-            
-            if len(photos) > 5:
-                return Response(
-                    {"message": "You can upload a maximum of 5 photos."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            for index, photo in enumerate(photos):
-                CoupleMomentPhotoModel.objects.create(
-                    moment=moment,
-                    image=photo,
-                    order=index,
-                )
-        elif photos:
-            existing_photo_count = instance.photos.count()
-            
-            if existing_photo_count + len(photos) > 5:
-                return Response(
-                    {"message": "You can upload a maximum of 5 photos."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            
-            for index, photo in enumerate(photos,start=existing_photo_count):
-                CoupleMomentPhotoModel.objects.create(
-                    moment=moment,
-                    image=photo,
-                    order=index,
-                )
-        
+
+        for index, photo in enumerate(new_photos, start=current_photo_count):
+            CoupleMomentPhotoModel.objects.create(
+                moment=moment,
+                image=photo,
+                order=index,
+            )
+
         response_serializer = self.get_serializer(moment)
-        
+
         return Response(
             {
                 "message": "Couple moment updated successfully.",
@@ -568,10 +612,10 @@ class CoupleMomentView(ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
-        
+
     @transaction.atomic
     def partial_update(self, request, *args, **kwargs):
-        kwargs['partial'] = True
+        kwargs["partial"] = True
         return self.update(request, *args, **kwargs)
     
     @transaction.atomic
@@ -583,6 +627,7 @@ class CoupleMomentView(ModelViewSet):
             {"message": "Couple moment deleted successfully."},
             status=status.HTTP_200_OK,
         )
+
 
 
 class SingleConnectionView(ModelViewSet):

@@ -7,3 +7,6 @@ admin.site.register(CoupleModel)
 admin.site.register(PhotoAlbumModel)
 admin.site.register(SingleConnectionModel)
 admin.site.register(UserPreferenceModel)
+admin.site.register(CoupleMomentModel)
+admin.site.register(CoupleMomentPhotoModel)
+
