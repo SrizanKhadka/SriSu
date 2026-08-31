@@ -169,6 +169,7 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             "country",
             "city",
             "bio",
+            "is_engaged"
         ]
         read_only_fields = ["is_profile_complete", "is_phone_verified"]
 

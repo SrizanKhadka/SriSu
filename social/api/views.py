@@ -1,3 +1,5 @@
+import json
+
 from .serializers import *
 from rest_framework import status
 from rest_framework.response import Response
@@ -8,10 +10,10 @@ from django.db import transaction
 from social.models import *
 from utils.choices import (
     CoupleConnectionStatus,
-    GenderChoices,
     SingleConnectionStatus,
     ChatTypeChoices,
 )
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
@@ -19,8 +21,13 @@ from authentication.api.serializers import UserModelSerializer
 from chat.utils.chatutils import *
 from chat.models import ChatRoom
 from rest_framework.generics import ListAPIView
+from rest_framework.views import APIView
 from social.services.suggestion_service import UserSuggestionService
 from social.api.serializers import UserSuggestionSerializer
+from social.services.couple_profile_service import (
+    CoupleProfileConflict,
+    create_or_get_couple_for_connection,
+)
 
 
 def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
@@ -263,9 +270,14 @@ class CoupleConnectionView(ModelViewSet):
                         )
 
                     if couple:
+                        couple_users = [
+                            membership.user
+                            for membership in couple.memberships.select_related("user")
+                            .order_by("position")
+                        ]
                         sync_chat_room(
-                            user_one=couple.male_partner,
-                            user_two=couple.female_partner,
+                            user_one=couple_users[0],
+                            user_two=couple_users[1],
                             chat_type=ChatTypeChoices.COUPLE,
                             couple=couple,
                         )
@@ -295,37 +307,10 @@ class CoupleConnectionView(ModelViewSet):
         )
 
     def createCouple(self, couple_connection):
-        couple_connection_model = couple_connection
-        sender_number = couple_connection.sender_number
-        receiver_number = couple_connection.receiver_number
-
         try:
-            # Fetch the male partner
-            male_partner = UserModel.objects.get(
-                Q(phone_number=sender_number, gender=GenderChoices.MALE)
-                | Q(phone_number=receiver_number, gender=GenderChoices.MALE)
-            )
-
-            # Fetch the female partner
-            female_partner = UserModel.objects.get(
-                Q(phone_number=sender_number, gender=GenderChoices.FEMALE)
-                | Q(phone_number=receiver_number, gender=GenderChoices.FEMALE)
-            )
-
-            couple, created = CoupleModel.objects.update_or_create(
-                couple_connection_model=couple_connection_model,
-                male_partner=male_partner,
-                female_partner=female_partner,
-            )
-
-            return couple
-
-        except UserModel.DoesNotExist as e:
-            raise ValueError(f"User not found: {str(e)}")
-        except UserModel.MultipleObjectsReturned as e:
-            raise ValueError(f"Data inconsistency detected: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Unexpected error occurred: {str(e)}")
+            return create_or_get_couple_for_connection(couple_connection)
+        except CoupleProfileConflict as exc:
+            raise ValueError(str(exc)) from exc
 
 
 @api_view(["GET"])
@@ -460,6 +445,171 @@ class CoupleConnectionRequestView(ModelViewSet):
             received_requests,
             "Love Requests Received fetched successfully.",
         )
+
+class CoupleMomentPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class CoupleMomentView(ModelViewSet):
+    serializer_class = CoupleMomentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    pagination_class = CoupleMomentPagination
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        return CoupleMomentModel.objects.filter(
+            couple__memberships__user=user,
+        ).prefetch_related("photos").order_by("-moment_date")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return Response(
+                {
+                    "data": {
+                        "count": self.paginator.page.paginator.count,
+                        "next": self.paginator.get_next_link(),
+                        "previous": self.paginator.get_previous_link(),
+                        "results": serializer.data,
+                    },
+                    "message": "Couple moments fetched successfully.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(
+            {
+                "data": {
+                    "count": queryset.count(),
+                    "next": None,
+                    "previous": None,
+                    "results": serializer.data,
+                },
+                "message": "Couple moments fetched successfully.",
+            },
+            status=status.HTTP_200_OK,
+        )
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        photos = request.FILES.getlist("photos")
+        
+        if len(photos) > 5:
+            return Response(
+                {"message": "You can upload a maximum of 5 photos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        moment = serializer.save(created_by=request.user)
+        
+        for index, photo in enumerate(photos):
+            CoupleMomentPhotoModel.objects.create(
+                moment=moment,
+                image=photo,
+                order=index,
+            )
+        
+        response_serializer = self.get_serializer(moment)
+        return Response(
+            {
+                "message": "Couple moment created successfully.",
+                "data": response_serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        moment = self.get_object()
+
+        new_photos = request.FILES.getlist("photos")
+        replace_photos = request.data.get("replace_photos", "false") == "true"
+
+        deleted_photo_ids_raw = request.data.get("deleted_photo_ids", "[]")
+        deleted_photo_ids = []
+        
+        if deleted_photo_ids_raw != "[]":
+            try:
+                deleted_photo_ids = json.loads(deleted_photo_ids_raw)
+            except (TypeError, json.JSONDecodeError):
+                return Response(
+                    {"message": "deleted_photo_ids must be a valid JSON array."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not isinstance(deleted_photo_ids, list):
+                return Response(
+                    {"message": "deleted_photo_ids must be a list."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        serializer = self.get_serializer(
+            moment,
+            data=request.data,
+            partial=partial
+        )
+        serializer.is_valid(raise_exception=True)
+        moment = serializer.save()
+
+        if replace_photos:
+            moment.photos.all().delete()
+
+        elif deleted_photo_ids:
+            moment.photos.filter(id__in=deleted_photo_ids).delete()
+
+        current_photo_count = moment.photos.count()
+
+        if current_photo_count + len(new_photos) > 5:
+            return Response(
+                {"message": "One moment can have maximum 5 photos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        for index, photo in enumerate(new_photos, start=current_photo_count):
+            CoupleMomentPhotoModel.objects.create(
+                moment=moment,
+                image=photo,
+                order=index,
+            )
+
+        response_serializer = self.get_serializer(moment)
+
+        return Response(
+            {
+                "message": "Couple moment updated successfully.",
+                "data": response_serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @transaction.atomic
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+
+        return Response(
+            {"message": "Couple moment deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
 
 class SingleConnectionView(ModelViewSet):
     serializer_class = SingleConnectionSerializer
@@ -690,35 +840,133 @@ class SingleConnectionRequestView(ModelViewSet):
         return Response(serializer.data)
 
 
-class CoupleAPIView(ModelViewSet):
-    serializer_class = CoupleModelSerializer
-    queryset = CoupleModel.objects.all()
+class CoupleProfileAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
+    @staticmethod
+    def get_couple(user):
+        return (
+            CoupleModel.objects.select_related("couple_connection")
+            .prefetch_related("memberships__user")
+            .filter(memberships__user=user)
+            .first()
+        )
 
-        # Handle photo updates explicitly in the view
-        photo_album_data = request.FILES.getlist("couple_photo_album")
-        self.upload_photos(photo_album_data=photo_album_data, instance=instance)
+    def get(self, request, *args, **kwargs):
+        couple = self.get_couple(request.user)
+        if not couple:
+            return Response(
+                {"message": "Couple profile does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer = CoupleModelSerializer(
+            couple,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "message": "Couple profile retrieved successfully.",
+                "data": {"couple_profile": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        couple = self.get_couple(request.user)
+        if couple and couple.profile_completed_at:
+            return Response(
+                {"message": "Couple profile already exists."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = CoupleModelSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        couple = serializer.save()
+
+        return Response(
+            {
+                "message": "Couple profile created successfully.",
+                "data": {
+                    "couple_profile": CoupleModelSerializer(
+                        couple,
+                        context={"request": request},
+                    ).data
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @transaction.atomic
+    def patch(self, request, *args, **kwargs):
+        couple = self.get_couple(request.user)
+        if not couple:
+            return Response(
+                {"message": "Couple profile does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = CoupleModelSerializer(
+            couple,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         return Response(
             {
-                "message": "Couple updated Successfully.",
-                "data": serializer.data,
+                "message": "Couple profile updated successfully.",
+                "data": {"couple_profile": serializer.data},
             },
             status=status.HTTP_200_OK,
         )
 
-    def upload_photos(self, photo_album_data, instance):
+
+class CoupleAPIView(ModelViewSet):
+    """Compatibility endpoint for clients using the former update-couple route."""
+
+    serializer_class = CoupleModelSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+
+    def get_queryset(self):
+        return (
+            CoupleModel.objects.filter(memberships__user=self.request.user)
+            .select_related("couple_connection")
+            .prefetch_related("memberships__user", "couple_photo_album")
+            .distinct()
+        )
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+
+        photo_album_data = request.FILES.getlist("couple_photo_album")
         if photo_album_data:
             instance.couple_photo_album.all().delete()
             for photo in photo_album_data:
                 PhotoAlbumModel.objects.create(couple=instance, photo=photo)
+
+        serializer.save()
+        return Response(
+            {
+                "message": "Couple updated successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class UserPreferenceView(ModelViewSet):
