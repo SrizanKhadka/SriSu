@@ -6,6 +6,7 @@ from social.api.views import (
     CoupleConnectionRequestView,
     CoupleConnectionView,
     CoupleAPIView,
+    CoupleProfileAPIView,
     CoupleMomentView,
     SingleConnectionView,
     SingleConnectionRequestView,
@@ -28,6 +29,7 @@ social_routers.register("user-preferences", UserPreferenceView, basename="user_p
 social_routers.register("couple-moments", CoupleMomentView, basename="couple_moments")
 
 urlpatterns = [
+    path("couple-profile/", CoupleProfileAPIView.as_view(), name="couple-profile"),
     path("", include(social_routers.urls)),
     path("user-suggestions/", UserSuggestionView.as_view(), name="user_suggestions"),
     path("find-partner/", find_partner, name="find-partner"),

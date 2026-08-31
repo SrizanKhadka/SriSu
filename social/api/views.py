@@ -10,7 +10,6 @@ from django.db import transaction
 from social.models import *
 from utils.choices import (
     CoupleConnectionStatus,
-    GenderChoices,
     SingleConnectionStatus,
     ChatTypeChoices,
 )
@@ -22,8 +21,13 @@ from authentication.api.serializers import UserModelSerializer
 from chat.utils.chatutils import *
 from chat.models import ChatRoom
 from rest_framework.generics import ListAPIView
+from rest_framework.views import APIView
 from social.services.suggestion_service import UserSuggestionService
 from social.api.serializers import UserSuggestionSerializer
+from social.services.couple_profile_service import (
+    CoupleProfileConflict,
+    create_or_get_couple_for_connection,
+)
 
 
 def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
@@ -266,9 +270,14 @@ class CoupleConnectionView(ModelViewSet):
                         )
 
                     if couple:
+                        couple_users = [
+                            membership.user
+                            for membership in couple.memberships.select_related("user")
+                            .order_by("position")
+                        ]
                         sync_chat_room(
-                            user_one=couple.male_partner,
-                            user_two=couple.female_partner,
+                            user_one=couple_users[0],
+                            user_two=couple_users[1],
                             chat_type=ChatTypeChoices.COUPLE,
                             couple=couple,
                         )
@@ -298,37 +307,10 @@ class CoupleConnectionView(ModelViewSet):
         )
 
     def createCouple(self, couple_connection):
-        couple_connection_model = couple_connection
-        sender_number = couple_connection.sender_number
-        receiver_number = couple_connection.receiver_number
-
         try:
-            # Fetch the male partner
-            male_partner = UserModel.objects.get(
-                Q(phone_number=sender_number, gender=GenderChoices.MALE)
-                | Q(phone_number=receiver_number, gender=GenderChoices.MALE)
-            )
-
-            # Fetch the female partner
-            female_partner = UserModel.objects.get(
-                Q(phone_number=sender_number, gender=GenderChoices.FEMALE)
-                | Q(phone_number=receiver_number, gender=GenderChoices.FEMALE)
-            )
-
-            couple, created = CoupleModel.objects.update_or_create(
-                couple_connection_model=couple_connection_model,
-                male_partner=male_partner,
-                female_partner=female_partner,
-            )
-
-            return couple
-
-        except UserModel.DoesNotExist as e:
-            raise ValueError(f"User not found: {str(e)}")
-        except UserModel.MultipleObjectsReturned as e:
-            raise ValueError(f"Data inconsistency detected: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Unexpected error occurred: {str(e)}")
+            return create_or_get_couple_for_connection(couple_connection)
+        except CoupleProfileConflict as exc:
+            raise ValueError(str(exc)) from exc
 
 
 @api_view(["GET"])
@@ -480,8 +462,7 @@ class CoupleMomentView(ModelViewSet):
         user = self.request.user
         
         return CoupleMomentModel.objects.filter(
-            models.Q(couple__male_partner=user) | 
-            models.Q(couple__female_partner=user)
+            couple__memberships__user=user,
         ).prefetch_related("photos").order_by("-moment_date")
 
     def list(self, request, *args, **kwargs):
@@ -859,35 +840,133 @@ class SingleConnectionRequestView(ModelViewSet):
         return Response(serializer.data)
 
 
-class CoupleAPIView(ModelViewSet):
-    serializer_class = CoupleModelSerializer
-    queryset = CoupleModel.objects.all()
+class CoupleProfileAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
+    @staticmethod
+    def get_couple(user):
+        return (
+            CoupleModel.objects.select_related("couple_connection")
+            .prefetch_related("memberships__user")
+            .filter(memberships__user=user)
+            .first()
+        )
 
-        # Handle photo updates explicitly in the view
-        photo_album_data = request.FILES.getlist("couple_photo_album")
-        self.upload_photos(photo_album_data=photo_album_data, instance=instance)
+    def get(self, request, *args, **kwargs):
+        couple = self.get_couple(request.user)
+        if not couple:
+            return Response(
+                {"message": "Couple profile does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer = CoupleModelSerializer(
+            couple,
+            context={"request": request},
+        )
+        return Response(
+            {
+                "message": "Couple profile retrieved successfully.",
+                "data": {"couple_profile": serializer.data},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        couple = self.get_couple(request.user)
+        if couple and couple.profile_completed_at:
+            return Response(
+                {"message": "Couple profile already exists."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = CoupleModelSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        couple = serializer.save()
+
+        return Response(
+            {
+                "message": "Couple profile created successfully.",
+                "data": {
+                    "couple_profile": CoupleModelSerializer(
+                        couple,
+                        context={"request": request},
+                    ).data
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @transaction.atomic
+    def patch(self, request, *args, **kwargs):
+        couple = self.get_couple(request.user)
+        if not couple:
+            return Response(
+                {"message": "Couple profile does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = CoupleModelSerializer(
+            couple,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         return Response(
             {
-                "message": "Couple updated Successfully.",
-                "data": serializer.data,
+                "message": "Couple profile updated successfully.",
+                "data": {"couple_profile": serializer.data},
             },
             status=status.HTTP_200_OK,
         )
 
-    def upload_photos(self, photo_album_data, instance):
+
+class CoupleAPIView(ModelViewSet):
+    """Compatibility endpoint for clients using the former update-couple route."""
+
+    serializer_class = CoupleModelSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+
+    def get_queryset(self):
+        return (
+            CoupleModel.objects.filter(memberships__user=self.request.user)
+            .select_related("couple_connection")
+            .prefetch_related("memberships__user", "couple_photo_album")
+            .distinct()
+        )
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+
+        photo_album_data = request.FILES.getlist("couple_photo_album")
         if photo_album_data:
             instance.couple_photo_album.all().delete()
             for photo in photo_album_data:
                 PhotoAlbumModel.objects.create(couple=instance, photo=photo)
+
+        serializer.save()
+        return Response(
+            {
+                "message": "Couple updated successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class UserPreferenceView(ModelViewSet):

@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
 from authentication.models import UserModel
 from utils.choices import *
 
@@ -39,16 +40,10 @@ class CoupleModel(models.Model):
         blank=True
     )
 
-    male_partner = models.ForeignKey(
+    members = models.ManyToManyField(
         UserModel,
-        on_delete=models.CASCADE,
-        related_name="couples_as_male"
-    )
-
-    female_partner = models.ForeignKey(
-        UserModel,
-        on_delete=models.CASCADE,
-        related_name="couples_as_female"
+        through="CoupleMembershipModel",
+        related_name="couple_profiles",
     )
 
     anniversary_date = models.DateField(null=True, blank=True)
@@ -56,17 +51,22 @@ class CoupleModel(models.Model):
     shared_dreams = models.JSONField(default=list, blank=True)
     shared_interests = models.JSONField(default=list, blank=True)
 
+    title = models.CharField(max_length=100, null=True, blank=True)
     relationship_tagline = models.CharField(max_length=80, null=True, blank=True)
+    journey_story = models.TextField(max_length=3000, null=True, blank=True)
+    relationship_strength = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
 
-    nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
-    nickname_for_female = models.CharField(max_length=30, null=True, blank=True)
-
-    couple_profile_photo = models.ImageField(
+    cover_photo = models.ImageField(
         upload_to="couples/profile_photos/",
         null=True,
         blank=True
     )
 
+    profile_completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -76,7 +76,46 @@ class CoupleModel(models.Model):
         verbose_name_plural = "Couples"
 
     def __str__(self):
-        return f"{self.male_partner} ❤️ {self.female_partner}"
+        names = list(self.members.values_list("full_name", flat=True)[:2])
+        return " ❤️ ".join(name for name in names if name) or f"Couple {self.pk}"
+
+
+class CoupleMembershipModel(models.Model):
+    class Position(models.IntegerChoices):
+        PARTNER_ONE = 1, "Partner one"
+        PARTNER_TWO = 2, "Partner two"
+
+    couple = models.ForeignKey(
+        CoupleModel,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    user = models.OneToOneField(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="couple_membership",
+    )
+    position = models.PositiveSmallIntegerField(choices=Position.choices)
+    nickname = models.CharField(max_length=30, null=True, blank=True)
+    is_owner = models.BooleanField(default=True)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["couple", "position"],
+                name="unique_couple_member_position",
+            ),
+            models.UniqueConstraint(
+                fields=["couple", "user"],
+                name="unique_user_per_couple",
+            ),
+        ]
+        indexes = [models.Index(fields=["couple", "position"])]
+
+    def __str__(self):
+        return f"{self.user} in {self.couple_id}"
 
 class CoupleMomentModel(models.Model):
     couple = models.ForeignKey(
@@ -169,7 +208,7 @@ class PhotoAlbumModel(models.Model): #This model is now deprecated and will be r
     photo = models.ImageField(upload_to="couple_album/", null=True, blank=True)
 
     def __str__(self):
-        return f"{self.couple.male_partner} ❤️ {self.couple.female_partner}"
+        return f"Photo for {self.couple}"
 
 class SingleConnectionModel(models.Model):
     sender_number = models.CharField(max_length=15)
