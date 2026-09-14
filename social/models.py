@@ -2,6 +2,8 @@ from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
 from authentication.models import UserModel
 from utils.choices import *
+from datetime import timedelta
+from django.utils import timezone
 
 class CoupleConnectionModel(models.Model):
     sender_number = models.CharField(max_length=15)
@@ -170,11 +172,25 @@ class CoupleMomentModel(models.Model):
 
     is_archived = models.BooleanField(default=False)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField(editable=False, db_index=True)
+    # Snapshot membership identities, not just users: replacement partners never inherit access.
+    audience_membership_ids = models.JSONField(default=list, editable=False)
+    audience_user_ids = models.JSONField(default=list, editable=False)
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self.created_at = timezone.now()
+            self.expires_at = self.created_at + timedelta(hours=24)
+        super().save(*args, **kwargs)
 
     class Meta:
-        ordering = ["-moment_date", "-created_at"]
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["couple", "-created_at", "-id"], name="moment_couple_feed_idx"),
+            models.Index(fields=["-created_at", "-id"], name="moment_feed_idx"),
+        ]
         verbose_name = "Couple Moment"
         verbose_name_plural = "Couple Moments"
 
@@ -195,10 +211,48 @@ class CoupleMomentPhotoModel(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["order", "uploaded_at"]
+        ordering = ["order", "id"]
 
     def __str__(self):
         return f"Photo for {self.moment}"
+
+
+class CoupleMomentNoteModel(models.Model):
+    moment = models.ForeignKey(CoupleMomentModel, on_delete=models.CASCADE, related_name="notes")
+    sender = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="moment_notes")
+    message = models.CharField(max_length=1000)
+    recipient_membership_ids = models.JSONField(default=list, editable=False)
+    recipient_user_ids = models.JSONField(default=list, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
+class MomentFileDeletion(models.Model):
+    """Durable retry queue; created in the same transaction as photo deletion."""
+    name = models.CharField(max_length=500, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class CoupleMomentNoteReplyModel(models.Model):
+    note = models.ForeignKey(CoupleMomentNoteModel, on_delete=models.CASCADE, related_name="replies")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="moment_note_replies")
+    message = models.CharField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class CoupleMomentViewModel(models.Model):
+    moment = models.ForeignKey(CoupleMomentModel, on_delete=models.CASCADE, related_name="views")
+    # Retain aggregate history when a viewer deletes their account.
+    viewer = models.ForeignKey(UserModel, on_delete=models.SET_NULL, null=True, related_name="moment_views")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["moment", "viewer"], name="unique_moment_viewer")]
 
 # @deprecated("Use the new CoupleMomentPhotoModel instead.")
 class PhotoAlbumModel(models.Model): #This model is now deprecated and will be removed in future releases. Please use CoupleMomentPhotoModel instead.

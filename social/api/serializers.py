@@ -373,47 +373,5 @@ class CoupleModelSerializer(serializers.ModelSerializer):
     def get_profile_complete(obj):
         return obj.profile_completed_at is not None
 
-class CoupleMomentPhotoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CoupleMomentPhotoModel
-        fields = ["id", "image", "order", "uploaded_at"]
-        read_only_fields = ["id", "uploaded_at"]
-
-
-class CoupleMomentSerializer(serializers.ModelSerializer):
-    photos = CoupleMomentPhotoSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = CoupleMomentModel
-        fields = [
-            "id",
-            "couple",
-            "created_by",
-            "title",
-            "caption",
-            "moment_date",
-            "mood",
-            "location_name",
-            "visibility",
-            "tags",
-            "partner_memory",
-            "photos",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at", "created_by"]
-    
-    def validate(self, data):
-        request = self.context.get("request")
-        couple = data.get("couple") or getattr(self.instance, "couple", None)
-        
-        if couple and request:
-            user = request.user
-            if not couple.memberships.filter(user=user).exists():
-                raise serializers.ValidationError("You are not allowed to create or update moment for this couple.")
-        
-        return data
-                
-    
-
-
+# Kept as import aliases for existing callers.
+from social.api.moment_serializers import CoupleMomentPhotoSerializer, CoupleMomentSerializer

@@ -19,11 +19,34 @@ from django.contrib import admin
 from django.urls import path, include
 from authentication.api.views import *
 from django.conf.urls.static import static
+from django.http import HttpResponseNotFound
+from django.urls import re_path
+from django.views.static import serve
+import posixpath
+import os
+from django.utils._os import safe_join
+
+
+def deny_direct_moment_media(request, **kwargs):
+    # Moment photos must go through the authenticated, expiry-aware API.
+    return HttpResponseNotFound()
+
+
+def serve_public_media(request, path, **kwargs):
+    normalized = posixpath.normpath(path.replace("\\", "/")).lstrip("/")
+    root = kwargs["document_root"]
+    target = os.path.normcase(os.path.realpath(safe_join(root, normalized)))
+    private_root = os.path.normcase(os.path.realpath(os.path.join(root, "couples", "moments")))
+    if (normalized.casefold() == "couples/moments" or normalized.casefold().startswith("couples/moments/")
+            or os.path.commonpath([target, private_root]) == private_root):
+        return HttpResponseNotFound()
+    return serve(request, path, **kwargs)
 
 
 urlpatterns = [
+    re_path(r"^media/couples/moments/", deny_direct_moment_media),
     path("admin/", admin.site.urls),
     path("api/auth/", include('authentication.urls')),
     path("api/chat/", include('chat.urls')),
     path("api/social/", include('social.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+] + static(settings.MEDIA_URL, view=serve_public_media, document_root=settings.MEDIA_ROOT)

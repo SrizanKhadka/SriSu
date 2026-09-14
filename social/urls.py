@@ -18,7 +18,10 @@ from social.api.views import (
     is_engaged,
 )
 
+from social.api.moment_views import MomentNoteView
+
 social_routers = DefaultRouter()
+social_routers.register("moment-notes", MomentNoteView, basename="moment_notes")
 
 social_routers.register("connect-couple", CoupleConnectionView, basename="coupleConnectionView")
 social_routers.register("update-couple", CoupleAPIView, basename="updateCoupleView")
