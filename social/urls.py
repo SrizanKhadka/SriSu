@@ -19,6 +19,7 @@ from social.api.views import (
 )
 
 from social.api.moment_views import MomentNoteView
+from social.api.couple_views import CoupleFaveDetail, CoupleFaveList, CoupleFeedView, CoupleMomentSequence
 
 social_routers = DefaultRouter()
 social_routers.register("moment-notes", MomentNoteView, basename="moment_notes")
@@ -32,6 +33,10 @@ social_routers.register("user-preferences", UserPreferenceView, basename="user_p
 social_routers.register("couple-moments", CoupleMomentView, basename="couple_moments")
 
 urlpatterns = [
+    path("couple-faves/", CoupleFaveList.as_view(), name="couple-faves"),
+    path("couple-faves/<str:couple_id>/", CoupleFaveDetail.as_view(), name="couple-fave-detail"),
+    path("couple-feed/", CoupleFeedView.as_view(), name="couple-feed"),
+    path("couple-moments/sequence/", CoupleMomentSequence.as_view(), name="couple-moment-sequence"),
     path("couple-profile/", CoupleProfileAPIView.as_view(), name="couple-profile"),
     path("", include(social_routers.urls)),
     path("user-suggestions/", UserSuggestionView.as_view(), name="user_suggestions"),

@@ -447,8 +447,9 @@ class MomentMigrationTests(APITransactionTestCase):
     def test_existing_moments_backfill_expiry_and_audience(self):
         from django.db.migrations.executor import MigrationExecutor
         old_target = [("social", "0007_couple_profile_memberships")]
-        new_target = [("social", "0009_moment_replies_and_views")]
         executor = MigrationExecutor(connection)
+        # Restore the current schema, including migrations added after the expiry work.
+        new_target = executor.loader.graph.leaf_nodes()
         executor.migrate(old_target)
         try:
             apps = executor.loader.project_state(old_target).apps

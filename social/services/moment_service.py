@@ -38,11 +38,12 @@ def blocked_user_ids(user):
     return UserModel.objects.filter(phone_number__in=numbers).values_list("id", flat=True)
 
 
-def visible_moments(user):
+def eligible_moments(user, at=None):
+    """Authorization only, without serialization joins or related-object loading."""
     own_couples = CoupleMembershipModel.objects.filter(user=user).values("couple_id")
     blocked_couples = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user)).values("couple_id")
     return (CoupleMomentModel.objects.filter(
-        couple_id__in=active_couples().values("id"), expires_at__gt=timezone.now(),
+        couple_id__in=active_couples().values("id"), expires_at__gt=at or timezone.now(),
         is_archived=False, is_time_capsule=False,
     ).alias(audience_one=Cast(KeyTextTransform("0", "audience_membership_ids"), BigIntegerField()),
             audience_two=Cast(KeyTextTransform("1", "audience_membership_ids"), BigIntegerField()),
@@ -51,11 +52,19 @@ def visible_moments(user):
       .filter(couple__memberships__id=F("audience_one"), couple__memberships__user_id=F("user_one"))
       .filter(couple__memberships__id=F("audience_two"), couple__memberships__user_id=F("user_two"))
       .filter(Q(visibility="public") | Q(couple_id__in=own_couples))
-      .exclude(couple_id__in=blocked_couples)
-      .annotate(total_view_count=Count("views", distinct=True))
+      .exclude(couple_id__in=blocked_couples))
+
+
+def hydrate_moments(queryset, user):
+    return (queryset.annotate(total_view_count=Count("views", distinct=True))
       .select_related("created_by", "couple").prefetch_related("photos", "couple__memberships",
           Prefetch("notes", queryset=visible_notes(user, recipients_only=True), to_attr="appreciation_notes"))
       .order_by("-created_at", "-id"))
+
+
+def visible_moments(user):
+    # Preserve the existing list/detail contract and its private note hydration.
+    return hydrate_moments(eligible_moments(user), user)
 
 
 def visible_notes(user, recipients_only=False):

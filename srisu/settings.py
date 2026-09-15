@@ -160,6 +160,24 @@ CHANNEL_LAYERS = {
 
 AUTH_USER_MODEL = "authentication.UserModel"
 
+# Separate namespace from Channels. Only short-lived ordered IDs are cached.
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "couple_feed": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": config("COUPLE_FEED_REDIS_URL", default="redis://%s:%s/1" % (
+            config("REDIS_HOST", default="redis"), config("REDIS_PORT", default=6379))),
+        "KEY_PREFIX": "srisu-couple-feed",
+        "OPTIONS": {"socket_connect_timeout": 1, "socket_timeout": 1},
+    },
+}
+COUPLE_FEED_ENABLED = config("COUPLE_FEED_ENABLED", default=True, cast=bool)
+COUPLE_FEED_SESSION_TTL = 15 * 60
+COUPLE_FEED_CANDIDATE_LIMIT = 500
+COUPLE_FEED_EXPLORATION_INTERVAL = 10
+COUPLE_FEED_RANKING_VERSION = "couple-v1"
+COUPLE_FEED_WEIGHTS = {"interests": 40, "location": 25, "fave": 20, "freshness": 15}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
