@@ -1,0 +1,3693 @@
+{
+  "info": {
+    "name": "SriSu - Couple Moments API tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "89 executable request cases. Read the accompanying guide. Set four access tokens and base_url; run folders 01-04, configure files and run 05, then run 06. Folder 07 is manual/conditional. Never run every folder blindly. No credentials are included. Cases 78-89 in folder 04 test partner replies, embedded private notes and unique view counts."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "creator_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partner_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sender_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stranger_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "couple_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "creator_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partner_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "public_moment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "private_moment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partner_moment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "upload_moment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "photo_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "removed_photo_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "note_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cascade_note_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "original_expiry",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expired_moment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "expired_photo_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "retained_note_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "view_count_baseline",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Create fixtures",
+      "description": "Run these first. Creator and partner must be active members of the same accepted couple. IDs are saved automatically.",
+      "item": [
+        {
+          "name": "01 Get my couple profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-profile/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"couple_id\", data.couple_profile.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02 Creator creates a public moment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 201. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Postman cafe test\",\n  \"caption\": \"Coffee and a rainy afternoon\",\n  \"moment_date\": \"2026-09-14\",\n  \"mood\": \"happy\",\n  \"location_name\": \"Kathmandu\",\n  \"visibility\": \"public\",\n  \"tags\": [\n    \"coffee\",\n    \"travel\"\n  ],\n  \"partner_memory\": \"A lovely afternoon\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"public_moment_id\", data.id);",
+                  "pm.collectionVariables.set(\"creator_user_id\", data.created_by);",
+                  "pm.collectionVariables.set(\"original_expiry\", data.expires_at);",
+                  "}",
+                  "if (pm.response.code === 201) {",
+                  "pm.test(\"Exactly 24 hours\", () => { const d = pm.response.json().data; pm.expect(Date.parse(d.expires_at) - Date.parse(d.created_at)).to.eql(86400000); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03 Creator creates a private moment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 201. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Only our couple can see this\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"private_moment_id\", data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "04 Other partner also creates a moment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 201. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"couple\": \"{{couple_id}}\",\n  \"caption\": \"Created by the other partner\",\n  \"visibility\": \"public\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"partner_moment_id\", data.id);",
+                  "pm.collectionVariables.set(\"partner_user_id\", data.created_by);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Read and update moments",
+      "description": "",
+      "item": [
+        {
+          "name": "05 List visible moments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Pagination envelope\", () => pm.expect(pm.response.json().data).to.have.all.keys(\"count\", \"next\", \"previous\", \"results\"));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "06 Filter by couple and paginate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/?couple={{couple_id}}&page=1&page_size=2",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"At most two results\", () => pm.expect(pm.response.json().data.results.length).to.be.at.most(2));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "07 Get creator moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Creator permissions\", () => { const d = pm.response.json(); pm.expect(d.can_edit).to.eql(true); pm.expect(d.can_delete).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "08 Partner reads private moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{private_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Partner cannot modify\", () => { const d = pm.response.json(); pm.expect(d.can_edit).to.eql(false); pm.expect(d.can_delete).to.eql(false); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "09 Outside user reads public moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "10 PATCH caption and mood",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Updated cafe caption\",\n  \"mood\": \"grateful\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Expiry unchanged\", () => pm.expect(pm.response.json().data.expires_at).to.eql(pm.collectionVariables.get(\"original_expiry\")));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "11 PUT moment metadata",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"couple\": \"{{couple_id}}\",\n  \"title\": \"Our cafe visit\",\n  \"caption\": \"A complete metadata update\",\n  \"moment_date\": \"2026-09-14\",\n  \"mood\": \"happy\",\n  \"location_name\": \"Patan\",\n  \"visibility\": \"public\",\n  \"tags\": [\n    \"cafe\"\n  ],\n  \"partner_memory\": \"Wonderful coffee\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "12 Ownership and expiry spoofing are ignored",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"created_by\": \"{{partner_user_id}}\",\n  \"expires_at\": \"2099-01-01T00:00:00Z\",\n  \"caption\": \"Ownership remains unchanged\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Ownership and expiry remain server-controlled\", () => { const d = pm.response.json().data; pm.expect(String(d.created_by)).to.eql(String(pm.collectionVariables.get(\"creator_user_id\"))); pm.expect(d.expires_at).to.eql(pm.collectionVariables.get(\"original_expiry\")); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Moment permission and validation failures",
+      "description": "",
+      "item": [
+        {
+          "name": "13 No authentication",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 401. Authenticate as none.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "14 Outsider cannot read private moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{private_moment_id}}/",
+            "description": "Expected HTTP 404. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "15 Partner cannot PATCH creator moment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 403. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Not allowed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "16 Partner cannot PUT creator moment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 403. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Not allowed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "17 Partner cannot DELETE creator moment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 403. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "18 Outside user cannot create for this couple",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 403. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"couple\": \"{{couple_id}}\",\n  \"caption\": \"Not my couple\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "19 Empty creation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "20 Blank caption without photos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "21 Caption longer than 1000 characters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "22 Friends visibility is unsupported",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Test\",\n  \"visibility\": \"friends\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "23 Invalid mood",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Test\",\n  \"mood\": \"angry\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "24 Invalid couple filter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/?couple=abc",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "25 Invalid moment ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/abc/",
+            "description": "Expected HTTP 404. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "26 Cannot move moment to another couple",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"couple\": 9223372036854775807\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "27 A URL is not an uploaded image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Test\",\n  \"photos\": [\n    \"https://example.com/image.jpg\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "28 Unknown photo deletion reference",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deleted_photo_ids\": [\n    9223372036854775807\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "29 Invalid deletion array type",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deleted_photo_ids\": \"not-json\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Private appreciation notes",
+      "description": "Run once before deletion tests. Repeated runs/invalid attempts count toward the 30/hour sender throttle.",
+      "item": [
+        {
+          "name": "30 Outside user sends appreciation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/notes/",
+            "description": "Expected HTTP 201. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"You two look so happy. Wishing you more afternoons like this!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"note_id\", data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "31 Sender lists notes for the moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/?moment={{public_moment_id}}&page_size=10",
+            "description": "Expected HTTP 200. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "32 Creator reads private note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "33 Partner reads private note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 200. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "34 Sender reads their own note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 200. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "35 Unrelated user cannot read note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 404. Authenticate as stranger.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{stranger_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "36 Unrelated user sees no notes for this moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/?moment={{public_moment_id}}",
+            "description": "Expected HTTP 200. Authenticate as stranger.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{stranger_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"No private content\", () => pm.expect(pm.response.json().data.count).to.eql(0));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "37 Blank appreciation is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/notes/",
+            "description": "Expected HTTP 400. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "38 Appreciation longer than 1000 characters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/notes/",
+            "description": "Expected HTTP 400. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "39 Cannot appreciate your own couple",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/notes/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Self note\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "40 Cannot send appreciation to hidden moment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{private_moment_id}}/notes/",
+            "description": "Expected HTTP 404. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Hidden\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "41 Notes cannot be edited",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 405. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Changed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 405\", () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "42 Recipient cannot delete sender note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 403. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "43 Unrelated user cannot delete note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 404. Authenticate as stranger.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{stranger_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "44 Invalid notes moment filter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/?moment=abc",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "78 Moment creator replies to appreciation",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/replies/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Run after case 44 and before deletion. Expected 201; authenticate as creator.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Thank you for your kind words!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "pm.test(\"Creator authored reply\", () => pm.expect(String(pm.response.json().data.author)).to.eql(String(pm.collectionVariables.get(\"creator_user_id\"))));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "79 Other partner also replies to appreciation",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/replies/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Run after case 44 and before deletion. Expected 201; authenticate as partner.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Thanks from me too!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "pm.test(\"Partner authored reply\", () => pm.expect(String(pm.response.json().data.author)).to.eql(String(pm.collectionVariables.get(\"partner_user_id\"))));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "80 Note sender reads both replies",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/replies/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Run after case 44 and before deletion. Expected 200; authenticate as sender."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Both replies visible\", () => pm.expect(pm.response.json().data.count).to.eql(2));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "81 Unrelated user cannot read replies",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/replies/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{stranger_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Run after case 44 and before deletion. Expected 404; authenticate as stranger."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "82 Outside note sender cannot reply as a partner",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/replies/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Run after case 44 and before deletion. Expected 403; authenticate as sender.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Not a couple member\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "83 Blank reply rejected",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/replies/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Run after case 44 and before deletion. Expected 400; authenticate as partner.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "84 Couple member receives embedded appreciation threads",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Run after case 44 and before deletion. Expected 200; authenticate as partner."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Notes and replies embedded for partner\", () => { const d = pm.response.json(); const n = d.appreciation_notes.find(n => String(n.id) === String(pm.collectionVariables.get(\"note_id\"))); pm.expect(n).to.be.an(\"object\"); pm.expect(n.replies.length).to.eql(2); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "85 Outside viewer receives count without private threads",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Run after case 44 and before deletion. Expected 200; authenticate as sender."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"No embedded notes for outsiders\", () => { const d = pm.response.json(); pm.expect(d).not.to.have.property(\"appreciation_notes\"); pm.expect(d.total_view_count).to.be.a(\"number\"); pm.collectionVariables.set(\"view_count_baseline\", d.total_view_count); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "86 Repeated detail GET does not inflate view count",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Run after case 44 and before deletion. Expected 200; authenticate as sender."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Same viewer counted once\", () => pm.expect(pm.response.json().total_view_count).to.eql(Number(pm.collectionVariables.get(\"view_count_baseline\"))));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "87 Feed includes count without recording another view",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/social/couple-moments/?couple={{couple_id}}&page_size=100",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Run after case 44 and before deletion. Expected 200; authenticate as sender."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Feed count agrees\", () => { const m = pm.response.json().data.results.find(m => String(m.id) === String(pm.collectionVariables.get(\"public_moment_id\"))); pm.expect(m.total_view_count).to.eql(Number(pm.collectionVariables.get(\"view_count_baseline\"))); pm.expect(m).not.to.have.property(\"appreciation_notes\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "88 Note detail includes both partner replies",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "description": "Run after case 44 and before deletion. Expected 200; authenticate as sender."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Replies included\", () => pm.expect(pm.response.json().replies.length).to.eql(2));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "89 Reply longer than 1000 characters is rejected",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/replies/",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Run after case 44 and before deletion. Expected 400; authenticate as creator.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 - Photo uploads and updates",
+      "description": "Before running, select files for EVERY file row. Each row expects one file. Postman sets multipart Content-Type; do not set it manually. Run in order.",
+      "item": [
+        {
+          "name": "45 Create moment with two photos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 201. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "type": "text",
+                  "value": "Two photos from our day"
+                },
+                {
+                  "key": "visibility",
+                  "type": "text",
+                  "value": "private"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"upload_moment_id\", data.id);",
+                  "pm.collectionVariables.set(\"photo_id\", data.photos[0].id);",
+                  "}",
+                  "if (pm.response.code === 201) {",
+                  "pm.test(\"Two ordered photos\", () => pm.expect(pm.response.json().data.photos.map(p => p.order)).to.eql([0, 1]));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "46 Creator downloads photo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/photos/{{photo_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Private cache policy\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "47 Partner downloads private photo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/photos/{{photo_id}}/",
+            "description": "Expected HTTP 200. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "48 Outsider cannot download private photo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/photos/{{photo_id}}/",
+            "description": "Expected HTTP 404. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "49 Append three photos - total five",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Five photos\", () => pm.expect(pm.response.json().data.photos.length).to.eql(5));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "50 Sixth photo is rejected on update",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "type": "text",
+                  "value": "This must not be saved"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "51 Verify rejected update did not change moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"No partial update\", () => { const d = pm.response.json(); pm.expect(d.photos.length).to.eql(5); pm.expect(d.caption).to.eql(\"Two photos from our day\"); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "52 Reject another moments photo ID",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "This photo belongs to upload_moment_id, not public_moment_id. The numeric photo ID must be rejected with 400.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deleted_photo_ids\": [{{photo_id}}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "53 Remove one photo and append one - still five",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "deleted_photo_ids",
+                  "type": "text",
+                  "value": "[{{photo_id}}]"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"removed_photo_id\", pm.collectionVariables.get(\"photo_id\"));",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Compacted order\", () => pm.expect(pm.response.json().data.photos.map(p => p.order)).to.eql([0,1,2,3,4]));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "54 Removed photo is inaccessible",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/photos/{{removed_photo_id}}/",
+            "description": "Expected HTTP 404. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "55 Replace all photos with two new ones",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "replace_photos",
+                  "type": "text",
+                  "value": "true"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"photo_id\", data.photos[0].id);",
+                  "}",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Replacement\", () => pm.expect(pm.response.json().data.photos.length).to.eql(2));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "56 Delete photo through JSON update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"deleted_photo_ids\": [{{photo_id}}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "57 Six photos are rejected on creation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Expected HTTP 400. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "type": "text",
+                  "value": "Too many"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "58 Invalid image bytes",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Select a plain text file renamed fake.png. Expected 400; filename/content-type alone is not trusted.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "type": "text",
+                  "value": "Bad image"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "59 Unsupported GIF image",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Select a real GIF file. JPEG, PNG and WebP are the supported formats. Expected 400.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "type": "text",
+                  "value": "Unsupported"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "60 Oversized image",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/",
+            "description": "Select a valid image larger than MOMENT_MAX_IMAGE_BYTES (default 10 MiB). Expected Django 400; a smaller reverse-proxy request limit may return 413 before Django.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "type": "text",
+                  "value": "Too large"
+                },
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select ONE local JPEG, PNG or WebP file for this row."
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06 - Permanent deletion - run last",
+      "description": "These requests delete only moments/notes whose IDs were captured by this collection. Run conditional expiry/membership tests before this folder if desired.",
+      "item": [
+        {
+          "name": "61 Sender deletes their note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 204. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "62 Deleted note no longer exists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{note_id}}/",
+            "description": "Expected HTTP 404. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "63 Create note to verify cascade deletion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/notes/",
+            "description": "Expected HTTP 201. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"This note belongs to the soon-deleted moment\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "const data = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"cascade_note_id\", data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "64 Creator permanently deletes public moment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "65 Deleted moment no longer exists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{public_moment_id}}/",
+            "description": "Expected HTTP 404. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "66 Notes are deleted with their moment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{cascade_note_id}}/",
+            "description": "Expected HTTP 404. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "67 Creator deletes photo moment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{upload_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "68 Creator deletes private moment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{private_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "69 Partner deletes their own moment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{partner_moment_id}}/",
+            "description": "Expected HTTP 200. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07 - Conditional expiry tests - manual only",
+      "description": "Do not include this folder in an ordinary collection run. Requires expired_moment_id, expired_photo_id and retained_note_id prepared as described in the guide. Use an expired PUBLIC moment authored by creator, with a note authored by sender; expiry must be less than 30 days ago.",
+      "item": [
+        {
+          "name": "70 Expired detail is hidden",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{expired_moment_id}}/",
+            "description": "Expected HTTP 404. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "71 Expired photo is hidden",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{expired_moment_id}}/photos/{{expired_photo_id}}/",
+            "description": "Expected HTTP 404. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "72 Expired moment cannot be updated",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{expired_moment_id}}/",
+            "description": "Expected HTTP 404. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caption\": \"Cannot revive\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "73 Expired moment cannot be deleted via ordinary API",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/{{expired_moment_id}}/",
+            "description": "Expected HTTP 404. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "74 Cannot send note after expiry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/social/couple-moments/{{expired_moment_id}}/notes/",
+            "description": "Expected HTTP 404. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Too late\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "75 Sender retains access to earlier note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{retained_note_id}}/",
+            "description": "Expected HTTP 200. Authenticate as sender.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{sender_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "76 Original partner retains access to earlier note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/moment-notes/{{retained_note_id}}/",
+            "description": "Expected HTTP 200. Authenticate as partner.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{partner_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "77 Expired moment excluded from couple feed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/social/couple-moments/?couple={{couple_id}}&page_size=100",
+            "description": "Expected HTTP 200. Authenticate as creator.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{creator_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "pm.test(\"Expired ID absent\", () => { const id = String(pm.variables.get(\"expired_moment_id\")); pm.expect(pm.response.json().data.results.some(m => String(m.id) === id)).to.eql(false); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

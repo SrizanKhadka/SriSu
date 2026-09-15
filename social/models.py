@@ -1,6 +1,9 @@
 from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
 from authentication.models import UserModel
 from utils.choices import *
+from datetime import timedelta
+from django.utils import timezone
 
 class CoupleConnectionModel(models.Model):
     sender_number = models.CharField(max_length=15)
@@ -31,32 +34,43 @@ class CoupleConnectionModel(models.Model):
 
 
 class CoupleModel(models.Model):
-    couple_connection_model = models.ForeignKey(
+    couple_connection = models.OneToOneField(
         CoupleConnectionModel,
         on_delete=models.CASCADE,
-        related_name="couple_connection_model",
+        related_name="couple",
+        null=True,
+        blank=True
     )
 
-    male_partner = models.ForeignKey(
-        UserModel, on_delete=models.CASCADE, related_name="male_partner"
+    members = models.ManyToManyField(
+        UserModel,
+        through="CoupleMembershipModel",
+        related_name="couple_profiles",
     )
 
-    female_partner = models.ForeignKey(
-        UserModel, on_delete=models.CASCADE, related_name="female_partner"
-    )
     anniversary_date = models.DateField(null=True, blank=True)
-    shared_dreams = models.JSONField(null=True, blank=True)
-    shared_interests = models.JSONField(null=True, blank=True)
-    relationship_tagline = models.CharField(max_length=30, null=True, blank=True)
-    photo_album = models.JSONField(null=True, blank=True)
-    nickname_for_male = models.CharField(max_length=30, null=True, blank=True)
-    nickname_for_female = models.CharField(max_length=30, null=True, blank=True)
-    created_at = models.DateTimeField(
-        auto_now_add=True, help_text="Timestamp when the couple was created."
+
+    shared_dreams = models.JSONField(default=list, blank=True)
+    shared_interests = models.JSONField(default=list, blank=True)
+
+    title = models.CharField(max_length=100, null=True, blank=True)
+    relationship_tagline = models.CharField(max_length=80, null=True, blank=True)
+    journey_story = models.TextField(max_length=3000, null=True, blank=True)
+    relationship_strength = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
-    updated_at = models.DateTimeField(
-        auto_now=True, help_text="Timestamp when the couple data was last updated."
+
+    cover_photo = models.ImageField(
+        upload_to="couples/profile_photos/",
+        null=True,
+        blank=True
     )
+
+    profile_completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -64,17 +78,191 @@ class CoupleModel(models.Model):
         verbose_name_plural = "Couples"
 
     def __str__(self):
-        return f"{self.male_partner} ❤️ {self.female_partner}"
+        names = list(self.members.values_list("full_name", flat=True)[:2])
+        return " ❤️ ".join(name for name in names if name) or f"Couple {self.pk}"
 
 
-class PhotoAlbumModel(models.Model):
+class CoupleMembershipModel(models.Model):
+    class Position(models.IntegerChoices):
+        PARTNER_ONE = 1, "Partner one"
+        PARTNER_TWO = 2, "Partner two"
+
+    couple = models.ForeignKey(
+        CoupleModel,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+    )
+    user = models.OneToOneField(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="couple_membership",
+    )
+    position = models.PositiveSmallIntegerField(choices=Position.choices)
+    nickname = models.CharField(max_length=30, null=True, blank=True)
+    is_owner = models.BooleanField(default=True)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["couple", "position"],
+                name="unique_couple_member_position",
+            ),
+            models.UniqueConstraint(
+                fields=["couple", "user"],
+                name="unique_user_per_couple",
+            ),
+        ]
+        indexes = [models.Index(fields=["couple", "position"])]
+
+    def __str__(self):
+        return f"{self.user} in {self.couple_id}"
+
+class CoupleMomentModel(models.Model):
+    couple = models.ForeignKey(
+        CoupleModel,
+        on_delete=models.CASCADE,
+        related_name="moments"
+    )
+
+    created_by = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="created_couple_moments"
+    )
+
+    title = models.CharField(max_length=100, null=True, blank=True)
+
+    caption = models.TextField(max_length=1000)
+
+    moment_date = models.DateField()
+
+    mood = models.CharField(
+        max_length=30,
+        choices=MomentMood.choices,
+        null=True,
+        blank=True
+    )
+
+    location_name = models.CharField(max_length=120, null=True, blank=True)
+
+    visibility = models.CharField(
+        max_length=20,
+        choices=MomentVisibility.choices,
+        default=MomentVisibility.PRIVATE
+    )
+
+    tags = models.JSONField(default=list, blank=True)
+
+    partner_memory = models.TextField(
+        max_length=1000,
+        null=True,
+        blank=True,
+        help_text="Partner's perspective on this moment."
+    )
+
+    is_time_capsule = models.BooleanField(default=False)
+
+    unlock_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="If time capsule, moment unlocks on this date."
+    )
+
+    is_archived = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField(editable=False, db_index=True)
+    # Snapshot membership identities, not just users: replacement partners never inherit access.
+    audience_membership_ids = models.JSONField(default=list, editable=False)
+    audience_user_ids = models.JSONField(default=list, editable=False)
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            self.created_at = timezone.now()
+            self.expires_at = self.created_at + timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["couple", "-created_at", "-id"], name="moment_couple_feed_idx"),
+            models.Index(fields=["-created_at", "-id"], name="moment_feed_idx"),
+        ]
+        verbose_name = "Couple Moment"
+        verbose_name_plural = "Couple Moments"
+
+    def __str__(self):
+        return f"{self.couple} - {self.title or self.moment_date}"
+
+class CoupleMomentPhotoModel(models.Model):
+    moment = models.ForeignKey(
+        CoupleMomentModel,
+        on_delete=models.CASCADE,
+        related_name="photos"
+    )
+
+    image = models.ImageField(upload_to="couples/moments/")
+
+    order = models.PositiveSmallIntegerField(default=0)
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"Photo for {self.moment}"
+
+
+class CoupleMomentNoteModel(models.Model):
+    moment = models.ForeignKey(CoupleMomentModel, on_delete=models.CASCADE, related_name="notes")
+    sender = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="moment_notes")
+    message = models.CharField(max_length=1000)
+    recipient_membership_ids = models.JSONField(default=list, editable=False)
+    recipient_user_ids = models.JSONField(default=list, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+
+class MomentFileDeletion(models.Model):
+    """Durable retry queue; created in the same transaction as photo deletion."""
+    name = models.CharField(max_length=500, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class CoupleMomentNoteReplyModel(models.Model):
+    note = models.ForeignKey(CoupleMomentNoteModel, on_delete=models.CASCADE, related_name="replies")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="moment_note_replies")
+    message = models.CharField(max_length=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class CoupleMomentViewModel(models.Model):
+    moment = models.ForeignKey(CoupleMomentModel, on_delete=models.CASCADE, related_name="views")
+    # Retain aggregate history when a viewer deletes their account.
+    viewer = models.ForeignKey(UserModel, on_delete=models.SET_NULL, null=True, related_name="moment_views")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["moment", "viewer"], name="unique_moment_viewer")]
+
+# @deprecated("Use the new CoupleMomentPhotoModel instead.")
+class PhotoAlbumModel(models.Model): #This model is now deprecated and will be removed in future releases. Please use CoupleMomentPhotoModel instead.
     couple = models.ForeignKey(
         CoupleModel, on_delete=models.CASCADE, related_name="couple_photo_album"
     )
     photo = models.ImageField(upload_to="couple_album/", null=True, blank=True)
 
     def __str__(self):
-        return f"{self.couple.male_partner} ❤️ {self.couple.female_partner}"
+        return f"Photo for {self.couple}"
 
 class SingleConnectionModel(models.Model):
     sender_number = models.CharField(max_length=15)
