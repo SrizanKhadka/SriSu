@@ -119,6 +119,19 @@ class CoupleMembershipModel(models.Model):
     def __str__(self):
         return f"{self.user} in {self.couple_id}"
 
+class CoupleFaveModel(models.Model):
+    """A personal, one-way preference. Never shared with the user's partner."""
+
+    user = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="couple_faves")
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="faves")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["user", "couple"], name="unique_user_couple_fave")]
+        indexes = [models.Index(fields=["user", "-created_at", "-id"], name="user_faves_order_idx")]
+
+
 class CoupleMomentModel(models.Model):
     couple = models.ForeignKey(
         CoupleModel,
