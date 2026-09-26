@@ -1,0 +1,40 @@
+name: SriSu backend checks
+
+on:
+  push:
+    branches: [dev, codex/workspace-integration]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13.5'
+          cache: pip
+          cache-dependency-path: Pipfile.lock
+      - name: Install locked workspace dependencies
+        run: |
+          python tools/export_workspace_requirements.py > "$RUNNER_TEMP/srisu-workspace-requirements.txt"
+          python -m pip install -r "$RUNNER_TEMP/srisu-workspace-requirements.txt"
+          python -m pip check
+      - name: Check Django configuration
+        run: python tools/workspace.py check
+      - name: Check migration consistency
+        run: python tools/workspace.py migrations
+      - name: Run isolated backend tests
+        run: python tools/workspace.py test
