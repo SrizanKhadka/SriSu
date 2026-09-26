@@ -9,7 +9,7 @@ from chat.utils.chatutils import serialize_message
 
 async def get_messages_before(scope,chat_room, user, page=None, limit=20):
     
-    print("Fetching messages before cursor:", user.id)
+    pass  # Private payloads must not be printed.
     query_set = (
         MessageModel.objects
         .filter(chat_room=chat_room)

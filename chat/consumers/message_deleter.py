@@ -97,13 +97,13 @@ async def handle_delete_message(data):
     delete_option = data.get("delete_option")
 
     if not message_id or not user_id or not delete_option:
-        print("Missing required data for deletion")
+        pass  # Private payloads must not be printed.
         return None
 
     message = await get_message(message_id)
 
     if not message:
-        print(f"Message {message_id} not found")
+        pass  # Private payloads must not be printed.
         return None
 
     if delete_option == DeleteOption.DELETE_FOR_ME:
@@ -111,7 +111,7 @@ async def handle_delete_message(data):
     else:  # DELETE_FOR_EVERYONE
         updated_message = await handle_delete_for_everyone(message, user_id)
 
-    print('MESSAGE DELETED SUCCESSFULLY.')
+    pass  # Private payloads must not be printed.
 
     return updated_message
 

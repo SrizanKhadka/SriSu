@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 
 from chat.models import MessageModel
 from utils.helpers import get_base_url
@@ -62,6 +62,6 @@ def serialize_message_for_socket_sync(message: MessageModel, scope) -> dict:
     }
 
 
-@sync_to_async
+@database_sync_to_async
 def serialize_message_for_socket(message: MessageModel, scope) -> dict:
     return serialize_message_for_socket_sync(message, scope)

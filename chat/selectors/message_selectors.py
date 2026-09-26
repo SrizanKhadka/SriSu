@@ -7,6 +7,7 @@ from django.db.models import Q, QuerySet
 from chat.models import MessageModel, ChatRoom
 from authentication.models import UserModel
 from utils.choices import DeleteOption
+from chat.selectors.access import authorized_rooms
 
 
 def get_room_messages_queryset(chat_room: ChatRoom) -> QuerySet[MessageModel]:
@@ -112,7 +113,7 @@ def get_room_message_for_user(
         )
         .prefetch_related("medias")
         .filter(id=message_id)
-        .filter(Q(chat_room__user_one=user) | Q(chat_room__user_two=user))
+        .filter(chat_room_id__in=authorized_rooms(user).values("pk"))
         .first()
     )
 

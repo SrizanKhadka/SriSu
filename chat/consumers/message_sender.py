@@ -77,5 +77,5 @@ def create_message(**kwargs):
             message.medias.set(medias)
         return message
     except Exception as e:
-        print(f"Error creating message: {e}")
+        pass  # Private payloads must not be printed.
         return None

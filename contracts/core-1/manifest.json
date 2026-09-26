@@ -1,0 +1,39 @@
+{
+  "contract": "core-1",
+  "owner": "SrizanKhadka/SriSu",
+  "fixtures": {
+    "interests": "interests",
+    "empty_interests": "interests",
+    "validation_error": "httpError",
+    "history": "history",
+    "empty_history": "history",
+    "socket_message": "socketEvent",
+    "socket_ack": "socketAck",
+    "socket_error": "socketError",
+    "rooms": "rooms"
+  },
+  "deployment": "Backend before new KMP; legacy installed clients retain envelopes and query-token socket auth.",
+  "http": {
+    "opt_in_error_header": {
+      "X-SriSu-Contract": "core-1"
+    },
+    "resources": [
+      "GET /api/auth/interests/",
+      "GET /api/chat/rooms/",
+      "GET /api/chat/rooms/{uuid}/messages/"
+    ],
+    "success": "Existing message/data envelope; empty/204, raw resources and existing paginated APIs retain their own shape.",
+    "pagination": "messages by descending integer ID; rooms by descending updated_at, UUID; room cursor signed/actor-bound/900s expiry; invalid cursor 400",
+    "retry": "Only bounded opt-in GET/HEAD; no automated command/write replay; no implemented refresh endpoint."
+  },
+  "websocket": {
+    "path": "/ws/chat/",
+    "version": 1,
+    "authentication": "Bearer header preferred; legacy token query adapter; native clients omit Origin, browsers allowlisted.",
+    "ack": "success request_id after service transaction returns; ack loss is ambiguous and must not auto-replay.",
+    "event_delivery": "At-most observed bounded client dedupe by event_id; events can be lost, duplicated, reordered. HTTP snapshot recovery on reconnect/foreground and every 30s while chat is active.",
+    "subscription": "fetch_messages subscribes; unsubscribe_room removes; disconnect removes all; max20 rooms per connection.",
+    "limits": "64KiB command,30 burst/10 per second per connection,4000 text,10 media,50 page items. Not distributed abuse protection.",
+    "unknown": "Ignore unknown fields; unknown/malformed events invalidate snapshots; unsupported commands receive unknown_action."
+  }
+}

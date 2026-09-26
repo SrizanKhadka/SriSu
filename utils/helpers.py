@@ -14,6 +14,7 @@ def validate_required_fields(data: dict, required_fields: dict):
 
 def get_base_url(scope):
     scheme = scope.get("scheme", "http")
+    scheme = {"ws": "http", "wss": "https"}.get(scheme, scheme)
     headers = dict(scope.get("headers", []))
     host = headers.get(b"host", b"").decode()
     return f"{scheme}://{host}"

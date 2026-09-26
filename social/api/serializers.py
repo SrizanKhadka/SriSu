@@ -47,10 +47,10 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         Returns the opposite user partner in the connection relative to the current request user.
         """
         request = self.context.get("request")
-        print("Request in get_partner:", request)
-        print("User in request:", getattr(request, "user", None))
+        pass  # Private payloads must not be printed.
+        pass  # Private payloads must not be printed.
         if not request or not hasattr(request, "user"):
-            print("No request or user in context")
+            pass  # Private payloads must not be printed.
             return None
 
         current_user = request.user
@@ -62,7 +62,7 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
 
             return UserModelSerializer(partner_user, context=self.context).data
         except UserModel.DoesNotExist:
-            print("Partner user not found")
+            pass  # Private payloads must not be printed.
             return None
         
 class SingleConnectionSerializer(serializers.ModelSerializer):
@@ -73,7 +73,7 @@ class SingleConnectionSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def validate(self, data):
-        print("inside serializer validate")
+        pass  # Private payloads must not be printed.
         validated_data = super().validate(data)
         sender_number = validated_data["sender_number"]
         receiver_number = validated_data["receiver_number"]

@@ -32,7 +32,7 @@ def update_unread_count(chat_room):
             .exclude(sender=user)
             .count()
         )
-    print("Updated unread count:", unread_count)
+    pass  # Private payloads must not be printed.
 
     chat_room.unread_count = unread_count
     chat_room.save(update_fields=["unread_count"])
@@ -142,7 +142,7 @@ def update_chat_room_last_message(
 ):
     
     chat_room = ChatRoom.objects.get(id=chat_room_id)
-    print("Updating chat room last message:", chat_room)
+    pass  # Private payloads must not be printed.
     chat_room.last_message = last_message
     update_unread_count(chat_room)
     chat_room.updated_at = datetime.now()

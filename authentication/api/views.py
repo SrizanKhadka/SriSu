@@ -211,7 +211,6 @@ class SetUpProfileAPIView(APIView):
         user_photos_data = payload.pop("user_photos", [])
         self.manage_user_photos(user, user_photos_data)
         
-        print("Payload after popping nested data:", payload)
 
         serializer = SetUpProfileSerializer(
             user,
@@ -303,12 +302,11 @@ class InterestsAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        interests = InterestModel.objects.all()
-        serializer = InterestSerializer(interests, many=True)
+        from authentication.catalogue import interest_catalogue
         return Response(
             {
                 "message": "User interests retrieved successfully.",
-                "data": {"interests": serializer.data},
+                "data": {"interests": interest_catalogue()},
             },
             status=status.HTTP_200_OK,
         )

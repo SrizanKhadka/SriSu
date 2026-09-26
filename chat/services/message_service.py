@@ -95,14 +95,12 @@ def send_message(*, user: UserModel, payload: SendMessageInput) -> MessageModel:
         if media_objects:
             message.medias.set(media_objects)
             
-        print("Inside send_message Core: ", message.text)
         updated_room = update_room_after_message_created(
             chat_room=chat_room,
             message=message,
             is_message_sent=True,
             
         )
-        print("Updated room last message to:", updated_room.last_message.text)
 
     return message,updated_room
 
