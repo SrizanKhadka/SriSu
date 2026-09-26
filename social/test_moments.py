@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import DatabaseError, connection
+from django.http import Http404
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -337,9 +338,15 @@ class MomentAPITests(APITestCase):
         from srisu.urls import serve_public_media
         for path in [name, "other/../" + name, name.replace("couples/", "COUPLES/"),
                      name.replace("couples/", "couples./")]:
-            response = serve_public_media(RequestFactory().get("/media/" + path), path,
-                                          document_root=self.media.name)
-            self.assertEqual(response.status_code, 404)
+            with self.subTest(path=path):
+                try:
+                    response = serve_public_media(RequestFactory().get("/media/" + path), path,
+                                                  document_root=self.media.name)
+                except Http404:
+                    # A missing path raises inside the view; Django converts it
+                    # to HTTP 404. A direct call has no exception middleware.
+                    continue
+                self.assertEqual(response.status_code, 404)
         self.assertEqual(self.client.get("/media/" + name).status_code, 404)
         self.assertEqual(self.client.get("/media/other/../" + name).status_code, 404)
         self.assertEqual(self.client.get("/media/" + name.replace("couples/", "COUPLES/")).status_code, 404)
