@@ -182,7 +182,7 @@ COUPLE_FEED_WEIGHTS = {"interests": 40, "location": 25, "fave": 20, "freshness":
 REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"chat_reads": "120/min"},
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "authentication.sessions.SessionJWTAuthentication",
     ],
     "EXCEPTION_HANDLER": "utils.exception_handlers.custom_exception_handler",
     "DEFAULT_PARSER_CLASSES" :[
@@ -220,3 +220,9 @@ LOGGING = {
     "handlers": {"core": {"class": "logging.StreamHandler", "formatter": "core"}},
     "loggers": {"srisu": {"handlers": ["core"], "level": "INFO", "propagate": False}},
 }
+
+# Temporary compatibility during auth-1 rollout; disable after the announced cutoff.
+AUTH_ACCEPT_LEGACY_TOKENS = config("AUTH_ACCEPT_LEGACY_TOKENS", default=True, cast=bool)
+
+OTP_GLOBAL_HOURLY_LIMIT = config("OTP_GLOBAL_HOURLY_LIMIT", default=100, cast=int)
+OTP_IP_HOURLY_LIMIT = config("OTP_IP_HOURLY_LIMIT", default=10, cast=int)

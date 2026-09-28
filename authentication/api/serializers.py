@@ -105,49 +105,33 @@ class UserSuggestionSerializer(serializers.ModelSerializer):
         return None
 
 
+def normalize_phone(value):
+    import re
+    value = re.sub(r"[ ()\-]", "", value.strip())
+    if not re.fullmatch(r"\+[1-9][0-9]{7,13}", value):
+        raise serializers.ValidationError("Use an international phone number.", code="invalid")
+    return value
+
+
 class SendOtpSerializer(serializers.Serializer):
-    phone_number = serializers.CharField(max_length=15)
+    phone_number = serializers.CharField(max_length=40)
+    request_id = serializers.UUIDField(required=False)
 
     def validate_phone_number(self, value):
-        if not value.startswith("+") or len(value) < 10:
-            raise serializers.ValidationError("Invalid phone number format.")
-        return value
+        return normalize_phone(value)
 
 
 class VerifyOtpSerializer(serializers.Serializer):
-    phone_number = serializers.CharField(max_length=15)
-    otp_code = serializers.CharField(max_length=6)
+    phone_number = serializers.CharField(max_length=40)
+    otp_code = serializers.RegexField(r"^[0-9]{6}$", trim_whitespace=False)
+    challenge_id = serializers.UUIDField(required=False)
 
-    def validate(self, attrs):
-        phone_number = attrs["phone_number"]
-        otp_code = attrs["otp_code"]
-
-        try:
-            otp_record = OtpModel.objects.get(phone_number=phone_number)
-        except OtpModel.DoesNotExist:
-            raise serializers.ValidationError({"error": "Invalid phone number or OTP."})
-
-        if self.is_otp_expired(otp_record.updated_date):
-            otp_record.otp_status = OtpStatusChoices.EXPIRED
-            otp_record.save(update_fields=["otp_status", "updated_date"])
-            raise serializers.ValidationError({"error": "OTP has expired."})
-
-        if otp_record.otp_status == OtpStatusChoices.EXPIRED:
-            raise serializers.ValidationError({"error": "OTP has expired."})
-
-        if otp_record.otp_code != otp_code:
-            raise serializers.ValidationError({"error": "Invalid OTP."})
-
-        attrs["otp_record"] = otp_record
-        return attrs
-
-    @staticmethod
-    def is_otp_expired(updated_time):
-        otp_lifespan_minutes = 5
-        return now() > updated_time + timedelta(minutes=otp_lifespan_minutes)
+    def validate_phone_number(self, value):
+        return normalize_phone(value)
 
 
 class SetUpProfileSerializer(WritableNestedModelSerializer):
+    skip_photo = serializers.BooleanField(write_only=True, required=False)
     user_photos = UserPhotoSerializer(many=True, required=False)
     user_interests = UserInterestSerializer(many=True, required=False)
     class Meta:
@@ -169,34 +153,70 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             "country",
             "city",
             "bio",
-            "is_engaged"
+            "is_engaged",
+            "profile_photo_skipped",
+            "skip_photo",
         ]
-        read_only_fields = ["is_profile_complete", "is_phone_verified"]
+        read_only_fields = ["id", "phone_number", "is_profile_complete", "is_phone_verified", "profile_photo_skipped", "is_engaged"]
+
+    def validate_full_name(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Enter your full name.", code="required")
+        return value
+
+    def validate_username(self, value):
+        # Preserve case and Unicode; do not silently rename existing identities.
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Enter a username.", code="required")
+        if UserModel.objects.filter(username=value).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError("This username is taken.", code="unique")
+        return value
+
+    def validate_profile_photo(self, value):
+        if not value:
+            raise serializers.ValidationError("Choose an image.", code="invalid_image")
+        if value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Choose an image under 5 MB.", code="too_large")
+        # ImageField verified decoding; bound dimensions before full pixel decode.
+        image = value.image
+        if image.width * image.height > 20_000_000 or max(image.size) > 8192:
+            raise serializers.ValidationError("Choose a smaller image.", code="too_large")
+        if image.format not in ("JPEG", "PNG", "WEBP"):
+            raise serializers.ValidationError("Use JPEG, PNG or WebP.", code="invalid_image")
+        from io import BytesIO
+        from uuid import uuid4
+        from PIL import Image, ImageOps
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        value.seek(0)
+        with Image.open(value) as source:
+            clean = ImageOps.exif_transpose(source).convert("RGB")
+            clean.thumbnail((1600, 1600))
+            output = BytesIO()
+            clean.save(output, format="JPEG", quality=88)
+        # Re-encode and assign a server filename. Neither metadata nor filename is trusted.
+        return SimpleUploadedFile(f"{uuid4()}.jpg", output.getvalue(), content_type="image/jpeg")
 
     def validate(self, attrs):
-        attrs = super().validate(attrs)
-        # profile is considered valid only when these are present.
-        required_fields = [
-            "phone_number",
-            "full_name",
-            "username",
-            "gender",
-            "zodiac_sign",
-            "dob",
-        ]
-
-        instance = getattr(self, "instance", None)
-
-        for field in required_fields:
-            incoming_value = attrs.get(field, None)
-            existing_value = getattr(instance, field, None) if instance else None
-
-            if not incoming_value and not existing_value:
-                raise serializers.ValidationError(
-                    {field: f"{field.replace('_', ' ').capitalize()} cannot be empty."}
-                )
-
+        if attrs.get("skip_photo") and attrs.get("profile_photo"):
+            raise serializers.ValidationError({"skip_photo": "Choose upload or skip."})
         return attrs
+
+    def update(self, instance, validated_data):
+        skip = validated_data.pop("skip_photo", False)
+        if skip:
+            validated_data["profile_photo_skipped"] = True
+        elif validated_data.get("profile_photo"):
+            validated_data["profile_photo_skipped"] = False
+        instance = super().update(instance, validated_data)
+        complete = bool(instance.is_phone_verified and instance.full_name and instance.username
+                        and (instance.profile_photo or instance.profile_photo_skipped))
+        # Preserve established completed accounts through the additive migration.
+        if complete and not instance.is_profile_complete:
+            instance.is_profile_complete = True
+            instance.save(update_fields=["is_profile_complete", "updated_date"])
+        return instance
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

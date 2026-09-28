@@ -51,7 +51,7 @@ in-memory SQLite test database, in-memory cache/channel layers, and a temporary
 media directory cleaned on exit. Socket connections and datagram sends are
 blocked for this process. No application server is started.
 
-Tests explicitly select the four existing social suites and `srisu.test_core`.
+Tests explicitly select the four existing social suites and `srisu.test_core` plus `authentication.test_auth`.
 The exporter now also includes `requirements-core-tests.txt` for JSON Schema tests. PostgreSQL-only concurrency
 tests may be skipped on SQLite; run them separately against a disposable local
 PostgreSQL instance using the existing PostgreSQL test settings after inspecting
@@ -81,6 +81,22 @@ GitHub Actions runs the isolated checks and migration consistency checks from
 under Actions; configuring CI does not itself establish a passing run. Native
 PostgreSQL concurrency and live transport still require additional coverage.
 
+### Disposable PostgreSQL verification
+
+With PostgreSQL 17 binaries installed, run the same explicitly selected suites:
+
+```sh
+.venv/bin/python tools/auth_postgres_tests.py --postgres-bin /opt/homebrew/opt/postgresql@17/bin
+```
+
+The runner creates a private temporary cluster, binds a dynamically selected
+loopback port, uses synthetic workspace settings and temporary media, runs the
+suites, stops the server and deletes the temporary directory. It does not use an
+application database or register a background service. Python socket egress is
+blocked; libpq connects only to the configured temporary loopback database. All
+121 tests passed on PostgreSQL 17.11 on 2026-09-28; this is separate from SQLite and
+the mobile loopback transport check.
+
 Configure an authorized GitHub login on each laptop when pushing changes; never
 put credentials in the workspace files. Workflow publication uses the connected
 GitHub account and does not copy a local Git login to other machines.
@@ -95,3 +111,7 @@ The normal server now requires environment-backed `DJANGO_SECRET_KEY`,
 `DJANGO_ALLOWED_HOSTS` and optional browser `WEBSOCKET_ALLOWED_ORIGINS`. Use
 `.env.example` only for fresh local values; plan any existing signing-key rotation
 with the Authentication rollout. Never use workspace test settings to serve users.
+
+Authentication phase 1 adds isolated auth tests and migrations; see
+[the endpoint/rollout notes](authentication.md). No unrestricted chat discovery or
+provider SMS is used by these tests.

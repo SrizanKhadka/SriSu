@@ -32,8 +32,8 @@ def main():
     from social.models import SingleConnectionModel
     from chat.models import ChatRoom, MessageModel
     from rest_framework_simplejwt.tokens import AccessToken
-    first = UserModel.objects.create_user(phone_number='+15005550101', full_name='Synthetic A')
-    second = UserModel.objects.create_user(phone_number='+15005550102', full_name='Synthetic B')
+    first = UserModel.objects.create_user(phone_number='+15005550101', full_name='Synthetic A', is_phone_verified=True, is_profile_complete=True)
+    second = UserModel.objects.create_user(phone_number='+15005550102', full_name='Synthetic B', is_phone_verified=True, is_profile_complete=True)
     link = SingleConnectionModel.objects.create(sender_number=first.phone_number, receiver_number=second.phone_number, connection_status='ACCEPTED')
     room = ChatRoom.objects.create(user_one=first, user_two=second, singles=link)
     MessageModel.objects.create(chat_room=room, sender=second, receiver=first, text='Synthetic baseline')

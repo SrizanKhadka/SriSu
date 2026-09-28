@@ -1013,6 +1013,217 @@
         "was_removed"
       ],
       "additionalProperties": true
+    },
+    "profileProgress": {
+      "type": "object",
+      "properties": {
+        "phone_verified": {
+          "type": "boolean"
+        },
+        "profile_complete": {
+          "type": "boolean"
+        },
+        "next_step": {
+          "enum": [
+            "name",
+            "photo",
+            "complete"
+          ]
+        },
+        "photo_skipped": {
+          "type": "boolean"
+        },
+        "membership": {
+          "enum": [
+            "linked",
+            "unlinked"
+          ]
+        },
+        "couple_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "phone_verified",
+        "profile_complete",
+        "next_step",
+        "photo_skipped",
+        "membership",
+        "couple_id"
+      ],
+      "additionalProperties": true
+    },
+    "authChallenge": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "challenge_id": {
+              "type": "string"
+            },
+            "expires_at": {
+              "type": "string"
+            },
+            "resend_at": {
+              "type": "string"
+            },
+            "server_time": {
+              "type": "string"
+            },
+            "retry_after_seconds": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "challenge_id",
+            "expires_at",
+            "resend_at",
+            "server_time",
+            "retry_after_seconds"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "authProfile": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "full_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "username": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "profile_photo": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "is_phone_verified": {
+                  "type": "boolean"
+                },
+                "is_profile_complete": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "full_name",
+                "username",
+                "profile_photo",
+                "is_phone_verified",
+                "is_profile_complete"
+              ],
+              "additionalProperties": true
+            },
+            "progress": {
+              "$ref": "#/$defs/profileProgress"
+            }
+          },
+          "required": [
+            "user",
+            "progress"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "authTokens": {
+      "type": "object",
+      "properties": {
+        "access": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refresh": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "access",
+        "refresh"
+      ],
+      "additionalProperties": true
+    },
+    "authVerified": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "tokens": {
+              "$ref": "#/$defs/authTokens"
+            },
+            "user": {
+              "type": "object"
+            },
+            "progress": {
+              "$ref": "#/$defs/profileProgress"
+            }
+          },
+          "required": [
+            "tokens",
+            "user",
+            "progress"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "authRefresh": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "tokens": {
+              "$ref": "#/$defs/authTokens"
+            }
+          },
+          "required": [
+            "tokens"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
     }
   }
 }

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_LABELS = [
-    "srisu.test_core",
+    "srisu.test_core", "authentication.test_auth",
     "social.tests", "social.test_moments", "social.test_moment_replies",
     "social.test_couple_feed",
 ]

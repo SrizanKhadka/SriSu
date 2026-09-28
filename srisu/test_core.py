@@ -30,7 +30,7 @@ from utils.exception_handlers import custom_exception_handler
 
 
 def fixtures():
-    users = [UserModel.objects.create_user(phone_number=f'+15005550{i:03}', full_name=f'Synthetic {i}') for i in range(3)]
+    users = [UserModel.objects.create_user(phone_number=f'+15005550{i:03}', full_name=f'Synthetic {i}', is_phone_verified=True, is_profile_complete=True) for i in range(3)]
     link = SingleConnectionModel.objects.create(sender_number=users[0].phone_number, receiver_number=users[1].phone_number, connection_status='ACCEPTED')
     room = ChatRoom.objects.create(user_one=users[0], user_two=users[1], singles=link)
     return users, link, room

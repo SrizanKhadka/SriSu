@@ -154,5 +154,42 @@
       "limit": 20,
       "next_cursor": null
     }
+  },
+  "auth_challenge": {
+    "data": {
+      "challenge_id": "00000000-0000-4000-8000-000000000003",
+      "expires_at": "2030-01-01T00:05:00Z",
+      "resend_at": "2030-01-01T00:01:00Z",
+      "server_time": "2030-01-01T00:00:00Z",
+      "retry_after_seconds": 60
+    }
+  },
+  "auth_profile": {
+    "data": {
+      "user": {
+        "id": 1,
+        "full_name": "Synthetic User",
+        "username": "synthetic",
+        "profile_photo": null,
+        "is_phone_verified": true,
+        "is_profile_complete": false
+      },
+      "progress": {
+        "phone_verified": true,
+        "profile_complete": false,
+        "next_step": "photo",
+        "photo_skipped": false,
+        "membership": "unlinked",
+        "couple_id": null
+      }
+    }
+  },
+  "auth_refresh": {
+    "data": {
+      "tokens": {
+        "access": "non-credential-fixture",
+        "refresh": "non-credential-fixture"
+      }
+    }
   }
 }

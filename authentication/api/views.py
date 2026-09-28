@@ -1,5 +1,6 @@
-import random
-from datetime import timedelta
+from django.db import IntegrityError, transaction
+from rest_framework.exceptions import PermissionDenied
+from authentication.progress import profile_progress
 
 from django.conf import settings
 from django.utils.timezone import now
@@ -9,7 +10,6 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from twilio.rest import Client
 
 from authentication.api.serializers import (
     InterestSerializer,
@@ -18,152 +18,57 @@ from authentication.api.serializers import (
     UserModelSerializer,
     VerifyOtpSerializer,
 )
-from authentication.models import InterestModel, OtpModel, UserInterestModel, UserModel, UserPhotoAlbumModel
-from utils.choices import OtpStatusChoices
+from authentication.models import UserInterestModel, UserModel, UserPhotoAlbumModel
 
 
 class SendOTPAPIView(APIView):
     http_method_names = ["post"]
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
-    @staticmethod
-    def get_user_by_phone_number(phone_number):
-        return UserModel.objects.filter(phone_number=phone_number).first()
-
-    @staticmethod
-    def generate_otp(phone_number):
-        otp_code = random.randint(100000, 999999)
-
-        OtpModel.objects.update_or_create(
-            phone_number=phone_number,
-            defaults={
-                "otp_code": str(otp_code),
-                "otp_status": OtpStatusChoices.NEW,
-                "last_request_time": now(),
-            },
-        )
-        return otp_code
-
-    @staticmethod
-    def update_otp_attempts(phone_number):
-        otp_record = OtpModel.objects.filter(phone_number=phone_number).first()
-        if otp_record:
-            otp_record.otp_attempts += 1
-            otp_record.save(update_fields=["otp_attempts", "updated_date"])
-
-    def unverify_user(self, phone_number):
-        user = self.get_user_by_phone_number(phone_number)
-        if user and user.is_phone_verified:
-            user.is_phone_verified = False
-            user.save(update_fields=["is_phone_verified", "updated_date"])
-
-    def send_otp_sms(self, phone_number, otp_code):
-        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        try:
-            client.messages.create(
-                body=f"Your SriSu Verification Code is {otp_code}",
-                from_=settings.TWILIO_PHONE_NUMBER,
-                to=phone_number,
-            )
-            self.update_otp_attempts(phone_number)
-            return True
-        except Exception:
-            return False
-
-    @staticmethod
-    def can_request_otp(phone_number):
-        otp_record = OtpModel.objects.filter(phone_number=phone_number).first()
-
-        if not otp_record:
-            return True
-
-        now_time = now()
-        time_diff = now_time - otp_record.last_request_time
-
-        if time_diff > timedelta(minutes=10):
-            otp_record.otp_attempts = 0
-            otp_record.last_request_time = now_time
-            otp_record.save(update_fields=["otp_attempts", "last_request_time", "updated_date"])
-            return True
-
-        return otp_record.otp_attempts < 3
-
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
+        from authentication.otp import request_code
         serializer = SendOtpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        phone_number = serializer.validated_data["phone_number"]
-
-        self.unverify_user(phone_number)
-
-        if not self.can_request_otp(phone_number):
-            return Response(
-                {"error": "Too many OTP requests. Try again in few minutes."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-
-        otp_code = self.generate_otp(phone_number)
-        success = self.send_otp_sms(phone_number, otp_code)
-
-        if success:
-            return Response(
-                {"message": "OTP sent successfully."},
-                status=status.HTTP_200_OK,
-            )
-
-        return Response(
-            {"error": "Failed to send OTP."},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        data = serializer.validated_data
+        result = request_code(data["phone_number"], request.META.get("REMOTE_ADDR", "unknown"), data.get("request_id"))
+        return Response({"message": "OTP sent successfully.", "data": result}, headers={"Cache-Control": "no-store"})
 
 
 class VerifyOTPAPIView(APIView):
     http_method_names = ["post"]
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     @staticmethod
     def generate_tokens(user):
         refresh = RefreshToken.for_user(user)
-        return {
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-        }
+        return {"refresh": str(refresh), "access": str(refresh.access_token)}
 
-    def post(self, request, *args, **kwargs):
+    def session_tokens(self, user, request):
+        if request.headers.get("X-SriSu-Auth") == "auth-1":
+            from authentication.sessions import create_session
+            return create_session(user)
+        return self.generate_tokens(user)
+
+    def post(self, request):
+        from authentication.otp import verify_code
+        if not settings.AUTH_ACCEPT_LEGACY_TOKENS and request.headers.get("X-SriSu-Auth") != "auth-1":
+            raise ValidationError("Update SriSu to sign in.", code="client_update_required")
         serializer = VerifyOtpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        phone_number = serializer.validated_data["phone_number"]
-
-        OtpModel.objects.filter(phone_number=phone_number).update(
-            otp_status=OtpStatusChoices.EXPIRED
-        )
-
-        user, _ = UserModel.objects.update_or_create(
-            phone_number=phone_number,
-            defaults={"is_phone_verified": True},
-        )
-
-        response_data = self.generate_tokens(user=user)
-        user_data = UserModelSerializer(user, context={"request": request}).data
-
-        return Response(
-            {
-                "message": "Phone number verified successfully.",
-                "data": {
-                    "user": user_data,
-                    "tokens": response_data,
-                },
-            },
-            status=status.HTTP_200_OK,
-        )
+        data = serializer.validated_data
+        user = verify_code(data["phone_number"], data["otp_code"], data.get("challenge_id"))
+        return Response({"message": "Phone number verified successfully.", "data": {
+            "user": UserModelSerializer(user, context={"request": request}).data,
+            "tokens": self.session_tokens(user, request),
+            "progress": profile_progress(user),
+        }}, headers={"Cache-Control": "no-store"})
 
 
 class SetUpProfileAPIView(APIView):
     http_method_names = ["get", "put", "patch"]
     permission_classes = [permissions.IsAuthenticated]
-
-    @staticmethod
-    def get_user_by_phone_number(phone_number):
-        return UserModel.objects.filter(phone_number=phone_number).first()
 
     def get(self, request, *args, **kwargs):
         user = request.user
@@ -174,9 +79,10 @@ class SetUpProfileAPIView(APIView):
         return Response(
             {
                 "message": "User profile retrieved successfully",
-                "data": {"user": serializer.data},
+                "data": {"user": serializer.data, "progress": profile_progress(user)},
             },
             status=status.HTTP_200_OK,
+            headers={"Cache-Control": "private, no-store"},
         )
 
     def put(self, request, *args, **kwargs):
@@ -190,44 +96,35 @@ class SetUpProfileAPIView(APIView):
             raise ValidationError({"error": "Authentication required."})
 
         payload = request.data.copy()
-        phone_number = payload.get("phone_number") or request.user.phone_number
-    
-        if not phone_number:
-            raise ValidationError({"error": "Phone number is required."})
-
-        user = self.get_user_by_phone_number(phone_number)
-        if not user:
-            raise ValidationError({"error": "User with this phone number does not exist."})
-
-        if request.user.id != user.id:
-            raise ValidationError({"error": "You are not allowed to update this profile."})
-
-        if not user.is_phone_verified:
-            raise ValidationError({"error": "Phone number is not verified yet."})
-
-        user_interests_data = payload.pop("user_interests", [])
-        self.manage_user_interests(user, user_interests_data)
-
-        user_photos_data = payload.pop("user_photos", [])
-        self.manage_user_photos(user, user_photos_data)
-        
-
-        serializer = SetUpProfileSerializer(
-            user,
-            data=payload,
-            partial=True,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save(is_profile_complete=True)
-
-        return Response(
-            {
-                "message": "Profile updated successfully",
-                "data": {"user": serializer.data},
-            },
-            status=status.HTTP_200_OK,
-        )
+        if payload.get("phone_number") not in (None, "", request.user.phone_number):
+            raise PermissionDenied("You cannot update another profile.")
+        if not request.user.is_phone_verified:
+            raise PermissionDenied("Verify your phone number first.")
+        try:
+            with transaction.atomic():
+                user = UserModel.objects.select_for_update().get(pk=request.user.pk)
+                user_interests_data = payload.pop("user_interests", [])
+                user_photos_data = payload.pop("user_photos", [])
+                serializer = SetUpProfileSerializer(user, data=payload, partial=True, context={"request": request})
+                serializer.is_valid(raise_exception=True)
+                # Validate before any related mutation. The transaction rolls back failures.
+                self.manage_user_interests(user, user_interests_data)
+                self.manage_user_photos(user, user_photos_data)
+                serializer.save()
+                # Old clients submit all historical required fields in one operation; a
+                # missing optional photo in that payload is their established skip action.
+                if request.headers.get("X-SriSu-Auth") != "auth-1" and all(
+                    payload.get(field) for field in ("full_name", "username", "gender", "zodiac_sign", "dob")
+                ):
+                    user.profile_photo_skipped = not bool(user.profile_photo)
+                    user.is_profile_complete = True
+                    user.save(update_fields=["profile_photo_skipped", "is_profile_complete"])
+        except IntegrityError:
+            raise ValidationError({"username": "This username is taken."}, code="unique") from None
+        return Response({"message": "Profile updated successfully", "data": {
+            "user": SetUpProfileSerializer(user, context={"request": request}).data,
+            "progress": profile_progress(user),
+        }}, headers={"Cache-Control": "private, no-store"})
 
     @staticmethod
     def manage_user_photos(user, user_photos_data):
@@ -235,10 +132,18 @@ class SetUpProfileAPIView(APIView):
             photo_id = photo_data.get("id")
             removed = photo_data.get("removed", False)
             new_photo = photo_data.get("photo")
+            if new_photo:
+                # Legacy nested uploads share the same decode/size/filename boundary.
+                # A string path or URL must never attach existing private media.
+                from rest_framework import serializers
+                field = serializers.ImageField()
+                new_photo = SetUpProfileSerializer().validate_profile_photo(field.run_validation(new_photo))
 
             if not photo_id:
                 # Case 1: New photo upload
                 if new_photo:
+                    if UserPhotoAlbumModel.objects.filter(user=user, removed=False).count() >= 10:
+                        raise ValidationError({"user_photos": "You can only upload 10 photos."})
                     UserPhotoAlbumModel.objects.create(
                         user=user,
                         photo=new_photo,
@@ -310,3 +215,39 @@ class InterestsAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class RefreshSessionAPIView(APIView):
+    def get_authenticate_header(self, request):
+        return "Bearer"
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    http_method_names = ["post"]
+
+    def post(self, request):
+        from rest_framework import serializers
+        from authentication.sessions import rotate_refresh
+        field = serializers.CharField(max_length=4096)
+        value = field.run_validation(request.data.get("refresh"))
+        return Response({"data": {"tokens": rotate_refresh(value, serializers.UUIDField(required=False).run_validation(request.data["request_id"]) if "request_id" in request.data else None)}}, headers={"Cache-Control": "no-store"})
+
+
+class LogoutSessionAPIView(APIView):
+    # Refresh proof permits revocation even if access expired; local logout needn't wait.
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    http_method_names = ["post"]
+
+    def post(self, request):
+        from authentication.models import DeviceSession
+        from rest_framework import serializers
+        from rest_framework_simplejwt.exceptions import TokenError
+        value = serializers.CharField(max_length=4096).run_validation(request.data.get("refresh"))
+        try:
+            token = RefreshToken(value)
+            if token.get("sid"):
+                DeviceSession.objects.filter(pk=token["sid"], user_id=token["user_id"], revoked_at__isnull=True).update(revoked_at=now())
+        except TokenError:
+            pass  # Idempotent revocation: an invalid/expired proof has no active authority.
+        return Response(status=204, headers={"Cache-Control": "no-store"})

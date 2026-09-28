@@ -39,7 +39,7 @@ class ChatConsumer(ChatSocketHandlerMixin, AsyncWebsocketConsumer):
         user = self.scope.get('user')
         expiry = self.scope.get('access_expires_at')
         return bool(user and user.is_authenticated and expiry and expiry > time()
-                    and await user_is_active(user.pk))
+                    and await user_is_active(user.pk, self.scope.get("device_session_id")))
 
     async def watch_access(self):
         try:
