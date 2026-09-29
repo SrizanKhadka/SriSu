@@ -14,7 +14,9 @@ services:
     depends_on:
       - srisu_db                  # Ensure the 'db' service starts before 'web'
     environment:            # Environment variables for Django
-      - DEBUG=1             # Set DEBUG mode to true (useful for development)
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
+      # Hostnames/IPs only, no scheme or port. Include the LAN address used by mobile clients.
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
       - DB_NAME=${POSTGRES_DB}      # Database name
       - DB_USER=${POSTGRES_USER}  # Database user
       - DB_PASSWORD=${POSTGRES_PASSWORD} # Database password

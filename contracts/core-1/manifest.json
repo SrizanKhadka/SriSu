@@ -32,7 +32,8 @@
     ],
     "success": "Existing message/data envelope; empty/204, raw resources and existing paginated APIs retain their own shape.",
     "pagination": "messages by descending integer ID; rooms by descending updated_at, UUID; room cursor signed/actor-bound/900s expiry; invalid cursor 400",
-    "retry": "Bounded opt-in GET/HEAD. No automatic write replay. auth-1 refresh: single-flight, stable request_id; replay same rotation for 60s only."
+    "retry": "Bounded opt-in GET/HEAD. No automatic write replay. auth-1 refresh: single-flight, stable request_id; replay same rotation for 60s only.",
+    "route_inventory": "routes.json"
   },
   "websocket": {
     "path": "/ws/chat/",

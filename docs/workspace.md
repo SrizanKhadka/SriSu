@@ -115,3 +115,50 @@ with the Authentication rollout. Never use workspace test settings to serve user
 Authentication phase 1 adds isolated auth tests and migrations; see
 [the endpoint/rollout notes](authentication.md). No unrestricted chat discovery or
 provider SMS is used by these tests.
+
+## Mobile clients connecting to Docker over the LAN
+
+Binding `0.0.0.0:8000` and publishing port 8000 makes the server reachable, but
+does not add the client's requested hostname to Django's allowlist. Django rejects
+an unlisted Host before API routing, returning **400 HTML**, including for a valid
+`POST /api/auth/send-otp/`. This is not a missing endpoint or OTP validation error.
+
+On the laptop running `docker-compose up`, edit the backend `.env` file. Include
+that laptop's current LAN address, matching the frontend origin. For example:
+
+```dotenv
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.73
+DJANGO_DEBUG=false
+```
+
+Use only hostnames/IPs: no scheme, path or port. Keep explicit host validation;
+do not use `*`. Compose passes both variables into `web` with these setting names.
+The old `DEBUG=1` name was ignored by `srisu/settings.py`.
+
+```sh
+docker-compose up -d --force-recreate web
+curl -i http://192.168.1.73:8000/api/auth/interests/
+```
+
+Modern Compose also accepts `docker compose` with the same arguments. A container
+recreation reloads environment values; an application autoreload is insufficient
+when the old value was injected into the container. The catalogue request must
+return 200 JSON. A read-only GET to `send-otp/` returns 405 JSON (it requires POST),
+and unauthenticated `chat/rooms/` returns 401 JSON. Do not send a real OTP simply
+to test connectivity. If the laptop's DHCP address changes, update this allowlist
+and rebuild the client with the new `srisu.apiBaseUrl` origin.
+
+On 2026-09-29 the reachable server at that example LAN address rejected its LAN
+Host with 400 HTML but accepted localhost, yielding 200/405/401 as above. GET on
+`auth/refresh/` also returned 405, confirming the new route was present on that
+server. The remote environment was not editable from the frontend laptop.
+
+## Full mobile HTTP route inventory
+
+`contracts/core-1/routes.json` lists all 26 first-party HTTP method/path/query
+combinations currently called by KMP. `srisu.test_api_routes` resolves each against
+the actual Django URLconf and view methods, and verifies the LAN-host rejection
+and explicit-allowlist fix with mocked SMS. The frontend pins this file and tests
+actual service requests against it. This extends the earlier core fixture subset;
+it is not a complete schema for all legacy response bodies. The external city
+catalogue and WebSocket protocol remain separate.
