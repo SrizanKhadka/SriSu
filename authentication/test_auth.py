@@ -20,6 +20,75 @@ from authentication.sessions import create_session, rotate_refresh
 PHONE = "+15005550101"
 
 
+class MockSmsDeliveryTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_SRISU_CONTRACT="core-1", HTTP_X_SRISU_AUTH="auth-1")
+
+    @override_settings(OTP_MOCK_DELIVERY=True)
+    @patch("authentication.otp.Client")
+    def test_mock_send_returns_fresh_contract_challenges_without_twilio(self, twilio):
+        from tools.check_core_contracts import validate_contract
+        ids = []
+        for phone in (PHONE, "+15005550102"):
+            response = self.client.post("/api/auth/send-otp/", {
+                "phone_number": phone, "request_id": str(uuid.uuid4()),
+            }, format="json")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data["message"], "Mock OTP request accepted. No SMS was sent.")
+            self.assertEqual(response["Cache-Control"], "no-store")
+            validate_contract("authChallenge", response.data)
+            self.assertEqual(set(response.data["data"]), {
+                "challenge_id", "expires_at", "resend_at", "server_time", "retry_after_seconds",
+            })
+            row = OtpModel.objects.get(phone_number=phone)
+            self.assertEqual(row.delivery_state, "sent")
+            self.assertEqual(len(row.otp_code), 64)  # HMAC only; no plaintext response/storage.
+            self.assertEqual(row.expires_at - row.resend_at, timedelta(minutes=4))
+            ids.append(response.data["data"]["challenge_id"])
+        self.assertNotEqual(ids[0], ids[1])
+        self.assertFalse(UserModel.objects.exists())
+        self.assertFalse(DeviceSession.objects.exists())
+        twilio.assert_not_called()
+
+    @override_settings(OTP_MOCK_DELIVERY=True)
+    @patch("authentication.otp.Client")
+    def test_mock_retains_idempotency_validation_and_resend_limit(self, twilio):
+        payload = {"phone_number": PHONE, "request_id": str(uuid.uuid4())}
+        first = self.client.post("/api/auth/send-otp/", payload, format="json")
+        repeated = self.client.post("/api/auth/send-otp/", payload, format="json")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(first.data["data"]["challenge_id"], repeated.data["data"]["challenge_id"])
+        self.assertEqual(OtpModel.objects.get().otp_attempts, 1)
+        limited = self.client.post("/api/auth/send-otp/", {"phone_number": PHONE}, format="json")
+        self.assertEqual(limited.status_code, 429)
+        self.assertIn("Retry-After", limited)
+        invalid = self.client.post("/api/auth/send-otp/", {"phone_number": "invalid"}, format="json")
+        self.assertEqual(invalid.status_code, 400)
+        twilio.assert_not_called()
+
+    @override_settings(OTP_MOCK_DELIVERY=False)
+    @patch("authentication.otp.Client")
+    def test_real_delivery_is_restored_when_mock_is_disabled(self, twilio):
+        twilio.return_value.messages.create.return_value.sid = "SM" + "0" * 32
+        twilio.return_value.messages.create.return_value.status = "queued"
+        response = self.client.post("/api/auth/send-otp/", {"phone_number": PHONE}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["message"], "OTP sent successfully.")
+        twilio.assert_called_once()
+        twilio.return_value.messages.create.assert_called_once()
+
+    @override_settings(OTP_MOCK_DELIVERY=False)
+    @patch("authentication.otp.Client")
+    def test_real_provider_failure_never_falls_back_to_mock_success(self, twilio):
+        twilio.return_value.messages.create.side_effect = RuntimeError("synthetic provider failure")
+        response = self.client.post("/api/auth/send-otp/", {"phone_number": PHONE}, format="json")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(OtpModel.objects.get().delivery_state, "failed")
+        self.assertEqual(OtpModel.objects.get().otp_code, "")
+
+
 class AuthenticationTests(TestCase):
     def setUp(self):
         self.client = APIClient()

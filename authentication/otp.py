@@ -55,10 +55,15 @@ def metadata(row, at=None):
 
 
 def deliver(phone, code):
+    if settings.OTP_MOCK_DELIVERY:
+        # Simulate Twilio accepting a new message. Do not send, log or return the
+        # OTP to the caller; request_code still stores only the bound proof.
+        return {"sid": "SM" + uuid.uuid4().hex, "status": "queued"}
     client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN,
                     http_client=TwilioHttpClient(timeout=8, max_retries=0))
-    client.messages.create(body=f"Your SriSu Verification Code is {code}",
-                           from_=settings.TWILIO_PHONE_NUMBER, to=phone)
+    message = client.messages.create(body=f"Your SriSu Verification Code is {code}",
+                                     from_=settings.TWILIO_PHONE_NUMBER, to=phone)
+    return {"sid": message.sid, "status": message.status}
 
 
 def request_code(phone, ip, request_id=None):

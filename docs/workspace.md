@@ -116,6 +116,12 @@ Authentication phase 1 adds isolated auth tests and migrations; see
 [the endpoint/rollout notes](authentication.md). No unrestricted chat discovery or
 provider SMS is used by these tests.
 
+Development Compose currently mocks OTP SMS delivery so the expired Twilio trial
+does not block testing `SendOTPAPIView`. See [mock delivery behavior and restoring
+real SMS](authentication.md#development-mock-for-sendotpapiview). Pull/recreate is
+sufficient; the response explicitly says no SMS was sent. OTP verification is not
+bypassed, and normal non-Compose settings retain real Twilio delivery by default.
+
 ## Mobile clients connecting to Docker over the LAN
 
 Binding `0.0.0.0:8000` and publishing port 8000 makes the server reachable, but

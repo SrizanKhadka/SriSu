@@ -205,6 +205,9 @@ TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE_NUMBER = config("TWILIO_PHONE_NUMBER")
 
+# Explicit development delivery switch. Normal deployments still use Twilio.
+OTP_MOCK_DELIVERY = config("OTP_MOCK_DELIVERY", default=False, cast=bool)
+
 
 # Native clients use bearer headers; browser origins are explicitly allowlisted.
 WEBSOCKET_ALLOWED_ORIGINS = [origin.strip() for origin in config("WEBSOCKET_ALLOWED_ORIGINS", default="").split(",") if origin.strip()]

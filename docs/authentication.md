@@ -58,6 +58,43 @@ No arbitrary URL, owner ID or MIME assertion can attach a profile image.
 
 ## Rollout and migration
 
+### Development mock for SendOTPAPIView
+
+The development `docker-compose.yaml` now sets `OTP_MOCK_DELIVERY=true` by default
+while the Twilio trial is unavailable. Pull `dev-core-architecture` and recreate
+`web`; no frontend change or new endpoint is needed:
+
+```sh
+git pull --ff-only origin dev-core-architecture
+docker-compose up -d --force-recreate web
+```
+
+`POST /api/auth/send-otp/` validates and reserves a normal challenge, then simulates
+a new Twilio message with a generated `SM...` SID and `queued` status internally.
+It does not construct a Twilio client or contact the provider. The API returns
+200 with the same `data` fields (challenge ID, expiry/resend/server timestamps,
+retry delay), and `message: "Mock OTP request accepted. No SMS was sent."`.
+Each new eligible request gets a fresh challenge; a reused request ID retains
+idempotency. Invalid phones, cooldowns and budgets still return their normal errors.
+
+This mocks the send response only. There is no SMS, fixed test code, OTP in the
+response/logs, or verification bypass. `verify-otp/` still requires the actual
+generated proof, with expiry, attempt limits and single-use consumption intact.
+
+Set `OTP_MOCK_DELIVERY=false` in the local `.env` and recreate `web` to resume
+Twilio. Normal non-Compose settings default to real delivery. A real provider
+failure still returns 503; it never silently falls back to mock success. This
+change adds no migrations and preserves the KMP challenge contract. Development
+Compose settings must not be used as production settings.
+
+Validation: the isolated suite passed 119 tests with 10 PostgreSQL-only skips;
+new API tests cover fresh mock challenges, unchanged response schema, idempotency,
+validation/cooldown, zero Twilio calls, restoring real delivery and real-provider
+failure without fallback. Django checks and migration consistency passed. No
+real SMS, database migration or remote Docker restart was performed.
+
+### Production rollout
+
 1. Before rollout, run `manage.py audit_auth_identities` against an explicitly
    approved copy/environment. It reports counts, not identities, and mutates nothing.
    Resolve duplicate usernames and noncanonical phone records with affected users;

@@ -32,7 +32,8 @@ class SendOTPAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         result = request_code(data["phone_number"], request.META.get("REMOTE_ADDR", "unknown"), data.get("request_id"))
-        return Response({"message": "OTP sent successfully.", "data": result}, headers={"Cache-Control": "no-store"})
+        message = "Mock OTP request accepted. No SMS was sent." if settings.OTP_MOCK_DELIVERY else "OTP sent successfully."
+        return Response({"message": message, "data": result}, headers={"Cache-Control": "no-store"})
 
 
 class VerifyOTPAPIView(APIView):
