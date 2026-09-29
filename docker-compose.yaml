@@ -18,6 +18,8 @@ services:
       # Development only: accept OTP requests without calling the expired Twilio trial.
       # Set OTP_MOCK_DELIVERY=false to resume real SMS delivery.
       - OTP_MOCK_DELIVERY=${OTP_MOCK_DELIVERY:-true}
+      # Shared development OTP, used only with mock delivery. Not a real credential.
+      - OTP_MOCK_CODE=${OTP_MOCK_CODE:-123456}
       # Development server: append the mobile client's backend LAN host even when
       # an existing .env has a localhost-only allowlist. Empty SRISU_DEV_LAN_HOST
       # disables this addition; set it to another IP when changing laptops/networks.

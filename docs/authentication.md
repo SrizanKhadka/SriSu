@@ -60,7 +60,8 @@ No arbitrary URL, owner ID or MIME assertion can attach a profile image.
 
 ### Development mock for SendOTPAPIView
 
-The development `docker-compose.yaml` now sets `OTP_MOCK_DELIVERY=true` by default
+The development `docker-compose.yaml` sets `OTP_MOCK_DELIVERY=true` and the shared
+synthetic test code `OTP_MOCK_CODE=123456` by default
 while the Twilio trial is unavailable. Pull `dev-core-architecture` and recreate
 `web`; no frontend change or new endpoint is needed:
 
@@ -77,21 +78,39 @@ retry delay), and `message: "Mock OTP request accepted. No SMS was sent."`.
 Each new eligible request gets a fresh challenge; a reused request ID retains
 idempotency. Invalid phones, cooldowns and budgets still return their normal errors.
 
-This mocks the send response only. There is no SMS, fixed test code, OTP in the
-response/logs, or verification bypass. `verify-otp/` still requires the actual
-generated proof, with expiry, attempt limits and single-use consumption intact.
+After recreating the container, request a **new OTP** from the app and enter
+**123456** for any development user. Old requests created before this change
+retain their old proof; do not reuse their request/challenge IDs. Wait for the
+existing resend cooldown if necessary. The database stores a one-way HMAC, not a
+decryptable OTP, so no database inspection is needed.
+
+`verify-otp/` still requires a requested challenge for that phone. Incorrect codes,
+five-minute expiry, five-attempt exhaustion, stale challenges and single-use
+consumption are enforced normally. Phone/challenge binding remains distinct even
+though the synthetic code is shared. The OTP is not returned in responses or logs.
+Set a different six-digit ASCII `OTP_MOCK_CODE` in the local `.env` to change the
+shared test code. Changing it or disabling mock delivery invalidates outstanding
+fixed-code proofs. Invalid mock code configuration fails rather than using an
+unintended value. This is for development accounts, not a deployed sign-in option.
 
 Set `OTP_MOCK_DELIVERY=false` in the local `.env` and recreate `web` to resume
-Twilio. Normal non-Compose settings default to real delivery. A real provider
+Twilio; the fixed code is then ignored and new codes are generated randomly.
+Normal non-Compose settings default to real delivery with no fixed code. A real provider
 failure still returns 503; it never silently falls back to mock success. This
 change adds no migrations and preserves the KMP challenge contract. Development
 Compose settings must not be used as production settings.
 
-Validation: the isolated suite passed 119 tests with 10 PostgreSQL-only skips;
+Initial delivery-mock validation: the isolated suite passed 119 tests with 10 PostgreSQL-only skips;
 new API tests cover fresh mock challenges, unchanged response schema, idempotency,
 validation/cooldown, zero Twilio calls, restoring real delivery and real-provider
 failure without fallback. Django checks and migration consistency passed. No
 real SMS, database migration or remote Docker restart was performed.
+
+Shared-code validation: the isolated suite passed 126 tests with 10 PostgreSQL-only
+skips. Seven added tests cover existing/new users, phone/challenge binding, expiry,
+attempt limits, single use, configuration changes and real-delivery isolation.
+Django checks and migration consistency passed. Docker restart and live-device
+verification remain on the development laptop.
 
 ### Production rollout
 

@@ -89,6 +89,110 @@ class MockSmsDeliveryTests(TestCase):
         self.assertEqual(OtpModel.objects.get().otp_code, "")
 
 
+@override_settings(OTP_MOCK_DELIVERY=True, OTP_MOCK_CODE="123456")
+class SharedMockOtpTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_SRISU_CONTRACT="core-1", HTTP_X_SRISU_AUTH="auth-1")
+        sender = patch("authentication.otp.Client")
+        self.twilio = sender.start()
+        self.addCleanup(sender.stop)
+
+    def issue(self, phone=PHONE):
+        response = self.client.post("/api/auth/send-otp/", {
+            "phone_number": phone, "request_id": str(uuid.uuid4()),
+        }, format="json")
+        self.assertEqual(response.status_code, 200)
+        return response.data["data"]["challenge_id"]
+
+    def verify(self, challenge, phone=PHONE, code="123456"):
+        return self.client.post("/api/auth/verify-otp/", {
+            "phone_number": phone, "challenge_id": challenge, "otp_code": code,
+        }, format="json")
+
+    def test_shared_code_completes_sign_in_and_profile_for_multiple_users(self):
+        from tools.check_core_contracts import validate_contract
+        # Cover an existing development account as well as a new registration.
+        UserModel.objects.create_user(PHONE)
+        proofs = []
+        for index, phone in enumerate((PHONE, "+15005550102")):
+            self.client.credentials(HTTP_X_SRISU_CONTRACT="core-1", HTTP_X_SRISU_AUTH="auth-1")
+            challenge = self.issue(phone)
+            proofs.append(OtpModel.objects.get(phone_number=phone).otp_code)
+            self.assertNotEqual(proofs[-1], "123456")
+            response = self.verify(challenge, phone)
+            self.assertEqual(response.status_code, 200)
+            validate_contract("authVerified", response.data)
+            self.assertEqual(response.data["data"]["progress"]["next_step"], "name")
+            self.assertEqual(self.verify(challenge, phone).status_code, 400)
+            self.client.credentials(HTTP_AUTHORIZATION="Bearer " + response.data["data"]["tokens"]["access"],
+                                    HTTP_X_SRISU_CONTRACT="core-1", HTTP_X_SRISU_AUTH="auth-1")
+            named = self.client.patch("/api/auth/setup-profile/", {
+                "full_name": "Synthetic User", "username": f"mock-user-{index}",
+            }, format="json")
+            self.assertEqual(named.status_code, 200)
+            self.assertEqual(named.data["data"]["progress"]["next_step"], "photo")
+            complete = self.client.patch("/api/auth/setup-profile/", {"skip_photo": True}, format="json")
+            self.assertEqual(complete.status_code, 200)
+            self.assertTrue(complete.data["data"]["progress"]["profile_complete"])
+        self.assertNotEqual(proofs[0], proofs[1])
+        self.assertEqual(DeviceSession.objects.count(), 2)
+        self.twilio.assert_not_called()
+
+    def test_shared_code_requires_requested_matching_challenge(self):
+        self.assertEqual(self.verify(str(uuid.uuid4())).status_code, 400)
+        first = self.issue()
+        second = self.issue("+15005550102")
+        self.assertEqual(self.verify(second).status_code, 400)
+        self.assertEqual(self.verify(first, "+15005550102").status_code, 400)
+        self.assertFalse(UserModel.objects.exists())
+        self.assertEqual(self.verify(first).status_code, 200)
+
+    def test_shared_code_still_expires(self):
+        challenge = self.issue()
+        expires = OtpModel.objects.get().expires_at
+        with patch("authentication.otp.now", return_value=expires):
+            response = self.verify(challenge)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("expired", response.data["error"]["fields"]["otp_code"])
+        self.assertFalse(UserModel.objects.exists())
+
+    def test_wrong_codes_exhaust_the_shared_code_challenge(self):
+        challenge = self.issue()
+        for _ in range(5):
+            self.assertEqual(self.verify(challenge, code="000000").status_code, 400)
+        response = self.verify(challenge)
+        self.assertIn("attempts_exhausted", response.data["error"]["fields"]["otp_code"])
+        self.assertFalse(UserModel.objects.exists())
+
+    def test_disabling_mock_or_changing_code_rejects_outstanding_mock_proof(self):
+        challenge = self.issue()
+        with override_settings(OTP_MOCK_DELIVERY=False):
+            self.assertEqual(self.verify(challenge).status_code, 400)
+        with override_settings(OTP_MOCK_CODE="654321"):
+            self.assertEqual(self.verify(challenge).status_code, 400)
+            self.assertEqual(self.verify(challenge, code="654321").status_code, 400)
+        self.assertFalse(UserModel.objects.exists())
+
+    @override_settings(OTP_MOCK_DELIVERY=False)
+    @patch("authentication.otp.secrets.randbelow", return_value=654321)
+    def test_real_delivery_ignores_configured_shared_code(self, random_code):
+        challenge = self.issue()
+        random_code.assert_called_once_with(1000000)
+        self.twilio.return_value.messages.create.assert_called_once()
+        self.assertEqual(self.verify(challenge).status_code, 400)
+        self.assertEqual(self.verify(challenge, code="654321").status_code, 200)
+
+    def test_invalid_fixed_code_rejects_before_creating_a_challenge(self):
+        from django.core.exceptions import ImproperlyConfigured
+        for code in ("12345", "abcdef", "1234567", "１２３４５６"):
+            with self.subTest(code=code), override_settings(OTP_MOCK_CODE=code):
+                with self.assertRaises(ImproperlyConfigured):
+                    request_code(PHONE, "127.0.0.1")
+        self.assertFalse(OtpModel.objects.exists())
+        self.twilio.assert_not_called()
+
+
 class AuthenticationTests(TestCase):
     def setUp(self):
         self.client = APIClient()

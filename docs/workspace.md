@@ -119,8 +119,10 @@ provider SMS is used by these tests.
 Development Compose currently mocks OTP SMS delivery so the expired Twilio trial
 does not block testing `SendOTPAPIView`. See [mock delivery behavior and restoring
 real SMS](authentication.md#development-mock-for-sendotpapiview). Pull/recreate is
-sufficient; the response explicitly says no SMS was sent. OTP verification is not
-bypassed, and normal non-Compose settings retain real Twilio delivery by default.
+sufficient; request a new OTP and use the shared synthetic code **123456** for
+development users. The response explicitly says no SMS was sent. Verification
+still enforces the challenge, expiry and attempt limits. Normal non-Compose
+settings retain real Twilio delivery with random OTPs by default.
 
 ## Mobile clients connecting to Docker over the LAN
 

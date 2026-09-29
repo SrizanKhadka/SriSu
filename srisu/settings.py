@@ -207,6 +207,8 @@ TWILIO_PHONE_NUMBER = config("TWILIO_PHONE_NUMBER")
 
 # Explicit development delivery switch. Normal deployments still use Twilio.
 OTP_MOCK_DELIVERY = config("OTP_MOCK_DELIVERY", default=False, cast=bool)
+# Empty outside development Compose; ignored entirely when real delivery is enabled.
+OTP_MOCK_CODE = config("OTP_MOCK_CODE", default="")
 
 
 # Native clients use bearer headers; browser origins are explicitly allowlisted.

@@ -5,6 +5,7 @@ import uuid
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.timezone import now
@@ -28,8 +29,21 @@ class DeliveryPending(APIException):
     default_code = "request_pending"
 
 
+def mock_code():
+    if not settings.OTP_MOCK_DELIVERY or not settings.OTP_MOCK_CODE:
+        return None
+    code = settings.OTP_MOCK_CODE
+    if not isinstance(code, str) or len(code) != 6 or not code.isascii() or not code.isdigit():
+        raise ImproperlyConfigured("OTP_MOCK_CODE must contain exactly six ASCII digits.")
+    return code
+
+
 def proof(phone, challenge, code):
-    return salted_hmac("srisu.otp.login.v1", f"{phone}:{challenge}:{code}", algorithm="sha256").hexdigest()
+    fixed = mock_code()
+    # A development proof is never valid in real-delivery mode. Changing the
+    # configured test code also invalidates outstanding development challenges.
+    salt = f"srisu.otp.mock.login.v1:{fixed}" if fixed else "srisu.otp.login.v1"
+    return salted_hmac(salt, f"{phone}:{challenge}:{code}", algorithm="sha256").hexdigest()
 
 
 def budget(scope, value):
@@ -67,6 +81,7 @@ def deliver(phone, code):
 
 
 def request_code(phone, ip, request_id=None):
+    fixed = mock_code()
     at = now()
     with transaction.atomic():
         # Lock ordering is global -> source -> phone. Reservations include failed delivery.
@@ -88,7 +103,7 @@ def request_code(phone, ip, request_id=None):
             raise Throttled(max(1, math.ceil((row.last_request_time + timedelta(minutes=10) - at).total_seconds())))
         reserve_budget(global_budget, settings.OTP_GLOBAL_HOURLY_LIMIT, 3600, at)
         reserve_budget(source_budget, settings.OTP_IP_HOURLY_LIMIT, 3600, at)
-        code = f"{secrets.randbelow(1000000):06d}"
+        code = fixed if fixed is not None else f"{secrets.randbelow(1000000):06d}"
         row.challenge_id, row.request_id = uuid.uuid4(), request_id
         row.otp_code = proof(phone, row.challenge_id, code)
         row.otp_status, row.delivery_state = OtpStatusChoices.NEW, "sending"
