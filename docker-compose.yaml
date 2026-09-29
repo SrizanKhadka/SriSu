@@ -15,8 +15,10 @@ services:
       - srisu_db                  # Ensure the 'db' service starts before 'web'
     environment:            # Environment variables for Django
       - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
-      # Hostnames/IPs only, no scheme or port. Include the LAN address used by mobile clients.
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      # Development server: append the mobile client's backend LAN host even when
+      # an existing .env has a localhost-only allowlist. Empty SRISU_DEV_LAN_HOST
+      # disables this addition; set it to another IP when changing laptops/networks.
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73}
       - DB_NAME=${POSTGRES_DB}      # Database name
       - DB_USER=${POSTGRES_USER}  # Database user
       - DB_PASSWORD=${POSTGRES_PASSWORD} # Database password

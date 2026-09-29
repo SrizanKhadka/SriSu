@@ -123,35 +123,38 @@ does not add the client's requested hostname to Django's allowlist. Django rejec
 an unlisted Host before API routing, returning **400 HTML**, including for a valid
 `POST /api/auth/send-otp/`. This is not a missing endpoint or OTP validation error.
 
-On the laptop running `docker-compose up`, edit the backend `.env` file. Include
-that laptop's current LAN address, matching the frontend origin. For example:
-
-```dotenv
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.73
-DJANGO_DEBUG=false
-```
-
-Use only hostnames/IPs: no scheme, path or port. Keep explicit host validation;
-do not use `*`. Compose passes both variables into `web` with these setting names.
-The old `DEBUG=1` name was ignored by `srisu/settings.py`.
+The checked-in development Compose configuration now appends `192.168.1.73` to
+`DJANGO_ALLOWED_HOSTS`, including when an existing `.env` sets only localhost.
+For the current backend laptop, no `.env` edit is needed: pull the backend branch
+and recreate the web container. From the `dev-core-architecture` checkout:
 
 ```sh
+git pull --ff-only origin dev-core-architecture
 docker-compose up -d --force-recreate web
 curl -i http://192.168.1.73:8000/api/auth/interests/
 ```
+
+For another address, set `SRISU_DEV_LAN_HOST` to the backend laptop's LAN IP in
+the local `.env`; an explicitly empty value disables the Compose addition.
+Omitting it uses `192.168.1.73`. Existing `DJANGO_ALLOWED_HOSTS` entries are retained.
+This addition is scoped to this development Compose server; `srisu/settings.py`
+and non-Docker deployments still use their own explicit `DJANGO_ALLOWED_HOSTS`.
+Use only hostnames/IPs: no scheme, path, port or wildcard. Compose also passes
+`DJANGO_DEBUG`; the old `DEBUG=1` name was ignored by `srisu/settings.py`.
 
 Modern Compose also accepts `docker compose` with the same arguments. A container
 recreation reloads environment values; an application autoreload is insufficient
 when the old value was injected into the container. The catalogue request must
 return 200 JSON. A read-only GET to `send-otp/` returns 405 JSON (it requires POST),
 and unauthenticated `chat/rooms/` returns 401 JSON. Do not send a real OTP simply
-to test connectivity. If the laptop's DHCP address changes, update this allowlist
+to test connectivity. If the laptop's DHCP address changes, update `SRISU_DEV_LAN_HOST`
 and rebuild the client with the new `srisu.apiBaseUrl` origin.
 
 On 2026-09-29 the reachable server at that example LAN address rejected its LAN
 Host with 400 HTML but accepted localhost, yielding 200/405/401 as above. GET on
 `auth/refresh/` also returned 405, confirming the new route was present on that
-server. The remote environment was not editable from the frontend laptop.
+server. The remote environment was not editable from the frontend laptop, so the
+follow-up Compose default makes pull/recreate sufficient for that LAN address.
 
 ## Full mobile HTTP route inventory
 
