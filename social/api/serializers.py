@@ -25,7 +25,8 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         validated_data = super().validate(data)
         sender_number = validated_data["sender_number"]
         receiver_number = validated_data["receiver_number"]
-
+        
+        print(f"Sender Number: {sender_number}, Receiver Number: {receiver_number}")  # Debugging line
 
         if not is_number_valid(number=sender_number):
             raise serializers.ValidationError("Sender_number is Invalid!")
@@ -39,6 +40,8 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User doesn't exists")
         elif not user_with_number_exists(number=receiver_number):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
+        
+        print(f"Validation passed for Sender: {sender_number}, Receiver: {receiver_number}")  # Debugging line
 
         return validated_data
     
@@ -47,10 +50,7 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         Returns the opposite user partner in the connection relative to the current request user.
         """
         request = self.context.get("request")
-        pass  # Private payloads must not be printed.
-        pass  # Private payloads must not be printed.
         if not request or not hasattr(request, "user"):
-            pass  # Private payloads must not be printed.
             return None
 
         current_user = request.user
@@ -62,7 +62,6 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
 
             return UserModelSerializer(partner_user, context=self.context).data
         except UserModel.DoesNotExist:
-            pass  # Private payloads must not be printed.
             return None
         
 class SingleConnectionSerializer(serializers.ModelSerializer):

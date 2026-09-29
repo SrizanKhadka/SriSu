@@ -75,10 +75,13 @@ def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
 
 
 class CoupleConnectionView(ModelViewSet):
+    
+    print("CoupleConnectionView initialized")  # Debugging line
+    
     serializer_class = CoupleConnectionSerializer
     queryset = CoupleConnectionModel.objects.all()
     permission_classes = [permissions.IsAuthenticated]
-
+    
     def get_connection(self, sender_number, receiver_number):
         """
         Retrieves a connection between two numbers, regardless of direction.
@@ -101,7 +104,7 @@ class CoupleConnectionView(ModelViewSet):
         ).exists()
 
     def create(self, request, *args, **kwargs):
-
+        
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
