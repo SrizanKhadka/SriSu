@@ -11,6 +11,7 @@ STATUS_CODES = {
     429: "rate_limited", 500: "server_error", 503: "temporarily_unavailable",
 }
 MESSAGES = {
+    "feature_retired": "This feature has been retired. Update SriSu to continue.",
     "validation_failed": "Check the supplied fields.",
     "unauthenticated": "Sign in to continue.", "forbidden": "This action is not allowed.",
     "not_found": "This resource is unavailable.", "method_not_allowed": "This method is not allowed.",

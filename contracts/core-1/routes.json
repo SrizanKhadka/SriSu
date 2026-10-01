@@ -73,71 +73,6 @@
       "query": [],
       "public": false
     },
-    "suggestions": {
-      "method": "GET",
-      "path": "/api/social/user-suggestions/",
-      "query": [
-        "page",
-        "page_size"
-      ],
-      "public": false
-    },
-    "suggestion-profile": {
-      "method": "GET",
-      "path": "/api/social/get-suggestion-profile/",
-      "query": [
-        "user_id"
-      ],
-      "public": false
-    },
-    "preferences-get": {
-      "method": "GET",
-      "path": "/api/social/user-preferences/me/",
-      "query": [],
-      "public": false
-    },
-    "preferences-post": {
-      "method": "POST",
-      "path": "/api/social/user-preferences/",
-      "query": [],
-      "public": false
-    },
-    "preferences-put": {
-      "method": "PUT",
-      "path": "/api/social/user-preferences/{id}/",
-      "query": [],
-      "public": false
-    },
-    "single-post": {
-      "method": "POST",
-      "path": "/api/social/connect-single/",
-      "query": [],
-      "public": false
-    },
-    "single-put": {
-      "method": "PUT",
-      "path": "/api/social/connect-single/{id}/",
-      "query": [],
-      "public": false
-    },
-    "single-sent": {
-      "method": "GET",
-      "path": "/api/social/single-connection/sent-requests/",
-      "query": [
-        "page",
-        "page_size"
-      ],
-      "public": false
-    },
-    "single-received": {
-      "method": "GET",
-      "path": "/api/social/single-connection/received-requests/",
-      "query": [
-        "page",
-        "page_size"
-      ],
-      "public": false
-    },
     "couple-post": {
       "method": "POST",
       "path": "/api/social/connect-couple/",
@@ -311,6 +246,81 @@
         "page_size",
         "cursor"
       ],
+      "public": false
+    }
+  },
+  "retired_endpoints": {
+    "suggestions": {
+      "method": "GET",
+      "path": "/api/social/user-suggestions/",
+      "query": [
+        "page",
+        "page_size"
+      ],
+      "public": false,
+      "authenticated_status": 410
+    },
+    "suggestion-profile": {
+      "method": "GET",
+      "path": "/api/social/get-suggestion-profile/",
+      "query": [
+        "user_id"
+      ],
+      "public": false,
+      "authenticated_status": 410
+    },
+    "single-post": {
+      "method": "POST",
+      "path": "/api/social/connect-single/",
+      "query": [],
+      "public": false,
+      "authenticated_status": 410
+    },
+    "single-put": {
+      "method": "PUT",
+      "path": "/api/social/connect-single/{id}/",
+      "query": [],
+      "public": false,
+      "authenticated_status": 410
+    },
+    "single-sent": {
+      "method": "GET",
+      "path": "/api/social/single-connection/sent-requests/",
+      "query": [
+        "page",
+        "page_size"
+      ],
+      "public": false,
+      "authenticated_status": 410
+    },
+    "single-received": {
+      "method": "GET",
+      "path": "/api/social/single-connection/received-requests/",
+      "query": [
+        "page",
+        "page_size"
+      ],
+      "public": false,
+      "authenticated_status": 410
+    }
+  },
+  "legacy_endpoints": {
+    "preferences-get": {
+      "method": "GET",
+      "path": "/api/social/user-preferences/me/",
+      "query": [],
+      "public": false
+    },
+    "preferences-post": {
+      "method": "POST",
+      "path": "/api/social/user-preferences/",
+      "query": [],
+      "public": false
+    },
+    "preferences-put": {
+      "method": "PUT",
+      "path": "/api/social/user-preferences/{id}/",
+      "query": [],
       "public": false
     }
   }

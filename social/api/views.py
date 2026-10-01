@@ -10,7 +10,6 @@ from django.db import transaction
 from social.models import *
 from utils.choices import (
     CoupleConnectionStatus,
-    SingleConnectionStatus,
     ChatTypeChoices,
 )
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -22,15 +21,13 @@ from chat.utils.chatutils import *
 from chat.models import ChatRoom
 from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
-from social.services.suggestion_service import UserSuggestionService
-from social.api.serializers import UserSuggestionSerializer
 from social.services.couple_profile_service import (
     CoupleProfileConflict,
     create_or_get_couple_for_connection,
 )
 
 
-def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
+def sync_chat_room(*, user_one, user_two, chat_type, couple=None):
     """
     Keep one chat room per user pair and attach the latest social relation to it.
     """
@@ -41,7 +38,6 @@ def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
         defaults={
             "chat_type": chat_type,
             "couple": couple,
-            "singles": singles,
         },
     )
 
@@ -62,10 +58,6 @@ def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
     if chat_room.couple_id != getattr(couple, "id", None):
         chat_room.couple = couple
         updates.append("couple")
-
-    if chat_room.singles_id != getattr(singles, "id", None):
-        chat_room.singles = singles
-        updates.append("singles")
 
     if updates:
         updates.append("updated_at")
@@ -452,233 +444,8 @@ class CoupleConnectionRequestView(ModelViewSet):
 from social.api.moment_views import CoupleMomentView, CoupleMomentPagination
 
 
-class SingleConnectionView(ModelViewSet):
-    serializer_class = SingleConnectionSerializer
-    queryset = SingleConnectionModel.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_connection(self, sender_number, receiver_number):
-        """
-        Retrieves a connection between two numbers, regardless of direction.
-        """
-        try:
-            return SingleConnectionModel.objects.get(
-                Q(sender_number=sender_number, receiver_number=receiver_number)
-                | Q(sender_number=receiver_number, receiver_number=sender_number)
-            )
-        except SingleConnectionModel.DoesNotExist:
-            return None
-
-    def create(self, request, *args, **kwargs):
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        sender_number = request.data["sender_number"]
-        receiver_number = request.data["receiver_number"]
-
-        if not is_user_valid(
-            user_number=request.user.phone_number, sender_number=sender_number
-        ):
-            return Response(
-                {"message": "You don't have permission to perform this operation."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        connection = self.get_connection(sender_number, receiver_number)
-
-        if not connection or connection.connection_status in [
-            SingleConnectionStatus.REJECTED,
-            SingleConnectionStatus.NOTHING,
-        ]:
-            connection, created = SingleConnectionModel.objects.update_or_create(
-                sender_number=sender_number,
-                receiver_number=receiver_number,
-                defaults={"connection_status": SingleConnectionStatus.PENDING},
-            )
-
-            return Response(
-                {
-                    "message": "Crush request sent.",
-                    "data": self.serializer_class(connection).data,
-                },
-                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-            )
-
-        return Response(
-            {
-                "message": "Crush request already exists.",
-                "data": self.serializer_class(connection).data,
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    def perform_create(self, serializer):
-        return serializer.save()
-
-    def update(self, request, *args, **kwargs):
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        sender_number = request.data["sender_number"]
-        receiver_number = request.data["receiver_number"]
-        current_user_number = request.user.phone_number
-
-        if not has_permission(
-            request.user.phone_number, sender_number, receiver_number
-        ):
-            return Response(
-                {"message": "You don't have permission to perform this operation."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        connection_status = request.data.get("connection_status")
-        connection = self.get_connection(
-            sender_number=sender_number, receiver_number=receiver_number
-        )
-
-        if not connection:
-            return Response(
-                {"error": "Connection does not exist."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # sender user can make it accept or reject but can cancel (nothing) the connection
-        if current_user_number == connection.sender_number and connection_status in [
-            SingleConnectionStatus.ACCEPTED,
-            SingleConnectionStatus.REJECTED,
-        ]:
-            return Response(
-                {"message": "Unsupported operation."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if (
-            connection
-            and connection.connection_status == SingleConnectionStatus.ACCEPTED
-        ) and connection_status == SingleConnectionStatus.REJECTED:
-            return Response(
-                {"error": "Unsupported operation."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if connection_status in [
-            SingleConnectionStatus.ACCEPTED,
-            SingleConnectionStatus.REJECTED,
-            SingleConnectionStatus.NOTHING,  # NOTHING is used to cancel the request
-        ]:
-            with transaction.atomic():
-                connection.connection_status = connection_status
-                connection.save(update_fields=["connection_status", "updated_at"])
-
-                if connection.connection_status == SingleConnectionStatus.REJECTED:
-                    message = "Sorry! Crush request rejected."
-                    return Response(
-                        {
-                            "message": message,
-                            "single_connection": self.serializer_class(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-                elif connection.connection_status == SingleConnectionStatus.NOTHING:
-                    message = "Crush request cancelled."
-                    return Response(
-                        {
-                            "message": message,
-                            "single_connection": self.serializer_class(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-
-                elif connection.connection_status == SingleConnectionStatus.ACCEPTED:
-                    message = "Crush request accepted!"
-                    sync_chat_room(
-                        user_one=UserModel.objects.get(phone_number=sender_number),
-                        user_two=UserModel.objects.get(phone_number=receiver_number),
-                        chat_type=ChatTypeChoices.SINGLE,
-                        singles=connection,
-                    )
-                    return Response(
-                        {
-                            "message": message,
-                            "single_connection": self.serializer_class(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-
-        return Response(
-            {"message": "Unsupported operation."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
 
 
-class SingleConnectionRequestView(ModelViewSet):
-
-    serializer_class = SingleConnectionSerializer
-    queryset = SingleConnectionModel.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = PageNumberPagination
-
-    @action(detail=False, methods=["GET"], url_path="sent-requests")
-    def retrieve_single_connection_sent_list(self, request, *args, **kwargs):
-
-        phone_number = request.user.phone_number
-        sent_requests = SingleConnectionModel.objects.filter(
-            sender_number=phone_number, connection_status=SingleConnectionStatus.PENDING
-        )
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
-
-        page = self.paginate_queryset(sent_requests)
-
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return Response(
-                {
-                    "data": {
-                        "count": self.paginator.page.paginator.count,
-                        "next": self.paginator.get_next_link(),
-                        "previous": self.paginator.get_previous_link(),
-                        "results": serializer.data,
-                    },
-                    "message": "Requests Sent fetched successfully.",
-                }
-            )
-
-        serializer = self.get_serializer(sent_requests, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=["GET"], url_path="received-requests")
-    def retrieve_single_connection_request_list(self, request, *args, **kwargs):
-
-        phone_number = request.user.phone_number
-        received_requests = SingleConnectionModel.objects.filter(
-            receiver_number=phone_number,
-            connection_status=SingleConnectionStatus.PENDING,
-        )
-
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
-
-        page = self.paginate_queryset(received_requests)
-
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return Response(
-                {
-                    "data": {
-                        "count": self.paginator.page.paginator.count,
-                        "next": self.paginator.get_next_link(),
-                        "previous": self.paginator.get_previous_link(),
-                        "results": serializer.data,
-                    },
-                    "message": "Request received fetched successfully.",
-                }
-            )
-
-        serializer = self.get_serializer(received_requests, many=True)
-        return Response(serializer.data)
 
 
 from social.api.moment_views import PrivateResponseMixin
@@ -820,6 +587,10 @@ class UserPreferenceView(ModelViewSet):
     serializer_class = UserPreferenceSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        # Personal preferences survive dating retirement, but are never directory data.
+        return self.queryset.filter(user=self.request.user)
+
     def validate_user_request(self, data, user):
         user_data = data.get("user")
         if not user_data or user_data.id != user.id:
@@ -885,57 +656,10 @@ class UserPreferenceView(ModelViewSet):
         serializer.save()
 
 
-class UserSuggestionPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = "page_size"
-    max_page_size = 100
 
 
-class UserSuggestionView(ListAPIView):
-    serializer_class = UserSuggestionSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = UserSuggestionPagination
-
-    def get_queryset(self):
-        return UserSuggestionService(user=self.request.user).get_ranked_user_list()
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        page = self.paginate_queryset(queryset)
-        serializer = self.get_serializer(page, many=True)
-
-        return Response(
-            {
-                "data": {
-                    "count": self.paginator.page.paginator.count,
-                    "next": self.paginator.get_next_link(),
-                    "previous": self.paginator.get_previous_link(),
-                    "results": serializer.data,
-                },
-                "message": "User suggestions fetched successfully.",
-            }
-        )
 
 
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_suggestion_profile_by_id(request):
-    try:
-        user_id = request.query_params.get("user_id")
-        user = UserModel.objects.get(id=user_id)
-        serializer = UserSuggestionSerializer(user, context={"request": request})
-        return Response(
-            {
-                "message": "Suggestion profile fetched successfully.",
-                "data": serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
-    except UserModel.DoesNotExist:
-        return Response(
-            {"message": "User not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
 
 
 @api_view(["GET"])
