@@ -1634,5 +1634,12 @@
       ],
       "additionalProperties": false
     }
+  },
+  "x-named-errors": {
+    "feature_retired": {
+      "status": 410,
+      "retryable": false,
+      "meaning": "Discontinued dating operation; never retry as a cursor refresh."
+    }
   }
 }
