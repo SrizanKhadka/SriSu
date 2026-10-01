@@ -29,19 +29,26 @@ def main():
     from django.test.utils import setup_databases
     setup_databases(verbosity=0, interactive=False)
     from authentication.models import UserModel, InterestModel
-    from social.models import SingleConnectionModel
+    from social.models import SingleConnectionModel, CoupleConnectionModel
+    from social.services.couple_profile_service import create_or_get_couple_for_connection
     from chat.models import ChatRoom, MessageModel
     from rest_framework_simplejwt.tokens import AccessToken
     first = UserModel.objects.create_user(phone_number='+15005550101', full_name='Synthetic A', is_phone_verified=True, is_profile_complete=True)
     second = UserModel.objects.create_user(phone_number='+15005550102', full_name='Synthetic B', is_phone_verified=True, is_profile_complete=True)
     link = SingleConnectionModel.objects.create(sender_number=first.phone_number, receiver_number=second.phone_number, connection_status='ACCEPTED')
-    room = ChatRoom.objects.create(user_one=first, user_two=second, singles=link)
+    couple_link = CoupleConnectionModel.objects.create(sender_number=first.phone_number, receiver_number=second.phone_number, connection_status='ACCEPTED')
+    couple = create_or_get_couple_for_connection(couple_link)
+    room = ChatRoom.objects.create(user_one=first, user_two=second, couple=couple, chat_type='couple')
+    visitor = UserModel.objects.create_user(phone_number='+15005550103', full_name='Synthetic Visitor', is_phone_verified=True, is_profile_complete=True)
     MessageModel.objects.create(chat_room=room, sender=second, receiver=first, text='Synthetic baseline')
     InterestModel.objects.create(name='Synthetic hiking')
     # This disposable, short-lived token is shared only through a private temporary file.
     from datetime import timedelta
     token = AccessToken.for_user(first); token.set_exp(lifetime=timedelta(minutes=5))
     payload = {'base_url': f'http://127.0.0.1:{args.port}/', 'room_id': str(room.pk), 'account_id': first.pk, 'access': str(token)}
+    partner_token = AccessToken.for_user(second); partner_token.set_exp(lifetime=timedelta(minutes=5))
+    visitor_token = AccessToken.for_user(visitor); visitor_token.set_exp(lifetime=timedelta(minutes=5))
+    payload.update(couple_id=couple.pk, partner_id=second.pk, partner_access=str(partner_token), visitor_id=visitor.pk, visitor_access=str(visitor_token))
     descriptor = os.open(args.fixture, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as file: json.dump(payload, file)
     from srisu.asgi import application

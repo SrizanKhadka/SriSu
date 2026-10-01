@@ -30,6 +30,7 @@ def serialize_message_for_socket_sync(message: MessageModel, scope) -> dict:
         "receiver_id": message.receiver_id,
         "message_type": message.message_type,
         "text": message.text,
+        "profile_action": message.profile_action if not message.is_deleted else None,
         "media_url": _absolute_url(base_url, message.media.url if message.media else message.media_url),
         "sticker_url": message.sticker_url,
         "medias": [

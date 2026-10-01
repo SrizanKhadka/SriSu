@@ -158,6 +158,8 @@ class MessageModel(models.Model):
         default=MessageType.TEXT,
     )
     text = models.TextField(null=True, blank=True)
+    profile_action = models.JSONField(null=True, blank=True, editable=False)
+    profile_request_id = models.UUIDField(null=True, blank=True, editable=False)
 
     media = models.FileField(
         upload_to="messages/media/",
@@ -201,6 +203,7 @@ class MessageModel(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        constraints = [models.UniqueConstraint(fields=["sender", "profile_request_id"], name="unique_profile_message_request")]
         ordering = ["-timestamp"]
         # Database indexes to optimize high-frequency chat queries:
         # - (chat_room, -timestamp): fast message pagination per room

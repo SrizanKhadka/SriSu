@@ -1224,6 +1224,415 @@
         "data"
       ],
       "additionalProperties": true
+    },
+    "coupleProfileData": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "viewer": {
+          "enum": [
+            "member",
+            "visitor"
+          ]
+        },
+        "can_edit": {
+          "type": "boolean"
+        },
+        "can_fave": {
+          "type": "boolean"
+        },
+        "can_view_moments": {
+          "type": "boolean"
+        },
+        "is_faved": {
+          "type": "boolean"
+        },
+        "published_sections": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "identity",
+              "story",
+              "song",
+              "interests",
+              "cover",
+              "date"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "visible_moment_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "photo_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "photo_url"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "story": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "author_id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "prompt": {
+                "enum": [
+                  "how_met",
+                  "first_move",
+                  "first_impression"
+                ]
+              },
+              "answer": {
+                "type": "string",
+                "maxLength": 240
+              }
+            },
+            "required": [
+              "author_id",
+              "prompt",
+              "answer"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 6
+        },
+        "song": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "artist": {
+              "type": "string"
+            },
+            "band": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "picked_by_id": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "artist",
+            "band",
+            "note",
+            "picked_by_id"
+          ],
+          "additionalProperties": false
+        },
+        "interests": {
+          "type": "object",
+          "properties": {
+            "shared": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mine": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "partner": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "shared"
+          ],
+          "additionalProperties": false
+        },
+        "cover": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "focal_y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "url",
+            "focal_y"
+          ],
+          "additionalProperties": false
+        },
+        "anniversary_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "days_together": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plan_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revisions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "sharing": {
+          "type": "object",
+          "properties": {
+            "proposal": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "proposal_version": {
+              "type": "integer"
+            },
+            "approved_by": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "valid_proposal": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "proposal",
+            "proposal_version",
+            "approved_by",
+            "valid_proposal"
+          ],
+          "additionalProperties": false
+        },
+        "days_to_anniversary": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plans_done": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plans_upcoming": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "viewer",
+        "can_edit",
+        "can_fave",
+        "can_view_moments",
+        "is_faved",
+        "published_sections",
+        "visible_moment_count"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "viewer": {
+                "const": "visitor"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "can_edit": {
+                "const": false
+              },
+              "interests": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "mine"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "partner"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "revisions"
+                  ]
+                },
+                {
+                  "required": [
+                    "sharing"
+                  ]
+                },
+                {
+                  "required": [
+                    "plan_count"
+                  ]
+                },
+                {
+                  "required": [
+                    "plans_done"
+                  ]
+                },
+                {
+                  "required": [
+                    "plans_upcoming"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "coupleProfile": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/$defs/coupleProfileData"
+        }
+      },
+      "required": [
+        "message",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "couplePlanData": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "created_by": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "starts_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "response": {
+          "enum": [
+            "pending",
+            "yes",
+            "no",
+            "another_time"
+          ]
+        },
+        "response_note": {
+          "type": "string"
+        },
+        "completed": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "id",
+        "created_by",
+        "title",
+        "starts_at",
+        "response",
+        "response_note",
+        "completed",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "couplePlan": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/$defs/couplePlanData"
+        }
+      },
+      "required": [
+        "message",
+        "data"
+      ],
+      "additionalProperties": false
     }
   }
 }

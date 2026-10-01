@@ -191,5 +191,84 @@
         "refresh": "non-credential-fixture"
       }
     }
+  },
+  "couple_profile_member": {
+    "message": "Profile fetched.",
+    "data": {
+      "id": 1,
+      "viewer": "member",
+      "can_edit": true,
+      "can_fave": false,
+      "can_view_moments": true,
+      "is_faved": false,
+      "published_sections": [],
+      "visible_moment_count": 0,
+      "members": [
+        {
+          "id": 1,
+          "name": "Synthetic One",
+          "photo_url": null
+        },
+        {
+          "id": 2,
+          "name": "Synthetic Two",
+          "photo_url": null
+        }
+      ],
+      "story": [],
+      "song": null,
+      "interests": {
+        "shared": [],
+        "mine": [],
+        "partner": []
+      },
+      "cover": {
+        "url": null,
+        "focal_y": 0.5
+      },
+      "anniversary_date": null,
+      "days_together": 0,
+      "plan_count": 0,
+      "revisions": {
+        "story": "0000000000000000000000000000000000000000000000000000000000000000",
+        "song": "0000000000000000000000000000000000000000000000000000000000000000",
+        "interests": "0000000000000000000000000000000000000000000000000000000000000000",
+        "cover": "0000000000000000000000000000000000000000000000000000000000000000",
+        "date": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sharing": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "sharing": {
+        "proposal": [],
+        "proposal_version": 0,
+        "approved_by": [],
+        "valid_proposal": false
+      }
+    }
+  },
+  "couple_profile_visitor": {
+    "message": "Profile fetched.",
+    "data": {
+      "id": 1,
+      "viewer": "visitor",
+      "can_edit": false,
+      "can_fave": true,
+      "can_view_moments": true,
+      "is_faved": false,
+      "published_sections": [],
+      "visible_moment_count": 0
+    }
+  },
+  "couple_plan": {
+    "message": "Plan saved.",
+    "data": {
+      "id": 1,
+      "created_by": 1,
+      "title": "A walk",
+      "starts_at": "2030-01-01T15:00:00Z",
+      "response": "pending",
+      "response_note": "",
+      "completed": false,
+      "revision": 1
+    }
   }
 }

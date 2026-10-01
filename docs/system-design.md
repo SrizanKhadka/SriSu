@@ -48,3 +48,12 @@ Moments/discovery. Explicit approval is required between major phases.
 No backend application behavior, dependencies, API routes or migration files were
 changed for this system-design task. Existing isolated verification is documented
 in the canonical design; concurrency and live service limitations remain explicit.
+
+## Couple Profile implementation
+
+The additive `couple-profile-1` feature reuses current social membership, core-1
+responses, chat transport and media validation. Read [the implemented contract,
+permission/concurrency model and rollout requirements](couple-profile.md). Shared
+sections require current membership; visitor publication requires both partners'
+content-bound consent. Plans/history remain private; author-owned answers and
+individual interests are not transferable shared identity fields.

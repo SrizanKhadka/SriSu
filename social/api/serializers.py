@@ -347,6 +347,34 @@ class CoupleModelSerializer(serializers.ModelSerializer):
         couple.save()
         return couple
 
+    def validate_cover_photo(self, value):
+        from authentication.api.serializers import SetUpProfileSerializer
+        return SetUpProfileSerializer().validate_profile_photo(value)
+
+    def update(self, instance, validated_data):
+        # Legacy writes must not save a stale full model over revisions/consent.
+        from social.services.moment_service import queue_file_deletion
+        fields = list(validated_data)
+        old = instance.cover_photo.name
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        if "cover_photo" in fields:
+            instance.cover_source_moment_photo = None
+            fields.append("cover_source_moment_photo")
+        instance.save(update_fields=fields + ["updated_at"])
+        if "cover_photo" in fields and old and old != instance.cover_photo.name:
+            queue_file_deletion(old)
+        return instance
+
+    def to_representation(self, instance):
+        result = super().to_representation(instance)
+        if instance.cover_photo or instance.cover_source_moment_photo_id:
+            request = self.context.get("request")
+            path = f"/api/social/profiles/{instance.pk}/cover/"
+            result["cover_photo"] = request.build_absolute_uri(path) if request else path
+            result["cover_photo_url"] = result["cover_photo"]
+        return result
+
     def get_partner(self, obj):
         request = self.context.get("request")
         if not request:

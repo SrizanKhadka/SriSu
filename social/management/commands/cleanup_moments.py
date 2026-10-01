@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
-from social.models import CoupleMomentModel, CoupleMomentPhotoModel, MomentFileDeletion
+from social.models import CoupleModel, CoupleMomentModel, CoupleMomentPhotoModel, MomentFileDeletion
 from social.services.moment_service import delete_file
 
 
@@ -38,11 +38,12 @@ class Command(BaseCommand):
                     return
                 for filename in files:
                     name = f"{prefix}/{filename}"
-                    if storage.get_modified_time(name) < grace and not CoupleMomentPhotoModel.objects.filter(image=name).exists():
+                    if storage.get_modified_time(name) < grace and not CoupleMomentPhotoModel.objects.filter(image=name).exists() and not CoupleModel.objects.filter(cover_photo=name).exists():
                         from social.services.moment_service import queue_file_deletion
                         queue_file_deletion(name)
                 for directory in directories:
                     sweep(f"{prefix}/{directory}")
 
             sweep("couples/moments")
+            sweep("couples/profile_private")
         self.stdout.write(f"Purged {count} moments; {MomentFileDeletion.objects.count()} file deletions pending.")

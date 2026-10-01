@@ -13,7 +13,10 @@
     "rooms": "rooms",
     "auth_challenge": "authChallenge",
     "auth_profile": "authProfile",
-    "auth_refresh": "authRefresh"
+    "auth_refresh": "authRefresh",
+    "couple_profile_member": "coupleProfile",
+    "couple_profile_visitor": "coupleProfile",
+    "couple_plan": "couplePlan"
   },
   "deployment": "Backend before new KMP; legacy installed clients retain envelopes and query-token socket auth.",
   "http": {
@@ -54,5 +57,13 @@
     "legacy_cutoff": "AUTH_ACCEPT_LEGACY_TOKENS must be explicitly disabled after announced rollout; no automatic invalidation during migration.",
     "otp": "Server-managed Twilio Messaging; HMAC protected, 5 min expiry, 5 attempts, 60s resend, 3 sends/phone/10min, database source/global spend reservations.",
     "profile": "Incremental name then upload or explicit skip; completed legacy accounts retained. No automatic couple creation."
+  },
+  "couple_profile": {
+    "version": "couple-profile-1",
+    "visibility": "Authenticated viewers receive only sections approved by both current partners for exact content and membership. Either partner can revoke immediately.",
+    "conflict": "PATCH sections require expected_revision from that viewer projection. Stale section -> 409 section_changed; different sections/author story contributions do not overwrite each other.",
+    "media": "First-party authenticated guarded URLs; private no-store; uploaded covers under couples/profile_private must not be served by a public bucket/proxy. Moment references retain original audience and expiry.",
+    "chat": "Optional server-authored profile_action on chat message: kind story or plan, couple_id, prompt or plan_id. No client flags confer access.",
+    "rollout": "Additive social 0011-0013 and chat 0003 migrations, backend first, then KMP. Legacy routes retained; cover URLs now require authenticated delivery, including old profile_photos paths. Block private prefixes at any proxy/bucket. No deployment is implied."
   }
 }

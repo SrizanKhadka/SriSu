@@ -181,6 +181,137 @@
       "path": "/api/social/have-couple-connection-requested/",
       "query": [],
       "public": false
+    },
+    "couple-profile-self": {
+      "method": "GET",
+      "path": "/api/social/profiles/me/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-detail": {
+      "method": "GET",
+      "path": "/api/social/profiles/{id}/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-story": {
+      "method": "PATCH",
+      "path": "/api/social/profiles/{id}/sections/story/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-song": {
+      "method": "PATCH",
+      "path": "/api/social/profiles/{id}/sections/song/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-interests": {
+      "method": "PATCH",
+      "path": "/api/social/profiles/{id}/sections/interests/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-date": {
+      "method": "PATCH",
+      "path": "/api/social/profiles/{id}/sections/date/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-sharing": {
+      "method": "PATCH",
+      "path": "/api/social/profiles/{id}/sections/sharing/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-cover-save": {
+      "method": "PATCH",
+      "path": "/api/social/profiles/{id}/cover/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-cover-read": {
+      "method": "GET",
+      "path": "/api/social/profiles/{id}/cover/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-member-photo": {
+      "method": "GET",
+      "path": "/api/social/profiles/{id}/members/{id}/photo/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-history": {
+      "method": "GET",
+      "path": "/api/social/profiles/{id}/history/",
+      "query": [
+        "before"
+      ],
+      "public": false
+    },
+    "couple-profile-cover-choices": {
+      "method": "GET",
+      "path": "/api/social/profiles/{id}/cover-choices/",
+      "query": [
+        "before"
+      ],
+      "public": false
+    },
+    "couple-profile-plans": {
+      "method": "GET",
+      "path": "/api/social/profiles/{id}/plans/",
+      "query": [
+        "mode",
+        "before"
+      ],
+      "public": false
+    },
+    "couple-profile-plan-create": {
+      "method": "POST",
+      "path": "/api/social/profiles/{id}/plans/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-plan": {
+      "method": "GET",
+      "path": "/api/social/profiles/{id}/plans/{id}/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-plan-respond": {
+      "method": "PATCH",
+      "path": "/api/social/profiles/{id}/plans/{id}/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-invite": {
+      "method": "POST",
+      "path": "/api/social/profiles/{id}/story-invites/",
+      "query": [],
+      "public": false
+    },
+    "couple-fave-add": {
+      "method": "PUT",
+      "path": "/api/social/couple-faves/{id}/",
+      "query": [],
+      "public": false
+    },
+    "couple-fave-remove": {
+      "method": "DELETE",
+      "path": "/api/social/couple-faves/{id}/",
+      "query": [],
+      "public": false
+    },
+    "couple-profile-discovery": {
+      "method": "GET",
+      "path": "/api/social/couple-feed/",
+      "query": [
+        "section",
+        "page_size",
+        "cursor"
+      ],
+      "public": false
     }
   }
 }

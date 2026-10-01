@@ -681,17 +681,21 @@ class SingleConnectionRequestView(ModelViewSet):
         return Response(serializer.data)
 
 
-class CoupleProfileAPIView(APIView):
+from social.api.moment_views import PrivateResponseMixin
+from social.services.couple_profile_sections import profile_for
+from social.services.moment_service import active_couples, blocked_user_ids
+
+
+class CoupleProfileAPIView(PrivateResponseMixin, APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @staticmethod
     def get_couple(user):
-        return (
-            CoupleModel.objects.select_related("couple_connection")
-            .prefetch_related("memberships__user")
-            .filter(memberships__user=user)
-            .first()
-        )
+        from django.http import Http404
+        try:
+            return profile_for(user, owner=True)[0]
+        except Http404:
+            return None
 
     def get(self, request, *args, **kwargs):
         couple = self.get_couple(request.user)
@@ -751,6 +755,7 @@ class CoupleProfileAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        couple, _, _ = profile_for(request.user, couple.pk, owner=True, lock=True)
         serializer = CoupleModelSerializer(
             couple,
             data=request.data,
@@ -769,7 +774,7 @@ class CoupleProfileAPIView(APIView):
         )
 
 
-class CoupleAPIView(ModelViewSet):
+class CoupleAPIView(PrivateResponseMixin, ModelViewSet):
     """Compatibility endpoint for clients using the former update-couple route."""
 
     serializer_class = CoupleModelSerializer
@@ -778,7 +783,7 @@ class CoupleAPIView(ModelViewSet):
 
     def get_queryset(self):
         return (
-            CoupleModel.objects.filter(memberships__user=self.request.user)
+            active_couples().filter(memberships__user=self.request.user).exclude(memberships__user_id__in=blocked_user_ids(self.request.user))
             .select_related("couple_connection")
             .prefetch_related("memberships__user", "couple_photo_album")
             .distinct()
@@ -786,7 +791,7 @@ class CoupleAPIView(ModelViewSet):
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
-        instance = self.get_object()
+        instance, _, _ = profile_for(request.user, self.get_object().pk, owner=True, lock=True)
         serializer = self.get_serializer(
             instance,
             data=request.data,
