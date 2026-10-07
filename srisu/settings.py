@@ -180,7 +180,14 @@ COUPLE_FEED_RANKING_VERSION = "couple-v1"
 COUPLE_FEED_WEIGHTS = {"interests": 40, "location": 25, "fave": 20, "freshness": 15}
 
 REST_FRAMEWORK = {
-    "DEFAULT_THROTTLE_RATES": {"chat_reads": "120/min"},
+    "DEFAULT_THROTTLE_RATES": {
+        "chat_reads": "120/min",
+        "chat_media_uploads": "10/min",
+        "partner_discovery": "20/min",
+        "chat_v2_reads": "120/min",
+        "chat_v2_writes": "60/min",
+        "chat_v2_attachments": "10/min",
+    },
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "authentication.sessions.SessionJWTAuthentication",
     ],
@@ -217,6 +224,52 @@ WS_MAX_FRAME_BYTES = 64 * 1024
 WS_COMMAND_BURST = 30
 WS_COMMANDS_PER_SECOND = 10
 WS_MAX_SUBSCRIPTIONS = 20
+
+# Chat v2 is a storage/synchronization foundation, not a home-grown crypto
+# implementation.  Production writes stay off until a reviewed client protocol
+# adapter is available on every supported platform.
+CHAT_V2_ENCRYPTED_WRITES_ENABLED = config(
+    "CHAT_V2_ENCRYPTED_WRITES_ENABLED", default=False, cast=bool
+)
+CHAT_V2_PROTOCOL_STATUS = config("CHAT_V2_PROTOCOL_STATUS", default="adapter_required")
+# Separate synthetic-test escape hatch. Never enable this in a user-serving
+# environment; capabilities deliberately never advertise test_adapter as ready.
+CHAT_V2_TEST_ADAPTER_ENABLED = config(
+    "CHAT_V2_TEST_ADAPTER_ENABLED", default=False, cast=bool
+)
+CHAT_V2_ALLOWED_USER_IDS = {
+    int(value)
+    for value in config("CHAT_V2_ALLOWED_USER_IDS", default="").split(",")
+    if value.strip().isdecimal()
+}
+CHAT_V2_REQUIRE_DEVICE_SESSION = config(
+    "CHAT_V2_REQUIRE_DEVICE_SESSION", default=True, cast=bool
+)
+CHAT_V2_MAX_ENVELOPE_BYTES = config("CHAT_V2_MAX_ENVELOPE_BYTES", default=64 * 1024, cast=int)
+CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES = config(
+    "CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES", default=4000, cast=int
+)
+CHAT_V2_MAX_ATTACHMENT_BYTES = config(
+    "CHAT_V2_MAX_ATTACHMENT_BYTES", default=15 * 1024 * 1024, cast=int
+)
+CHAT_V2_ATTACHMENT_STAGING_ENABLED = config(
+    "CHAT_V2_ATTACHMENT_STAGING_ENABLED", default=False, cast=bool
+)
+CHAT_V2_ATTACHMENT_TTL_SECONDS = config(
+    "CHAT_V2_ATTACHMENT_TTL_SECONDS", default=24 * 60 * 60, cast=int
+)
+CHAT_LEGACY_MEDIA_TTL_SECONDS = config(
+    "CHAT_LEGACY_MEDIA_TTL_SECONDS", default=24 * 60 * 60, cast=int
+)
+CHAT_MEDIA_CLEANUP_BATCH_SIZE = config(
+    "CHAT_MEDIA_CLEANUP_BATCH_SIZE", default=100, cast=int
+)
+CHAT_V2_OUTBOX_RETENTION_SECONDS = config(
+    "CHAT_V2_OUTBOX_RETENTION_SECONDS", default=7 * 24 * 60 * 60, cast=int
+)
+CHAT_V2_OUTBOX_BATCH_SIZE = config("CHAT_V2_OUTBOX_BATCH_SIZE", default=100, cast=int)
+CHAT_V2_EDIT_WINDOW_SECONDS = config("CHAT_V2_EDIT_WINDOW_SECONDS", default=15 * 60, cast=int)
+CHAT_V2_DELETE_WINDOW_SECONDS = config("CHAT_V2_DELETE_WINDOW_SECONDS", default=48 * 60 * 60, cast=int)
 
 LOGGING = {
     "version": 1,

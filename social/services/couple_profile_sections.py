@@ -37,7 +37,7 @@ def digest(value):
 
 def profile_for(user, couple_id=None, *, owner=False, lock=False):
     if couple_id is None:
-        couple_id = CoupleMembershipModel.objects.filter(user=user).values_list("couple_id", flat=True).first()
+        couple_id = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).values_list("couple_id", flat=True).first()
     if not couple_id:
         raise Http404
     if lock:
@@ -45,10 +45,10 @@ def profile_for(user, couple_id=None, *, owner=False, lock=False):
         # cannot pass these row locks during a conditional mutation.
         candidate = get_object_or_404(CoupleModel.objects.select_for_update(), pk=couple_id)
         list(CoupleConnectionModel.objects.select_for_update().filter(pk=candidate.couple_connection_id))
-        list(CoupleMembershipModel.objects.select_for_update().filter(couple_id=couple_id).order_by("id"))
-    blocked = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user)).values("couple_id")
+        list(CoupleMembershipModel.objects.select_for_update().filter(couple_id=couple_id, ended_at__isnull=True).order_by("id"))
+    blocked = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user), ended_at__isnull=True).values("couple_id")
     couple = get_object_or_404(active_couples().exclude(pk__in=blocked), pk=couple_id)
-    members = list(couple.memberships.select_related("user").order_by("position"))
+    members = list(couple.memberships.filter(ended_at__isnull=True).select_related("user").order_by("position"))
     is_member = any(m.user_id == user.pk for m in members)
     if owner and not is_member:
         raise Http404

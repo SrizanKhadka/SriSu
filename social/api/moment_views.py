@@ -141,12 +141,12 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
             lock_couple(obj.couple_id)
             moment = self.get_object()
             recipients = membership_snapshot(moment.couple)
-            if moment.couple.memberships.filter(user=request.user).exists():
+            if moment.couple.memberships.filter(user=request.user, ended_at__isnull=True).exists():
                 raise ValidationError("You cannot send appreciation to your own couple.")
             serializer = MomentNoteSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             note = serializer.save(moment=moment, sender=request.user, recipient_membership_ids=recipients,
-                recipient_user_ids=list(moment.couple.memberships.order_by("id").values_list("user_id", flat=True)))
+                recipient_user_ids=list(moment.couple.memberships.filter(ended_at__isnull=True).order_by("id").values_list("user_id", flat=True)))
         return Response({"data": MomentNoteSerializer(note).data}, status=status.HTTP_201_CREATED)
 
 

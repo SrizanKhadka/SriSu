@@ -1,65 +1,99 @@
-from PIL import Image
+"""Fail-closed normalization for legacy chat photo uploads."""
+
 from io import BytesIO
-import pillow_heif
-from django.core.files.base import ContentFile
 import os
+import warnings
 
-pillow_heif.register_heif_opener()
+from django.core.files.base import ContentFile
+from django.utils.text import get_valid_filename
+from PIL import Image, ImageOps, UnidentifiedImageError
 
-MAX_SIZE_MB = 5
-MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 
-def open_image(file):
+ALLOWED_FORMATS = {"JPEG", "PNG"}
+MAX_DIMENSION = 8192
+MAX_PIXELS = 25_000_000
+MAX_OUTPUT_DIMENSION = 2000
+MAX_OUTPUT_BYTES = 5 * 1024 * 1024
+
+
+class InvalidImage(ValueError):
+    pass
+
+
+def _open_verified(uploaded_image):
     try:
-        image = Image.open(file)
-        return image
-    except Exception as e:
-        print(f"Error opening image: {e}")
-        raise ValueError("Invalid image file") from e
-    
-def convert_to_jpeg(image,original_name):
-    if image.mode in ("RGBA", "P"):
-        image = image.convert("RGB")
-        
-    base_name = os.path.splitext(original_name)[0]  
-    buffer = BytesIO()
-    image.save(buffer, format="JPEG", quality=90,optimize=True)
-    
-    return ContentFile(buffer.getvalue(), name=f"{base_name}.jpg")
+        uploaded_image.seek(0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            probe = Image.open(uploaded_image)
+            detected_format = probe.format
+            width, height = probe.size
+            if detected_format not in ALLOWED_FORMATS:
+                raise InvalidImage("Only JPEG and PNG photos are supported.")
+            if (
+                width <= 0
+                or height <= 0
+                or width > MAX_DIMENSION
+                or height > MAX_DIMENSION
+                or width * height > MAX_PIXELS
+            ):
+                raise InvalidImage("Image dimensions are too large.")
+            if getattr(probe, "is_animated", False):
+                raise InvalidImage("Animated images are not supported.")
+            probe.verify()
 
-def resize_image(uploaded_image):
-    if uploaded_image.size <= MAX_SIZE_BYTES:
-        return uploaded_image # No resizing needed
-    
-    image = open_image(uploaded_image)
-    
-    if image and image.mode in ("RGBA", "P"):
-        image = image.convert("RGB")
-        
-    max_width = 2000
-    if image.width > max_width:
-        ratio = max_width / image.width
-        image = image.resize((max_width, int(image.height * ratio)), Image.LANCZOS)
-    
-    buffer = BytesIO()
-    quality = 85
-    
-    while True:
-        buffer.seek(0)
-        buffer.truncate()
-        image.save(buffer, format="JPEG", quality=quality,optimize=True)
-        
-        if buffer.tell() <= MAX_SIZE_BYTES or quality <= 35:
-            break
-        
-    
-    return ContentFile(buffer.getvalue(), name=uploaded_image.name)
+        uploaded_image.seek(0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            decoded = Image.open(uploaded_image)
+            decoded.load()
+            return ImageOps.exif_transpose(decoded).copy()
+    except InvalidImage:
+        raise
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        raise InvalidImage("Image dimensions are too large.") from None
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
+        raise InvalidImage("The uploaded file is not a valid JPEG or PNG image.") from None
+    finally:
+        try:
+            uploaded_image.seek(0)
+        except (AttributeError, OSError):
+            pass
+
+
+def _flatten_to_rgb(image: Image.Image) -> Image.Image:
+    if image.mode in ("RGBA", "LA") or "transparency" in image.info:
+        foreground = image.convert("RGBA")
+        background = Image.new("RGB", foreground.size, "white")
+        background.paste(foreground, mask=foreground.getchannel("A"))
+        return background
+    return image.convert("RGB")
+
 
 def process_image(uploaded_image):
-    extensino = os.path.splitext(uploaded_image.name)[1].lower()
-    
-    image = open_image(uploaded_image)
-    if extensino not in [".png", ".jpg", ".jpeg"]:
-        return convert_to_jpeg(image,uploaded_image.name)
-    else:
-        return resize_image(uploaded_image)
+    """Verify, fully decode, orient, resize and re-encode without source metadata."""
+    image = _flatten_to_rgb(_open_verified(uploaded_image))
+    image.thumbnail(
+        (MAX_OUTPUT_DIMENSION, MAX_OUTPUT_DIMENSION),
+        Image.Resampling.LANCZOS,
+    )
+
+    encoded = None
+    for quality in range(90, 34, -5):
+        buffer = BytesIO()
+        image.save(
+            buffer,
+            format="JPEG",
+            quality=quality,
+            optimize=True,
+            progressive=True,
+        )
+        if buffer.tell() <= MAX_OUTPUT_BYTES:
+            encoded = buffer.getvalue()
+            break
+    if encoded is None:
+        raise InvalidImage("The normalized image is too large.")
+
+    original_name = os.path.basename(getattr(uploaded_image, "name", "image"))
+    stem = get_valid_filename(os.path.splitext(original_name)[0]) or "image"
+    return ContentFile(encoded, name=f"{stem}.jpg")

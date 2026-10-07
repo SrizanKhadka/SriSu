@@ -43,8 +43,8 @@
     "version": 1,
     "authentication": "Bearer header preferred; legacy token query adapter; native clients omit Origin, browsers allowlisted.",
     "ack": "success request_id after service transaction returns; ack loss is ambiguous and must not auto-replay.",
-    "event_delivery": "At-most observed bounded client dedupe by event_id; events can be lost, duplicated, reordered. HTTP snapshot recovery on reconnect/foreground and every 30s while chat is active.",
-    "subscription": "fetch_messages subscribes; unsubscribe_room removes; disconnect removes all; max20 rooms per connection.",
+    "event_delivery": "At-most observed bounded client dedupe by event_id; events can be lost, duplicated, reordered. Content-free socket hints trigger catch-up; HTTP snapshot recovery runs on reconnect, foreground, or explicit manual recovery.",
+    "subscription": "fetch_messages or subscribe_room subscribes; unsubscribe_room removes; disconnect removes all; max20 rooms per connection.",
     "limits": "64KiB command,30 burst/10 per second per connection,4000 text,10 media,50 page items. Not distributed abuse protection.",
     "unknown": "Ignore unknown fields; unknown/malformed events invalidate snapshots; unsupported commands receive unknown_action."
   },

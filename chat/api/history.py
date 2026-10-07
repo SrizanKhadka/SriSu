@@ -28,7 +28,11 @@ class RoomQuery(serializers.Serializer):
 
 
 def request_scope(request):
-    return {'scheme': request.scheme, 'headers': [(b'host', request.get_host().encode())]}
+    return {
+        'scheme': request.scheme,
+        'headers': [(b'host', request.get_host().encode())],
+        'user': request.user,
+    }
 
 
 class RoomHistoryView(APIView):

@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from django.db.models import Q, QuerySet
+from django.db.models import Prefetch, Q, QuerySet
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from chat.models import ChatRoom, MessageModel
+from chat.models import ChatRoom, MessageDeletion, MessageModel
 from authentication.models import UserModel
 from chat.selectors.access import authorized_rooms
 
@@ -35,6 +35,11 @@ def get_user_chat_rooms_queryset(user: UserModel) -> QuerySet[ChatRoom]:
         )
         .prefetch_related(
             "last_message__medias",
+            Prefetch(
+                "last_message__deletions",
+                queryset=MessageDeletion.objects.filter(user=user),
+                to_attr="_viewer_deletions",
+            ),
         )
         .order_by("-updated_at", "-id")
     )

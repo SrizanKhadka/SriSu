@@ -6,11 +6,12 @@ from django.db import transaction
 
 from authentication.models import UserModel
 from chat.models import MessageModel, MessageReaction
-from chat.selectors.message_selectors import get_room_message_for_user
+from chat.services.authorization import lock_authorized_room, require_locked_legacy_session
 from chat.websocket.exceptions import (
     InvalidMessagePayloadError,
     MessageNotFoundError,
 )
+from chat.services.v2 import record_legacy_change
 
 
 @dataclass(frozen=True)
@@ -21,11 +22,13 @@ class ReactionResult:
     was_removed: bool
 
 
+@transaction.atomic
 def react_to_message(
     *,
     user: UserModel,
     message_id: int,
     reaction: str,
+    device_session_id=None,
 ) -> tuple[MessageModel, ReactionResult]:
     """
     Toggle or replace a reaction for a message.
@@ -38,38 +41,67 @@ def react_to_message(
     if not reaction:
         raise InvalidMessagePayloadError("Reaction is required.")
 
-    message = get_room_message_for_user(message_id, user)
+    room_id = (
+        MessageModel.objects.filter(pk=message_id)
+        .values_list("chat_room_id", flat=True)
+        .first()
+    )
+    room = lock_authorized_room(room_id, user) if room_id is not None else None
+    message = (
+        MessageModel.objects.select_for_update(of=("self",))
+        .select_related("chat_room", "sender", "receiver")
+        .filter(pk=message_id, chat_room=room)
+        .first()
+        if room is not None
+        else None
+    )
     if not message:
         raise MessageNotFoundError("Message not found or access denied.")
+    require_locked_legacy_session(user, device_session_id)
+    if not message.legacy_plaintext:
+        raise InvalidMessagePayloadError(
+            "Encrypted messages can only be reacted to through chat v2."
+        )
 
-    with transaction.atomic():
-        existing = MessageReaction.objects.filter(
+    existing = MessageReaction.objects.select_for_update().filter(
+        message=message,
+        user=user,
+    ).first()
+
+    if existing and existing.reaction == reaction:
+        existing.delete()
+        _sync_legacy_reactions_json(message)
+        record_legacy_change(
+            room_id=message.chat_room_id,
+            actor=user,
+            kind="legacy_reaction_changed",
+            message=message,
+        )
+        result = ReactionResult(
+            message_id=message.id,
+            user_id=user.id,
+            reaction=None,
+            was_removed=True,
+        )
+        return message, result
+
+    if existing:
+        existing.reaction = reaction
+        existing.save(update_fields=["reaction"])
+    else:
+        MessageReaction.objects.create(
             message=message,
             user=user,
-        ).first()
+            reaction=reaction,
+        )
 
-        if existing and existing.reaction == reaction:
-            existing.delete()
-            _sync_legacy_reactions_json(message)
-            result = ReactionResult(
-                message_id=message.id,
-                user_id=user.id,
-                reaction=None,
-                was_removed=True,
-            )
-            return message, result
-
-        if existing:
-            existing.reaction = reaction
-            existing.save(update_fields=["reaction"])
-        else:
-            MessageReaction.objects.create(
-                message=message,
-                user=user,
-                reaction=reaction,
-            )
-
-        _sync_legacy_reactions_json(message)
+    _sync_legacy_reactions_json(message)
+    record_legacy_change(
+        room_id=message.chat_room_id,
+        actor=user,
+        kind="legacy_reaction_changed",
+        message=message,
+    )
 
     result = ReactionResult(
         message_id=message.id,

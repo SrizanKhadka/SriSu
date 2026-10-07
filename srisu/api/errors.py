@@ -21,6 +21,7 @@ MESSAGES = {
     "rate_limited": "Please wait before trying again.",
     "server_error": "The service could not complete this request.",
     "temporarily_unavailable": "The service is temporarily unavailable.",
+    "encrypted_chat_unavailable": "Encrypted chat is unavailable until a supported security adapter is enabled.",
     "unknown_action": "This action is not supported.",
 }
 

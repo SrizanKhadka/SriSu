@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def active_couples():
     return CoupleModel.objects.filter(
         couple_connection__connection_status=CoupleConnectionStatus.ACCEPTED,
-    ).annotate(active_members=Count("memberships", filter=Q(memberships__user__is_active=True) & (
+    ).annotate(active_members=Count("memberships", filter=Q(memberships__ended_at__isnull=True, memberships__user__is_active=True) & (
         Q(memberships__user__phone_number=F("couple_connection__sender_number")) |
         Q(memberships__user__phone_number=F("couple_connection__receiver_number"))
     ))).filter(active_members=2)
@@ -40,8 +40,8 @@ def blocked_user_ids(user):
 
 def eligible_moments(user, at=None):
     """Authorization only, without serialization joins or related-object loading."""
-    own_couples = CoupleMembershipModel.objects.filter(user=user).values("couple_id")
-    blocked_couples = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user)).values("couple_id")
+    own_couples = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).values("couple_id")
+    blocked_couples = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user), ended_at__isnull=True).values("couple_id")
     return (CoupleMomentModel.objects.filter(
         couple_id__in=active_couples().values("id"), expires_at__gt=at or timezone.now(),
         is_archived=False, is_time_capsule=False,
@@ -69,7 +69,7 @@ def visible_moments(user):
 
 def visible_notes(user, recipients_only=False):
     """One privacy policy for note endpoints, embedded notes and partner replies."""
-    membership = CoupleMembershipModel.objects.filter(user=user).first()
+    membership = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).first()
     allowed = Q(pk__in=[]) if recipients_only else Q(sender=user)
     if membership:
         allowed |= (Q(moment__couple_id=membership.couple_id,
@@ -83,7 +83,7 @@ def visible_notes(user, recipients_only=False):
 
 
 def membership_snapshot(couple):
-    return list(couple.memberships.order_by("id").values_list("id", flat=True))
+    return list(couple.memberships.filter(ended_at__isnull=True).order_by("id").values_list("id", flat=True))
 
 
 def may_modify(moment, user):
@@ -123,7 +123,7 @@ def lock_couple(couple_id):
         CoupleConnectionModel.objects.select_for_update().filter(pk=connection_id).first()
     couple = CoupleModel.objects.select_for_update().filter(pk=couple_id).first()
     if couple:
-        list(couple.memberships.select_for_update().order_by("id"))
+        list(couple.memberships.select_for_update().filter(ended_at__isnull=True).order_by("id"))
     return couple
 
 
@@ -135,12 +135,12 @@ def save_moment(serializer, user, moment=None):
     deleted = data.pop("deleted_photo_ids", [])
     couple_id = moment.couple_id if moment else data.pop("couple", None)
     if couple_id is None:
-        couple_id = CoupleMembershipModel.objects.filter(user=user).values_list("couple_id", flat=True).first()
+        couple_id = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).values_list("couple_id", flat=True).first()
     # Same parent lock serializes all moment mutations for a couple.
     couple = lock_couple(couple_id)
     if not couple or not active_couples().filter(pk=couple.pk).exists():
         raise ValidationError({"couple": "An active couple with two active partners is required."})
-    members = list(couple.memberships.select_for_update().order_by("id"))
+    members = list(couple.memberships.select_for_update().filter(ended_at__isnull=True).order_by("id"))
     if user.id not in [member.user_id for member in members]:
         raise PermissionDenied("You must belong to this couple.")
     if moment:

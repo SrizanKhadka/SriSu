@@ -1,5 +1,8 @@
 from datetime import date, timedelta
+from unittest.mock import patch
+from uuid import uuid4
 
+from django.core.cache import cache
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -12,6 +15,8 @@ from social.models import (
     CoupleModel,
 )
 from social.services.couple_profile_service import create_or_get_couple_for_connection
+from social.services.relationship_service import accept_connection, end_connection
+from social.api.views import PartnerDiscoveryThrottle
 from utils.choices import CoupleConnectionStatus
 
 
@@ -287,3 +292,340 @@ class CoupleProfileAPITests(APITestCase):
         self.assertEqual(get_response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(post_response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(patch_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class CoupleConnectionSecurityTests(APITestCase):
+    def setUp(self):
+        self.sender = UserModel.objects.create_user(
+            phone_number="+9779810000001", full_name="Synthetic Sender"
+        )
+        self.receiver = UserModel.objects.create_user(
+            phone_number="+9779810000002", full_name="Synthetic Receiver"
+        )
+        self.outsider = UserModel.objects.create_user(
+            phone_number="+9779810000003", full_name="Synthetic Outsider"
+        )
+
+    def _payload(self):
+        return {
+            "sender_number": self.sender.phone_number,
+            "receiver_number": self.receiver.phone_number,
+        }
+
+    def test_exact_phone_partner_lookup_returns_only_the_preview_contract(self):
+        self.receiver.email = "private@example.test"
+        self.receiver.dob = date(1990, 1, 1)
+        self.receiver.city = "Private City"
+        self.receiver.country = "Private Country"
+        self.receiver.bio = "Private biography"
+        self.receiver.save(
+            update_fields=["email", "dob", "city", "country", "bio"]
+        )
+        self.client.force_authenticate(self.sender)
+
+        response = self.client.get(
+            reverse("find-partner"),
+            {"phone_number": self.receiver.phone_number},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(response.data["data"]),
+            {"id", "full_name", "username", "phone_number", "profile_photo"},
+        )
+        self.assertEqual(response.data["data"]["phone_number"], self.receiver.phone_number)
+        self.assertNotIn("private@example.test", str(response.data))
+        self.assertNotIn("Private City", str(response.data))
+        self.assertNotIn("Private biography", str(response.data))
+
+    def test_exact_phone_partner_lookup_has_a_per_user_rate_budget(self):
+        self.client.force_authenticate(self.sender)
+        cache.clear()
+        try:
+            with patch.dict(
+                PartnerDiscoveryThrottle.THROTTLE_RATES,
+                {"partner_discovery": "1/min"},
+                clear=False,
+            ):
+                first = self.client.get(
+                    reverse("find-partner"),
+                    {"phone_number": self.receiver.phone_number},
+                )
+                throttled = self.client.get(
+                    reverse("find-partner"),
+                    {"phone_number": self.receiver.phone_number},
+                )
+        finally:
+            cache.clear()
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_invite_replays_idempotently_without_exposing_operation_key(self):
+        self.receiver.email = "private@example.test"
+        self.receiver.dob = date(1990, 1, 1)
+        self.receiver.city = "Private City"
+        self.receiver.country = "Private Country"
+        self.receiver.save(update_fields=["email", "dob", "city", "country"])
+        self.client.force_authenticate(self.sender)
+        operation_id = uuid4()
+        first = self.client.post(
+            reverse("coupleConnectionView-list"),
+            self._payload(),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=str(operation_id),
+        )
+        replay = self.client.post(
+            reverse("coupleConnectionView-list"),
+            self._payload(),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=str(operation_id),
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(replay.status_code, status.HTTP_200_OK)
+        self.assertTrue(replay.data["data"]["replayed"])
+        self.assertEqual(CoupleConnectionModel.objects.count(), 1)
+        self.assertNotIn("request_operation_id", str(first.data))
+        self.assertNotIn("acceptance_operation_id", str(first.data))
+        self.assertEqual(
+            set(first.data["data"]["partner"]),
+            {"id", "full_name", "username", "profile_photo"},
+        )
+        self.assertNotIn("private@example.test", str(first.data))
+        self.assertNotIn("Private City", str(first.data))
+
+    def test_unrelated_user_cannot_list_retrieve_or_delete_relationships(self):
+        connection = CoupleConnectionModel.objects.create(
+            **self._payload(),
+            connection_status=CoupleConnectionStatus.PENDING,
+            request_operation_id=uuid4(),
+        )
+        self.client.force_authenticate(self.outsider)
+
+        connect_list = self.client.get(reverse("coupleConnectionView-list"))
+        connect_detail = self.client.get(
+            reverse("coupleConnectionView-detail", args=[connection.pk])
+        )
+        connect_delete = self.client.delete(
+            reverse("coupleConnectionView-detail", args=[connection.pk])
+        )
+        request_list = self.client.get(reverse("coupleConnectionRequestView-list"))
+        request_detail = self.client.get(
+            reverse("coupleConnectionRequestView-detail", args=[connection.pk])
+        )
+        request_delete = self.client.delete(
+            reverse("coupleConnectionRequestView-detail", args=[connection.pk])
+        )
+
+        self.assertEqual(connect_list.status_code, status.HTTP_200_OK)
+        self.assertNotIn(self.sender.phone_number, str(connect_list.data))
+        self.assertEqual(connect_detail.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(connect_delete.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertNotIn(self.sender.phone_number, str(request_list.data))
+        self.assertEqual(request_detail.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(request_delete.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertTrue(CoupleConnectionModel.objects.filter(pk=connection.pk).exists())
+
+    def test_both_partners_discover_the_same_accepted_room(self):
+        connection = CoupleConnectionModel.objects.create(
+            **self._payload(),
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+        accepted = accept_connection(connection_id=connection.pk, actor=self.receiver)
+        responses = []
+        for user in (self.sender, self.receiver):
+            self.client.force_authenticate(user)
+            responses.append(
+                self.client.get(reverse("have-couple-connection-requested"))
+            )
+
+        for response in responses:
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertFalse(response.data["data"]["connection_requested"])
+            self.assertEqual(
+                response.data["data"]["connection"]["chat_room_id"],
+                str(accepted.chat_room.pk),
+            )
+            self.assertEqual(
+                response.data["data"]["connection"]["couple_id"],
+                accepted.couple.pk,
+            )
+
+    def test_acceptance_publishes_content_free_reconciliation_hints(self):
+        connection = CoupleConnectionModel.objects.create(
+            **self._payload(),
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+        published = []
+
+        class Layer:
+            async def group_send(self, group, event):
+                published.append((group, event))
+
+        with patch(
+            "social.services.relationship_service.get_channel_layer",
+            return_value=Layer(),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                result = accept_connection(connection_id=connection.pk, actor=self.receiver)
+                self.assertEqual(published, [])
+
+        self.assertEqual(
+            {group for group, _ in published},
+            {f"chat_user_{self.sender.pk}", f"chat_user_{self.receiver.pk}"},
+        )
+        for _, event in published:
+            self.assertEqual(event["room_id"], str(result.chat_room.pk))
+            self.assertEqual(event["payload"]["action"], "relationship_changed")
+            self.assertEqual(
+                event["payload"]["data"],
+                {
+                    "connection_id": connection.pk,
+                    "chat_room_id": str(result.chat_room.pk),
+                    "revision": result.connection.revision,
+                    "status": CoupleConnectionStatus.ACCEPTED,
+                },
+            )
+            self.assertNotIn(self.sender.phone_number, str(event))
+            self.assertNotIn(self.receiver.phone_number, str(event))
+
+        published.clear()
+        with patch(
+            "social.services.relationship_service.get_channel_layer",
+            return_value=Layer(),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                ended = end_connection(connection_id=connection.pk, actor=self.sender)
+                self.assertEqual(published, [])
+
+        self.assertEqual(
+            {group for group, _ in published},
+            {f"chat_user_{self.sender.pk}", f"chat_user_{self.receiver.pk}"},
+        )
+        for _, event in published:
+            self.assertEqual(event["room_id"], str(result.chat_room.pk))
+            self.assertEqual(event["payload"]["action"], "relationship_changed")
+            self.assertEqual(
+                event["payload"]["data"],
+                {
+                    "connection_id": connection.pk,
+                    "chat_room_id": str(result.chat_room.pk),
+                    "revision": ended.revision,
+                    "status": "ENDED",
+                },
+            )
+            self.assertNotIn(self.sender.phone_number, str(event))
+            self.assertNotIn(self.receiver.phone_number, str(event))
+
+    def test_acceptance_invalidates_other_stale_pending_requests(self):
+        stale = CoupleConnectionModel.objects.create(
+            sender_number=self.sender.phone_number,
+            receiver_number=self.outsider.phone_number,
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+        current = CoupleConnectionModel.objects.create(
+            **self._payload(),
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+
+        accept_connection(connection_id=current.pk, actor=self.receiver)
+
+        stale.refresh_from_db()
+        self.assertEqual(stale.connection_status, CoupleConnectionStatus.NOTHING)
+
+    def test_reverse_pending_request_is_a_conflict_not_a_false_replay(self):
+        CoupleConnectionModel.objects.create(
+            sender_number=self.receiver.phone_number,
+            receiver_number=self.sender.phone_number,
+            connection_status=CoupleConnectionStatus.PENDING,
+            request_operation_id=uuid4(),
+        )
+        self.client.force_authenticate(self.sender)
+        response = self.client.post(
+            reverse("coupleConnectionView-list"),
+            self._payload(),
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=str(uuid4()),
+        )
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(CoupleConnectionModel.objects.count(), 1)
+
+    def test_active_member_can_end_when_partner_account_is_inactive(self):
+        connection = CoupleConnectionModel.objects.create(
+            **self._payload(),
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+        accepted = accept_connection(connection_id=connection.pk, actor=self.receiver)
+        self.receiver.is_active = False
+        self.receiver.save(update_fields=["is_active"])
+
+        ended = end_connection(connection_id=connection.pk, actor=self.sender)
+
+        self.assertEqual(ended.connection_status, CoupleConnectionStatus.BREAKUP)
+        self.assertFalse(
+            CoupleMembershipModel.objects.filter(couple=accepted.couple).exists()
+        )
+        self.assertEqual(
+            CoupleMembershipModel.all_objects.filter(
+                couple=accepted.couple,
+                ended_at__isnull=False,
+            ).count(),
+            2,
+        )
+
+    def test_reject_and_cancel_retries_are_desired_state_idempotent(self):
+        rejected = CoupleConnectionModel.objects.create(
+            **self._payload(),
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+        reject_payload = {
+            **self._payload(),
+            "connection_status": CoupleConnectionStatus.REJECTED,
+        }
+        operation_id = str(uuid4())
+        self.client.force_authenticate(self.receiver)
+        first_reject = self.client.put(
+            reverse("coupleConnectionView-detail", args=[rejected.pk]),
+            reject_payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=operation_id,
+        )
+        replay_reject = self.client.put(
+            reverse("coupleConnectionView-detail", args=[rejected.pk]),
+            reject_payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=operation_id,
+        )
+        self.assertEqual(first_reject.status_code, status.HTTP_200_OK)
+        self.assertEqual(replay_reject.status_code, status.HTTP_200_OK)
+        self.assertFalse(first_reject.data["data"]["replayed"])
+        self.assertTrue(replay_reject.data["data"]["replayed"])
+
+        cancelled = CoupleConnectionModel.objects.create(
+            sender_number=self.sender.phone_number,
+            receiver_number=self.outsider.phone_number,
+            connection_status=CoupleConnectionStatus.PENDING,
+        )
+        cancel_payload = {
+            "sender_number": self.sender.phone_number,
+            "receiver_number": self.outsider.phone_number,
+            "connection_status": CoupleConnectionStatus.NOTHING,
+        }
+        operation_id = str(uuid4())
+        self.client.force_authenticate(self.sender)
+        first_cancel = self.client.put(
+            reverse("coupleConnectionView-detail", args=[cancelled.pk]),
+            cancel_payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=operation_id,
+        )
+        replay_cancel = self.client.put(
+            reverse("coupleConnectionView-detail", args=[cancelled.pk]),
+            cancel_payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY=operation_id,
+        )
+        self.assertEqual(first_cancel.status_code, status.HTTP_200_OK)
+        self.assertEqual(replay_cancel.status_code, status.HTTP_200_OK)
+        self.assertFalse(first_cancel.data["data"]["replayed"])
+        self.assertTrue(replay_cancel.data["data"]["replayed"])

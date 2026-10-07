@@ -52,6 +52,8 @@ media directory cleaned on exit. Socket connections and datagram sends are
 blocked for this process. No application server is started.
 
 Tests explicitly select the four existing social suites and `srisu.test_core` plus `authentication.test_auth`.
+The selection also includes `chat.test_v2`; see [chat v2 rollout and contract](chat-v2.md)
+before applying its additive migrations or enabling the fail-closed pilot gates.
 The exporter now also includes `requirements-core-tests.txt` for JSON Schema tests. PostgreSQL-only concurrency
 tests may be skipped on SQLite; run them separately against a disposable local
 PostgreSQL instance using the existing PostgreSQL test settings after inspecting

@@ -8,3 +8,4 @@ class ChatSocketEvents:
     TYPING_UPDATED = "typing_updated"
     CHAT_ROOMS_FETCHED = "chat_rooms_fetched"
     CHAT_ROOM_UPDATED = "chat_room_updated"
+    RELATIONSHIP_CHANGED = "relationship_changed"

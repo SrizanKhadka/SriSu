@@ -9,9 +9,31 @@ from social.services.couple_profile_service import (
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
 from authentication.models import UserModel
 from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
-from authentication.api.serializers import UserModelSerializer
 from datetime import date
 from utils.choices import CoupleConnectionStatus, SingleConnectionStatus
+
+
+class CoupleConnectionPartnerSerializer(serializers.ModelSerializer):
+    profile_photo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserModel
+        fields = ["id", "full_name", "username", "profile_photo"]
+        read_only_fields = fields
+
+    def get_profile_photo(self, obj):
+        if not obj.profile_photo:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(obj.profile_photo.url) if request else obj.profile_photo.url
+
+
+class PartnerDiscoverySerializer(CoupleConnectionPartnerSerializer):
+    """Minimal exact-phone lookup projection used before an invitation."""
+
+    class Meta(CoupleConnectionPartnerSerializer.Meta):
+        fields = ["id", "full_name", "username", "phone_number", "profile_photo"]
+        read_only_fields = fields
 
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
@@ -19,15 +41,34 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
     partner = serializers.SerializerMethodField()
     class Meta:
         model = CoupleConnectionModel
-        fields = "__all__"
+        # The stored acceptance idempotency key is an internal replay guard,
+        # not relationship/profile data, and must never cross the API boundary.
+        fields = [
+            "id",
+            "sender_number",
+            "receiver_number",
+            "connection_status",
+            "breakup_reason",
+            "accepted_at",
+            "ended_at",
+            "revision",
+            "created_at",
+            "updated_at",
+            "partner",
+        ]
+        read_only_fields = (
+            "accepted_at",
+            "ended_at",
+            "revision",
+            "created_at",
+            "updated_at",
+        )
 
     def validate(self, data):
         validated_data = super().validate(data)
         sender_number = validated_data["sender_number"]
         receiver_number = validated_data["receiver_number"]
         
-        print(f"Sender Number: {sender_number}, Receiver Number: {receiver_number}")  # Debugging line
-
         if not is_number_valid(number=sender_number):
             raise serializers.ValidationError("Sender_number is Invalid!")
         elif not is_number_valid(number=receiver_number):
@@ -41,8 +82,6 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         elif not user_with_number_exists(number=receiver_number):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
         
-        print(f"Validation passed for Sender: {sender_number}, Receiver: {receiver_number}")  # Debugging line
-
         return validated_data
     
     def get_partner(self, obj):
@@ -60,7 +99,10 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
             else:
                 partner_user = UserModel.objects.get(phone_number=obj.sender_number)
 
-            return UserModelSerializer(partner_user, context=self.context).data
+            return CoupleConnectionPartnerSerializer(
+                partner_user,
+                context=self.context,
+            ).data
         except UserModel.DoesNotExist:
             return None
         
@@ -175,7 +217,7 @@ class CoupleModelSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"partner_id": "The partner cannot be changed on an existing profile."}
                 )
-            if not self.instance.memberships.filter(user=request.user).exists():
+            if not self.instance.memberships.filter(user=request.user, ended_at__isnull=True).exists():
                 raise serializers.ValidationError(
                     "You cannot update a couple profile you do not belong to."
                 )
@@ -269,7 +311,7 @@ class CoupleModelSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request:
             return None
-        membership = obj.memberships.exclude(user=request.user).select_related("user").first()
+        membership = obj.memberships.filter(ended_at__isnull=True).exclude(user=request.user).select_related("user").first()
         if not membership:
             return None
         return CoupleProfileUserSerializer(membership.user, context=self.context).data

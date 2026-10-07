@@ -14,6 +14,14 @@ class CoupleConnectionModel(models.Model):
         default=CoupleConnectionStatus.NOTHING,
     )
     breakup_reason = models.TextField(null=True, blank=True)
+    # Acceptance is an idempotent relationship transition.  This UUID belongs to
+    # the client operation that first committed the transition; legacy clients
+    # may leave it null and still replay the already-accepted connection safely.
+    request_operation_id = models.UUIDField(null=True, blank=True)
+    acceptance_operation_id = models.UUIDField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    revision = models.PositiveBigIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -27,6 +35,13 @@ class CoupleConnectionModel(models.Model):
         verbose_name = "Couple_Connection"
         indexes = [
             models.Index(fields=["sender_number", "receiver_number","connection_status"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sender_number", "request_operation_id"],
+                condition=models.Q(request_operation_id__isnull=False),
+                name="unique_couple_request_operation",
+            ),
         ]
 
     def __str__(self):
@@ -99,6 +114,18 @@ class CoupleModel(models.Model):
         return " ❤️ ".join(name for name in names if name) or f"Couple {self.pk}"
 
 
+class ActiveCoupleMembershipQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(ended_at__isnull=True)
+
+
+class ActiveCoupleMembershipManager(models.Manager.from_queryset(ActiveCoupleMembershipQuerySet)):
+    """Security boundary: ordinary membership reads mean current membership."""
+
+    def get_queryset(self):
+        return super().get_queryset().active()
+
+
 class CoupleMembershipModel(models.Model):
     class Position(models.IntegerChoices):
         PARTNER_ONE = 1, "Partner one"
@@ -109,15 +136,19 @@ class CoupleMembershipModel(models.Model):
         on_delete=models.CASCADE,
         related_name="memberships",
     )
-    user = models.OneToOneField(
+    user = models.ForeignKey(
         UserModel,
         on_delete=models.CASCADE,
-        related_name="couple_membership",
+        related_name="couple_memberships",
     )
     position = models.PositiveSmallIntegerField(choices=Position.choices)
     nickname = models.CharField(max_length=30, null=True, blank=True)
     is_owner = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    objects = ActiveCoupleMembershipManager()
+    all_objects = models.Manager()
 
     class Meta:
         ordering = ["position"]
@@ -130,8 +161,16 @@ class CoupleMembershipModel(models.Model):
                 fields=["couple", "user"],
                 name="unique_user_per_couple",
             ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(ended_at__isnull=True),
+                name="unique_active_couple_membership",
+            ),
         ]
-        indexes = [models.Index(fields=["couple", "position"])]
+        indexes = [
+            models.Index(fields=["couple", "position"]),
+            models.Index(fields=["user", "ended_at"], name="couple_member_active_idx"),
+        ]
 
     def __str__(self):
         return f"{self.user} in {self.couple_id}"

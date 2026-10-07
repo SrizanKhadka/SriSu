@@ -1,4 +1,5 @@
 class ChatSocketActions:
+    SUBSCRIBE_ROOM = "subscribe_room"
     SEND_MESSAGE = "send_message"
     FETCH_MESSAGES = "fetch_messages"
     EDIT_MESSAGE = "edit_message"

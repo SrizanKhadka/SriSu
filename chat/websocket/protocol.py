@@ -52,6 +52,7 @@ class TypingPayload(RoomPayload):
 
 
 PAYLOADS = {
+    ChatSocketActions.SUBSCRIBE_ROOM: RoomPayload,
     "unsubscribe_room": RoomPayload,
     ChatSocketActions.FETCH_MESSAGES: HistoryPayload,
     ChatSocketActions.GET_CHAT_ROOMS: RoomsPayload,

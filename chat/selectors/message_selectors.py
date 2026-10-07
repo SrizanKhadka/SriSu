@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from django.db.models import Q, QuerySet
+from django.db.models import Prefetch, Q, QuerySet
 
-from chat.models import MessageModel, ChatRoom
+from chat.models import ChatRoom, MessageDeletion, MessageModel
 from authentication.models import UserModel
 from utils.choices import DeleteOption
 from chat.selectors.access import authorized_rooms
@@ -16,7 +16,8 @@ def get_room_messages_queryset(chat_room: ChatRoom) -> QuerySet[MessageModel]:
     """
     return (
         MessageModel.objects
-        .filter(chat_room=chat_room)
+        .filter(chat_room=chat_room, legacy_plaintext=True)
+        .exclude(delete_option=DeleteOption.DELETE_FOR_ME)
         .select_related(
             "chat_room",
             "sender",
@@ -42,6 +43,19 @@ def get_visible_room_messages_queryset(
     """
     return (
         get_room_messages_queryset(chat_room)
+        .prefetch_related(
+            Prefetch(
+                "reply_to__deletions",
+                queryset=MessageDeletion.objects.filter(
+                    user=user,
+                    delete_option__in=[
+                        DeleteOption.DELETE_FOR_ME,
+                        DeleteOption.CONVERSATION_DELETED,
+                    ],
+                ),
+                to_attr="_viewer_deletions",
+            )
+        )
         .exclude(
             deletions__user=user,
             deletions__delete_option__in=[
@@ -118,6 +132,17 @@ def get_room_message_for_user(
     )
 
 
+def get_visible_room_message_for_user(
+    chat_room: ChatRoom,
+    user: UserModel,
+    message_id: int,
+) -> Optional[MessageModel]:
+    """Return one legacy message only when it remains visible to this viewer."""
+    return get_visible_room_messages_queryset(chat_room, user).filter(
+        pk=message_id
+    ).first()
+
+
 def get_reply_target_for_room(
     reply_to_id: int,
     chat_room: ChatRoom,
@@ -129,6 +154,7 @@ def get_reply_target_for_room(
         MessageModel.objects
         .select_related("sender")
         .prefetch_related("medias")
-        .filter(id=reply_to_id, chat_room=chat_room)
+        .filter(id=reply_to_id, chat_room=chat_room, legacy_plaintext=True)
+        .exclude(delete_option=DeleteOption.DELETE_FOR_ME)
         .first()
     )

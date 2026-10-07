@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from channels.db import database_sync_to_async
 
 from chat.selectors.chat_room_selectors import get_chat_room_for_user, get_chat_rooms_for_user
@@ -19,6 +21,9 @@ from chat.websocket.actions import ChatSocketActions
 from chat.websocket.events import ChatSocketEvents
 from chat.websocket.exceptions import ChatServiceError, ChatRoomNotFoundError, MessageNotFoundError, PermissionDeniedError
 from chat.websocket.responses import socket_error, socket_event, socket_success
+
+
+logger = logging.getLogger("srisu.socket")
 
 
 class ChatSocketHandlerMixin:
@@ -54,6 +59,7 @@ class ChatSocketHandlerMixin:
                 request_id=request_id,
             )
         except Exception:
+            logger.exception("socket_command_failed", extra={"action": action})
             return socket_error(
                 action=action,
                 message="Internal server error",
@@ -66,6 +72,7 @@ class ChatSocketHandlerMixin:
 
         message,updated_room = await database_sync_to_async(send_message)(
             user=user,
+            device_session_id=self.scope.get("device_session_id"),
             payload=SendMessageInput(
                 chat_room_id=payload["chat_room_id"],
                 text=payload.get("text", ""),
@@ -80,21 +87,16 @@ class ChatSocketHandlerMixin:
         message_data = await self.serialize_message(message)
         room_payload = await self.serialize_chat_room_preview(updated_room)
 
-        await self.broadcast_to_room(
+        await self.broadcast_message_to_room(
             chat_room_id=str(message.chat_room_id),
-            event=socket_event(
-                action=ChatSocketEvents.MESSAGE_CREATED,
-                message="Message created",
-                data={
-                    "message": message_data,
-                    "chat_room": room_payload,
-                },
-            ),
+            message_id=message.pk,
+            action=ChatSocketEvents.MESSAGE_CREATED,
+            message="Message created",
+            include_room=True,
         )
 
         await self.broadcast_chat_room_update_to_participants(
             message.chat_room,
-            room_payload,
         )
 
         return socket_success(
@@ -150,6 +152,7 @@ class ChatSocketHandlerMixin:
         user = self.scope["user"]
         message, updated_room = await database_sync_to_async(edit_message)(
             user=user,
+            device_session_id=self.scope.get("device_session_id"),
             payload=EditMessageInput(
                 message_id=payload["message_id"],
                 text=payload["text"],
@@ -160,16 +163,12 @@ class ChatSocketHandlerMixin:
         room_payload = await self.serialize_chat_room_preview(updated_room)
 
 
-        await self.broadcast_to_room(
+        await self.broadcast_message_to_room(
             chat_room_id=str(message.chat_room_id),
-            event=socket_event(
-                action=ChatSocketEvents.MESSAGE_UPDATED,
-                message="Message edited",
-                data={
-                    "message": message_data
-                    ,"chat_room": room_payload
-                    },
-            ),
+            message_id=message.pk,
+            action=ChatSocketEvents.MESSAGE_UPDATED,
+            message="Message edited",
+            include_room=True,
         )
 
         return socket_success(
@@ -183,6 +182,7 @@ class ChatSocketHandlerMixin:
         user = self.scope["user"]
         message,updated_room = await database_sync_to_async(delete_message)(
             user=user,
+            device_session_id=self.scope.get("device_session_id"),
             payload=DeleteMessageInput(
                 message_id=payload["message_id"],
                 delete_option=payload["delete_option"],
@@ -190,16 +190,31 @@ class ChatSocketHandlerMixin:
         )
 
         message_data = await self.serialize_message(message)
-        
-
-        await self.broadcast_to_room(
-            chat_room_id=str(message.chat_room_id),
-            event=socket_event(
+        if payload["delete_option"] == "DELETE_FOR_ME":
+            # This is actor-private state. Never disclose it to the partner or
+            # echo deleted content back into the actor's local cache.
+            message_data.update(
+                text=None,
+                profile_action=None,
+                media_url=None,
+                sticker_url=None,
+                medias=[],
+                reply_to=None,
+                delete_option="DELETE_FOR_ME",
+            )
+            await self.broadcast_chat_room_update_to_user(
+                user_id=user.id,
+                chat_room_id=str(message.chat_room_id),
+            )
+        else:
+            await self.broadcast_message_to_room(
+                chat_room_id=str(message.chat_room_id),
+                message_id=message.pk,
                 action=ChatSocketEvents.MESSAGE_DELETED,
                 message="Message deleted",
-                data={"message": message_data},
-            ),
-        )
+                include_room=True,
+            )
+            await self.broadcast_chat_room_update_to_participants(message.chat_room)
 
         return socket_success(
             action=ChatSocketActions.DELETE_MESSAGE,
@@ -212,6 +227,7 @@ class ChatSocketHandlerMixin:
         user = self.scope["user"]
         result = await database_sync_to_async(mark_messages_read)(
             user=user,
+            device_session_id=self.scope.get("device_session_id"),
             chat_room_id=payload["chat_room_id"],
         )
 
@@ -252,6 +268,7 @@ class ChatSocketHandlerMixin:
         user = self.scope["user"]
         result = await database_sync_to_async(mark_messages_delivered)(
             user=user,
+            device_session_id=self.scope.get("device_session_id"),
             chat_room_id=payload["chat_room_id"],
         )
 
@@ -292,6 +309,7 @@ class ChatSocketHandlerMixin:
         user = self.scope["user"]
         message, reaction_result = await database_sync_to_async(react_to_message)(
             user=user,
+            device_session_id=self.scope.get("device_session_id"),
             message_id=payload["message_id"],
             reaction=payload["reaction"],
         )
@@ -325,6 +343,7 @@ class ChatSocketHandlerMixin:
         
         result = await database_sync_to_async(set_typing_status)(
             user=user,
+            device_session_id=self.scope.get("device_session_id"),
             chat_room_id=payload["chat_room_id"],
             is_typing=bool(payload.get("is_typing", False)),
         )

@@ -25,6 +25,7 @@ from django.views.static import serve
 import posixpath
 import os
 from django.utils._os import safe_join
+from chat.api.media_delivery import LegacyChatMediaDelivery
 
 
 def deny_direct_moment_media(request, **kwargs):
@@ -36,7 +37,14 @@ def serve_public_media(request, path, **kwargs):
     normalized = posixpath.normpath(path.replace("\\", "/")).lstrip("/")
     root = kwargs["document_root"]
     target = os.path.normcase(os.path.realpath(safe_join(root, normalized)))
-    for prefix in ("couples/moments", "couples/profile_private", "couples/profile_photos"):
+    for prefix in (
+        "couples/moments",
+        "couples/profile_private",
+        "couples/profile_photos",
+        "chats/media",
+        "messages/media",
+        "chat_encrypted",
+    ):
         private_root = os.path.normcase(os.path.realpath(os.path.join(root, *prefix.split("/"))))
         if (normalized.casefold() == prefix or normalized.casefold().startswith(prefix + "/")
                 or os.path.commonpath([target, private_root]) == private_root):
@@ -45,6 +53,12 @@ def serve_public_media(request, path, **kwargs):
 
 
 urlpatterns = [
+    re_path(
+        r"^media/(?P<kind>chats/media|messages/media)/(?P<path>.+)$",
+        LegacyChatMediaDelivery.as_view(),
+        name="authorized-chat-media",
+    ),
+    re_path(r"^media/chat_encrypted/", deny_direct_moment_media),
     re_path(r"^media/couples/(?:moments|profile_private|profile_photos)/", deny_direct_moment_media),
     path("admin/", admin.site.urls),
     path("api/auth/", include('authentication.urls')),

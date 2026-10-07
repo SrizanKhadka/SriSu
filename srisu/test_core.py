@@ -20,11 +20,12 @@ from authentication.catalogue import interest_catalogue
 from authentication.models import InterestCategory, InterestModel, UserModel
 from chat.consumers.chat_consumers import ChatConsumer
 from chat.middleware import JwtAuthMiddleware
-from chat.models import ChatRoom, MessageModel
+from chat.models import ChatRoom, MessageDeletion, MessageModel
 from chat.websocket.protocol import CommandBudget, decode_command
 from chat.websocket.responses import socket_event
 from social.models import SingleConnectionModel, CoupleConnectionModel, CoupleMembershipModel
 from social.services.couple_profile_service import create_or_get_couple_for_connection
+from social.services.relationship_service import end_connection
 from srisu.api.cache import PerformanceCache, cache_key
 from utils.exception_handlers import custom_exception_handler
 
@@ -77,6 +78,49 @@ class CoreHttpTests(TestCase):
         self.assertEqual(self.client.get(self.history, **self.headers).status_code, 404)
         self.assertEqual(self.client.get('/api/chat/rooms/', **self.headers).data['data']['chat_rooms'], [])
 
+    def test_private_deletion_redacts_reply_preview_and_room_preview(self):
+        secret = MessageModel.objects.create(
+            chat_room=self.room,
+            sender=self.users[1],
+            receiver=self.users[0],
+            text='private deleted reply target',
+        )
+        reply = MessageModel.objects.create(
+            chat_room=self.room,
+            sender=self.users[1],
+            receiver=self.users[0],
+            text='visible reply',
+            reply_to=secret,
+        )
+        self.room.last_message = reply
+        self.room.save(update_fields=['last_message', 'updated_at'])
+        visible_history = self.client.get(self.history, **self.headers)
+        self.assertEqual(
+            visible_history.data['data']['messages'][0]['reply_to']['text'],
+            'private deleted reply target',
+        )
+        MessageDeletion.objects.create(
+            message=secret,
+            user=self.users[0],
+            delete_option='DELETE_FOR_ME',
+        )
+
+        history = self.client.get(self.history, **self.headers)
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual([row['id'] for row in history.data['data']['messages']], [reply.pk])
+        self.assertIsNone(history.data['data']['messages'][0]['reply_to'])
+        self.assertNotIn('private deleted reply target', str(history.data))
+
+        MessageDeletion.objects.create(
+            message=reply,
+            user=self.users[0],
+            delete_option='DELETE_FOR_ME',
+        )
+        rooms = self.client.get('/api/chat/rooms/', **self.headers)
+        self.assertEqual(rooms.status_code, 200)
+        self.assertIsNone(rooms.data['data']['chat_rooms'][0]['last_message'])
+        self.assertNotIn('private deleted reply target', str(rooms.data))
+
     def test_history_query_cost_is_bounded_by_page_not_message_count(self):
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
@@ -104,6 +148,15 @@ class CoreHttpTests(TestCase):
         cursor = signing.dumps({'user': self.users[0].pk, 'at': self.room.updated_at.isoformat(), 'id': str(self.room.pk)}, salt='srisu.chat.rooms.core-1')
         self.client.force_authenticate(self.users[1])
         self.assertEqual(self.client.get('/api/chat/rooms/', {'cursor': cursor}, **self.headers).status_code, 400)
+
+    def test_room_participant_projection_omits_phone_numbers(self):
+        response = self.client.get('/api/chat/rooms/', **self.headers)
+        self.assertEqual(response.status_code, 200)
+        room = response.data['data']['chat_rooms'][0]
+        self.assertNotIn('phone_number', room['user'])
+        self.assertNotIn('phone_number', room['other_user'])
+        self.assertNotIn(self.users[0].phone_number, str(response.data))
+        self.assertNotIn(self.users[1].phone_number, str(response.data))
 
     def test_cached_catalogue_query_count_and_committed_invalidation(self):
         category = InterestCategory.objects.create(name='outdoors', label='Outdoors')
@@ -218,6 +271,211 @@ class CoreSocketTests(TransactionTestCase):
             await socket.disconnect()
         async_to_sync(scenario)()
         self.assertFalse(MessageModel.objects.exists())
+
+    def test_explicit_room_subscription_is_authorized_and_acknowledged(self):
+        async def scenario():
+            socket = self.socket()
+            self.assertTrue((await socket.connect())[0])
+            await socket.send_json_to({
+                'action': 'subscribe_room',
+                'request_id': 'subscribe-1',
+                'payload': {'chat_room_id': str(self.room.pk)},
+            })
+            accepted = await socket.receive_json_from()
+            self.assertEqual(accepted['type'], 'success')
+            self.assertEqual(accepted['action'], 'subscribe_room')
+            self.assertEqual(accepted['request_id'], 'subscribe-1')
+            self.assertEqual(accepted['data']['chat_room_id'], str(self.room.pk))
+            await socket.disconnect()
+
+            outsider = self.socket(user=self.users[2])
+            self.assertTrue((await outsider.connect())[0])
+            await outsider.send_json_to({
+                'action': 'subscribe_room',
+                'request_id': 'subscribe-denied',
+                'payload': {'chat_room_id': str(self.room.pk)},
+            })
+            denied = await outsider.receive_json_from()
+            self.assertEqual(denied['type'], 'error')
+            self.assertEqual(denied['error']['code'], 'not_found')
+            await outsider.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_delete_for_me_is_actor_private_and_ack_redacts_content(self):
+        message = MessageModel.objects.create(
+            chat_room=self.room,
+            sender=self.users[0],
+            receiver=self.users[1],
+            text='actor-private deleted content',
+        )
+
+        async def scenario():
+            actor = self.socket(user=self.users[0])
+            partner = self.socket(user=self.users[1])
+            self.assertTrue((await actor.connect())[0])
+            self.assertTrue((await partner.connect())[0])
+            for socket in (actor, partner):
+                await socket.send_json_to({
+                    'action': 'fetch_messages',
+                    'payload': {'chat_room_id': str(self.room.pk)},
+                })
+                self.assertEqual((await socket.receive_json_from())['type'], 'success')
+
+            await actor.send_json_to({
+                'action': 'delete_message',
+                'request_id': 'private-delete',
+                'payload': {
+                    'message_id': message.pk,
+                    'delete_option': 'DELETE_FOR_ME',
+                },
+            })
+            actor_frames = [await actor.receive_json_from() for _ in range(2)]
+            acknowledgment = next(
+                frame for frame in actor_frames
+                if frame.get('request_id') == 'private-delete'
+            )
+            room_update = next(
+                frame for frame in actor_frames
+                if frame.get('action') == 'chat_room_updated'
+            )
+            self.assertEqual(acknowledgment['request_id'], 'private-delete')
+            self.assertIsNone(acknowledgment['data']['message']['text'])
+            self.assertEqual(
+                acknowledgment['data']['message']['delete_option'],
+                'DELETE_FOR_ME',
+            )
+            self.assertNotIn('actor-private deleted content', str(acknowledgment))
+            self.assertIsNone(room_update['data']['last_message'])
+            self.assertNotIn('actor-private deleted content', str(room_update))
+            self.assertTrue(await partner.receive_nothing(timeout=0.1))
+            await actor.disconnect()
+            await partner.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_live_message_and_room_frames_are_projected_per_viewer(self):
+        target = MessageModel.objects.create(
+            chat_room=self.room,
+            sender=self.users[0],
+            receiver=self.users[1],
+            text='reply target hidden by recipient',
+        )
+        MessageDeletion.objects.create(
+            message=target,
+            user=self.users[1],
+            delete_option='DELETE_FOR_ME',
+        )
+
+        async def scenario():
+            sender = self.socket(user=self.users[0])
+            recipient = self.socket(user=self.users[1])
+            self.assertTrue((await sender.connect())[0])
+            self.assertTrue((await recipient.connect())[0])
+            for socket in (sender, recipient):
+                await socket.send_json_to({
+                    'action': 'fetch_messages',
+                    'payload': {'chat_room_id': str(self.room.pk)},
+                })
+                await socket.receive_json_from()
+
+            await sender.send_json_to({
+                'action': 'send_message',
+                'request_id': 'viewer-specific-send',
+                'payload': {
+                    'chat_room_id': str(self.room.pk),
+                    'text': 'safe visible reply',
+                    'reply_to_id': target.pk,
+                },
+            })
+            sender_frames = [await sender.receive_json_from() for _ in range(3)]
+            self.assertTrue(any(
+                frame.get('request_id') == 'viewer-specific-send'
+                for frame in sender_frames
+            ))
+            recipient_frames = [await recipient.receive_json_from() for _ in range(2)]
+            created = next(
+                frame for frame in recipient_frames
+                if frame.get('action') == 'message_created'
+            )
+            room_update = next(
+                frame for frame in recipient_frames
+                if frame.get('action') == 'chat_room_updated'
+            )
+            self.assertIsNone(created['data']['message']['reply_to'])
+            self.assertIsNone(room_update['data']['last_message']['reply_to'])
+            self.assertNotIn('reply target hidden by recipient', str(recipient_frames))
+            await sender.disconnect()
+            await recipient.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_live_edit_is_not_sent_to_a_viewer_who_hid_the_message(self):
+        hidden = MessageModel.objects.create(
+            chat_room=self.room,
+            sender=self.users[0],
+            receiver=self.users[1],
+            text='hidden before edit',
+        )
+        MessageDeletion.objects.create(
+            message=hidden,
+            user=self.users[1],
+            delete_option='DELETE_FOR_ME',
+        )
+
+        async def scenario():
+            sender = self.socket(user=self.users[0])
+            recipient = self.socket(user=self.users[1])
+            self.assertTrue((await sender.connect())[0])
+            self.assertTrue((await recipient.connect())[0])
+            for socket in (sender, recipient):
+                await socket.send_json_to({
+                    'action': 'fetch_messages',
+                    'payload': {'chat_room_id': str(self.room.pk)},
+                })
+                await socket.receive_json_from()
+            await sender.send_json_to({
+                'action': 'edit_message',
+                'request_id': 'viewer-specific-edit',
+                'payload': {'message_id': hidden.pk, 'text': 'edited private text'},
+            })
+            sender_frames = [await sender.receive_json_from() for _ in range(2)]
+            self.assertTrue(any(
+                frame.get('request_id') == 'viewer-specific-edit'
+                for frame in sender_frames
+            ))
+            self.assertTrue(await recipient.receive_nothing(timeout=0.1))
+            await sender.disconnect()
+            await recipient.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_connected_member_receives_authoritative_ended_relationship_frame(self):
+        async def scenario():
+            socket = self.socket(user=self.users[0])
+            self.assertTrue((await socket.connect())[0])
+            await database_sync_to_async(end_connection)(
+                connection_id=self.link.pk,
+                actor=self.users[0],
+            )
+            event = await socket.receive_json_from()
+            self.assertEqual(event["type"], "event")
+            self.assertEqual(event["action"], "relationship_changed")
+            self.assertEqual(
+                event["data"],
+                {
+                    "connection_id": self.link.pk,
+                    "chat_room_id": str(self.room.pk),
+                    "revision": 2,
+                    "status": "ENDED",
+                },
+            )
+            self.assertEqual(event["protocol_version"], 1)
+            self.assertNotIn(self.users[0].phone_number, str(event))
+            self.assertNotIn(self.users[1].phone_number, str(event))
+            await socket.disconnect()
+
+        async_to_sync(scenario)()
 
     def test_header_auth_legacy_adapter_and_origin_guard(self):
         token = str(AccessToken.for_user(self.users[0]))

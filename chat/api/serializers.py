@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from chat.api.media_urls import guarded_media_url
 from chat.models import ChatRoom, MediaModel
 
 class MediaModelSerializer(serializers.ModelSerializer):
@@ -7,22 +8,12 @@ class MediaModelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MediaModel
-        fields = ["id", "file", "file_url", "uploaded_at"]
-        read_only_fields = ["id", "uploaded_at", "file_url"]
+        fields = ["id", "file_url", "uploaded_at"]
+        read_only_fields = fields
 
     def get_file_url(self, obj):
         request = self.context.get("request")
-        if not obj.file:
-            return None
-
-        try:
-            url = obj.file.url
-        except Exception:
-            return None
-
-        if request:
-            return request.build_absolute_uri(url)
-        return url
+        return guarded_media_url(obj.file, request=request)
 
 
 class ChatRoomSerializer(serializers.ModelSerializer):

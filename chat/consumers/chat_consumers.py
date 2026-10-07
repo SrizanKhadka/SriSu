@@ -13,6 +13,9 @@ from rest_framework.exceptions import ValidationError
 from chat.consumers.handlers import ChatSocketHandlerMixin
 from chat.middleware import user_is_active
 from chat.selectors.chat_room_selectors import get_chat_room_for_user
+from chat.selectors.message_selectors import get_visible_room_message_for_user
+from chat.selectors.access import relationship_hint_for_user
+from chat.websocket.events import ChatSocketEvents
 from chat.websocket.protocol import CommandBudget, decode_command
 from chat.websocket.responses import socket_error, socket_event
 from srisu.api.errors import field_codes
@@ -87,6 +90,32 @@ class ChatConsumer(ChatSocketHandlerMixin, AsyncWebsocketConsumer):
             from chat.websocket.responses import socket_success
             await self.send_json(socket_success(action='unsubscribe_room', data={}, request_id=command.get('request_id')))
             return
+        if command['action'] == 'subscribe_room':
+            from chat.websocket.responses import socket_success
+            room_id = command['payload']['chat_room_id']
+            if not await self.room_allowed(room_id):
+                await self.send_json(socket_error(
+                    action='subscribe_room',
+                    status=404,
+                    message='Resource unavailable.',
+                    request_id=command.get('request_id'),
+                ))
+                return
+            if not await self.ensure_room_subscription(room_id):
+                await self.send_json(socket_error(
+                    action='subscribe_room',
+                    status=429,
+                    message='Subscription limit reached.',
+                    request_id=command.get('request_id'),
+                ))
+                return
+            await self.send_json(socket_success(
+                action='subscribe_room',
+                data={'chat_room_id': room_id},
+                message='Room subscribed.',
+                request_id=command.get('request_id'),
+            ))
+            return
         response = await self.handle_action(action=command['action'], payload=command['payload'], request_id=command.get('request_id'))
         if not await self.session_valid():
             await self.close(code=4401)
@@ -136,22 +165,108 @@ class ChatConsumer(ChatSocketHandlerMixin, AsyncWebsocketConsumer):
             # into a false send failure; HTTP history is the recovery boundary.
             logger.warning('socket_publication_unavailable')
 
+    async def broadcast_message_to_room(
+        self,
+        *,
+        chat_room_id,
+        message_id,
+        action,
+        message,
+        include_room=False,
+    ):
+        """Publish IDs only; each consumer builds its own authorized projection."""
+        try:
+            await self.channel_layer.group_send(
+                self.get_room_group_name(chat_room_id),
+                {
+                    'type': 'chat.broadcast',
+                    'room_id': chat_room_id,
+                    'personalize_message_id': message_id,
+                    'personalize_action': action,
+                    'personalize_label': message,
+                    'include_room': include_room,
+                },
+            )
+        except Exception:
+            logger.warning('socket_publication_unavailable')
+
     async def broadcast_to_user(self, *, user_id, event, room_id):
         try:
             await self.channel_layer.group_send(self.get_user_group_name(user_id), {'type': 'chat.broadcast', 'room_id': room_id, 'payload': {**event, 'room_id': room_id}})
         except Exception:
             logger.warning('socket_publication_unavailable')
 
-    async def broadcast_chat_room_update_to_participants(self, chat_room, room_payload):
+    async def broadcast_chat_room_update_to_participants(self, chat_room):
         for participant in (chat_room.user_one, chat_room.user_two):
             if participant:
-                await self.broadcast_to_user(user_id=participant.id, room_id=str(chat_room.pk), event=socket_event(action='chat_room_updated', data=room_payload))
+                await self.broadcast_chat_room_update_to_user(
+                    user_id=participant.id,
+                    chat_room_id=str(chat_room.pk),
+                )
+
+    async def broadcast_chat_room_update_to_user(self, *, user_id, chat_room_id):
+        try:
+            await self.channel_layer.group_send(
+                self.get_user_group_name(user_id),
+                {
+                    'type': 'chat.broadcast',
+                    'room_id': chat_room_id,
+                    'personalize_room_preview': True,
+                },
+            )
+        except Exception:
+            logger.warning('socket_publication_unavailable')
 
     async def chat_broadcast(self, event):
         if not await self.session_valid():
             await self.close(code=4401)
             return
         room_id = event.get('room_id')
+        payload = event.get('payload') or {}
+        if event.get('personalize_message_id'):
+            room = await database_sync_to_async(get_chat_room_for_user)(room_id, self.user)
+            if room is None:
+                await self.remove_subscription(room_id)
+                await self.send_json(socket_event(action='access_revoked', data={'chat_room_id': room_id}))
+                return
+            message = await database_sync_to_async(get_visible_room_message_for_user)(
+                room,
+                self.user,
+                event['personalize_message_id'],
+            )
+            if message is None:
+                return
+            data = {'message': await self.serialize_message(message)}
+            if event.get('include_room'):
+                data['chat_room'] = await self.serialize_chat_room_preview(room)
+            await self.send_json(socket_event(
+                action=event['personalize_action'],
+                message=event.get('personalize_label') or 'Message changed',
+                data=data,
+            ))
+            return
+        if event.get('personalize_room_preview'):
+            room = await database_sync_to_async(get_chat_room_for_user)(room_id, self.user)
+            if room is None:
+                return
+            await self.send_json(socket_event(
+                action='chat_room_updated',
+                data=await self.serialize_chat_room_preview(room),
+            ))
+            return
+        if payload.get('action') == ChatSocketEvents.RELATIONSHIP_CHANGED:
+            connection_id = (payload.get('data') or {}).get('connection_id')
+            data = await database_sync_to_async(relationship_hint_for_user)(
+                self.user,
+                room_id=room_id,
+                connection_id=connection_id,
+            )
+            if data is not None:
+                await self.send_json(socket_event(
+                    action=ChatSocketEvents.RELATIONSHIP_CHANGED,
+                    data=data,
+                ))
+            return
         if not room_id or not await self.room_allowed(room_id):
             if room_id:
                 await self.remove_subscription(room_id)

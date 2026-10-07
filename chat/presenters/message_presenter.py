@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from channels.db import database_sync_to_async
 
-from chat.models import MessageModel
+from chat.api.media_urls import guarded_media_url
+from chat.models import MessageDeletion, MessageModel
+from utils.choices import DeleteOption
 from utils.helpers import get_base_url
 
 
@@ -12,6 +14,31 @@ def _absolute_url(base_url: str, relative_url: str | None) -> str | None:
     if relative_url.startswith("http://") or relative_url.startswith("https://"):
         return relative_url
     return f"{base_url}{relative_url}"
+
+
+def _reply_visible_to_scope(message: MessageModel, scope) -> bool:
+    reply = message.reply_to
+    if (
+        reply is None
+        or reply.is_deleted
+        or reply.tombstoned_at is not None
+        or reply.delete_option == DeleteOption.DELETE_FOR_ME
+    ):
+        return False
+    viewer = scope.get("user") if isinstance(scope, dict) else None
+    if not getattr(viewer, "is_authenticated", False):
+        return False
+    prefetched = getattr(reply, "_viewer_deletions", None)
+    if prefetched is not None:
+        return not prefetched
+    return not MessageDeletion.objects.filter(
+        message=reply,
+        user=viewer,
+        delete_option__in=[
+            DeleteOption.DELETE_FOR_ME,
+            DeleteOption.CONVERSATION_DELETED,
+        ],
+    ).exists()
 
 
 def serialize_message_for_socket_sync(message: MessageModel, scope) -> dict:
@@ -31,12 +58,16 @@ def serialize_message_for_socket_sync(message: MessageModel, scope) -> dict:
         "message_type": message.message_type,
         "text": message.text,
         "profile_action": message.profile_action if not message.is_deleted else None,
-        "media_url": _absolute_url(base_url, message.media.url if message.media else message.media_url),
-        "sticker_url": message.sticker_url,
-        "medias": [
+        "media_url": (
+            guarded_media_url(message.media, base_url=base_url)
+            if message.media and not message.is_deleted
+            else None if message.couple_id else _absolute_url(base_url, message.media_url)
+        ),
+        "sticker_url": None if message.couple_id or message.is_deleted else message.sticker_url,
+        "medias": [] if message.is_deleted else [
             {
                 "id": media.id,
-                "media_url": _absolute_url(base_url, media.file.url),
+                "media_url": guarded_media_url(media.file, base_url=base_url),
                 "uploaded_at": media.uploaded_at.isoformat(),
             }
             for media in message.medias.all()
@@ -48,7 +79,7 @@ def serialize_message_for_socket_sync(message: MessageModel, scope) -> dict:
             "message_type": message.reply_to.message_type,
             "message_owner_name": getattr(message.reply_to.sender, "full_name", None),
         }
-        if message.reply_to
+        if _reply_visible_to_scope(message, scope)
         else None,
         "is_deleted": message.is_deleted,
         "is_read": message.is_read,

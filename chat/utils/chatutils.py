@@ -89,6 +89,8 @@ def delete_message(message):
         pass  # Private payloads must not be printed.
         
 def serialize_message_sync(message, scope):
+    from chat.api.media_urls import guarded_media_url
+    from chat.presenters.message_presenter import _reply_visible_to_scope
     base_url = get_base_url(scope)
 
     return {
@@ -106,15 +108,15 @@ def serialize_message_sync(message, scope):
         # Message content
         "message_type": message.message_type,
         "text": message.text,
-        "media": message.media.url if message.media else None,
-        "media_url": message.media_url,
-        "sticker_url": message.sticker_url,
+        "media": guarded_media_url(message.media, base_url=base_url) if message.media and not message.is_deleted else None,
+        "media_url": None if message.couple_id or message.is_deleted else message.media_url,
+        "sticker_url": None if message.couple_id or message.is_deleted else message.sticker_url,
 
         # Multiple medias (ManyToMany)
-        "medias": [
+        "medias": [] if message.is_deleted else [
             {
                 "id": media.id,
-                "media_url": f"{base_url}{media.file.url}",
+                "media_url": guarded_media_url(media.file, base_url=base_url),
                 "uploaded_at": media.uploaded_at.isoformat()
             }
             for media in message.medias.all()
@@ -128,7 +130,7 @@ def serialize_message_sync(message, scope):
             "sender_id": message.reply_to.sender.id,
             "message_type": message.reply_to.message_type,
             "message_owner_name": message.reply_to.sender.full_name if message.reply_to.sender else None,
-        } if message.reply_to else None,
+        } if _reply_visible_to_scope(message, scope) else None,
 
         # Message status
         "is_deleted": message.is_deleted,
