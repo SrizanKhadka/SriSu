@@ -988,6 +988,105 @@ class ChatV2Tests(TestCase):
         self.assertGreater(row.available_at, now)
 
 
+class ChatV2ManagementCommandTests(TestCase):
+    @override_settings(
+        CHAT_V2_ENCRYPTED_WRITES_ENABLED=False,
+        CHAT_V2_PROTOCOL_STATUS="adapter_required",
+        CHAT_V2_TEST_ADAPTER_ENABLED=False,
+        CHAT_V2_ALLOWED_USER_IDS={101, 202},
+        CHAT_V2_REQUIRE_DEVICE_SESSION=True,
+        CHAT_V2_ATTACHMENT_STAGING_ENABLED=False,
+    )
+    def test_status_reports_safe_configuration_and_backlog_counts(self):
+        output = StringIO()
+
+        call_command("chat_v2_status", stdout=output)
+
+        values = dict(
+            line.split("=", 1)
+            for line in output.getvalue().splitlines()
+            if "=" in line
+        )
+        self.assertEqual(values["chat_v2_schema_ready"], "true")
+        self.assertEqual(values["chat_v2_required_migrations_applied"], "true")
+        self.assertEqual(values["protocol_status"], "adapter_required")
+        self.assertEqual(values["encrypted_writes_enabled"], "false")
+        self.assertEqual(values["test_adapter_enabled"], "false")
+        self.assertEqual(values["allowlisted_user_count"], "2")
+        self.assertEqual(values["requires_device_session"], "true")
+        self.assertEqual(values["attachment_staging_enabled"], "false")
+        self.assertEqual(values["legacy_unsequenced_messages"], "0")
+        self.assertEqual(values["outbox_pending"], "0")
+        self.assertEqual(values["outbox_retrying"], "0")
+        self.assertNotIn("101,202", output.getvalue())
+
+    @patch("chat.management.commands.dispatch_chat_outbox.signal.signal")
+    @patch("chat.management.commands.dispatch_chat_outbox.Event")
+    @patch("chat.management.commands.dispatch_chat_outbox.dispatch_pending")
+    def test_outbox_watch_dispatches_a_bounded_batch_and_stops_cleanly(
+        self,
+        dispatch,
+        event_type,
+        signal_handler,
+    ):
+        dispatch.return_value = {"claimed": 0, "published": 0, "failed": 0}
+        stopped = event_type.return_value
+        stopped.is_set.return_value = False
+        stopped.wait.return_value = True
+        output = StringIO()
+
+        call_command(
+            "dispatch_chat_outbox",
+            watch=True,
+            poll_interval=0.01,
+            limit=7,
+            stdout=output,
+        )
+
+        dispatch.assert_called_once_with(batch_size=7)
+        stopped.wait.assert_called_once_with(0.01)
+        self.assertEqual(signal_handler.call_count, 4)
+        self.assertIn("chat_outbox_worker=started", output.getvalue())
+        self.assertIn("chat_outbox_worker=stopped", output.getvalue())
+
+    @patch("chat.management.commands.run_chat_media_cleanup.signal.signal")
+    @patch("chat.management.commands.run_chat_media_cleanup.Event")
+    @patch("chat.management.commands.run_chat_media_cleanup.call_command")
+    def test_media_cleanup_watch_runs_the_existing_bounded_command(
+        self,
+        cleanup,
+        event_type,
+        signal_handler,
+    ):
+        stopped = event_type.return_value
+        stopped.is_set.return_value = False
+        stopped.wait.return_value = True
+        output = StringIO()
+
+        call_command(
+            "run_chat_media_cleanup",
+            poll_interval=0.01,
+            limit=9,
+            stdout=output,
+        )
+
+        cleanup.assert_called_once()
+        self.assertEqual(cleanup.call_args.args, ("cleanup_chat_media",))
+        self.assertEqual(cleanup.call_args.kwargs["limit"], 9)
+        stopped.wait.assert_called_once_with(0.01)
+        self.assertEqual(signal_handler.call_count, 4)
+        self.assertIn("chat_media_cleanup_worker=started", output.getvalue())
+        self.assertIn("chat_media_cleanup_worker=stopped", output.getvalue())
+
+    def test_watch_commands_reject_non_positive_intervals(self):
+        for command, options in (
+            ("dispatch_chat_outbox", {"watch": True}),
+            ("run_chat_media_cleanup", {}),
+        ):
+            with self.subTest(command=command), self.assertRaises(CommandError):
+                call_command(command, poll_interval=0, **options)
+
+
 class RelationshipAcceptancePostgresTests(TransactionTestCase):
     reset_sequences = True
 

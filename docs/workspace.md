@@ -103,6 +103,10 @@ Configure an authorized GitHub login on each laptop when pushing changes; never
 put credentials in the workspace files. Workflow publication uses the connected
 GitHub account and does not copy a local Git login to other machines.
 
+For the chat-v2 feature branch's exact Docker migration, backfill, worker, and
+diagnostic sequence, read [Development Compose and another-laptop
+setup](chat-v2.md#development-compose-and-another-laptop-setup).
+
 ## Core contract checks
 
 ```sh
@@ -136,11 +140,12 @@ an unlisted Host before API routing, returning **400 HTML**, including for a val
 The checked-in development Compose configuration now appends `192.168.1.73` to
 `DJANGO_ALLOWED_HOSTS`, including when an existing `.env` sets only localhost.
 For the current backend laptop, no `.env` edit is needed: pull the backend branch
-and recreate the web container. From the `dev-core-architecture` checkout:
+and recreate the application services. From the `codex/couple-chat-rebuild`
+checkout:
 
 ```sh
-git pull --ff-only origin dev-core-architecture
-docker-compose up -d --force-recreate web
+git pull --ff-only origin codex/couple-chat-rebuild
+docker compose up -d --force-recreate web chat_outbox chat_maintenance
 curl -i http://192.168.1.73:8000/api/auth/interests/
 ```
 

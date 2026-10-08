@@ -1,60 +1,107 @@
-# Define the services (containers) to be created
-services:
-  # Web service (Django application)
-  web:
-    build:
-      context: .            # Use the current directory as the build context
-      dockerfile: Dockerfile # Specify the Dockerfile to use
-    command: python manage.py runserver 0.0.0.0:8000 # Command to start the Django development server
-    # command: watchfiles "daphne -b 0.0.0.0 -p 8000 srisu.asgi:application"
-    volumes:
-      - .:/app              # Mount the current directory into the container for live updates
-    ports:
-      - "8000:8000"         # Map port 8000 on the host to port 8000 in the container
-    depends_on:
-      - srisu_db                  # Ensure the 'db' service starts before 'web'
-    environment:            # Environment variables for Django
-      - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
-      # Development only: accept OTP requests without calling the expired Twilio trial.
-      # Set OTP_MOCK_DELIVERY=false to resume real SMS delivery.
-      - OTP_MOCK_DELIVERY=${OTP_MOCK_DELIVERY:-true}
-      # Shared development OTP, used only with mock delivery. Not a real credential.
-      - OTP_MOCK_CODE=${OTP_MOCK_CODE:-123456}
-      # Development server: append the mobile client's backend LAN host even when
-      # an existing .env has a localhost-only allowlist. Empty SRISU_DEV_LAN_HOST
-      # disables this addition; set it to another IP when changing laptops/networks.
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73}
-      - DB_NAME=${POSTGRES_DB}      # Database name
-      - DB_USER=${POSTGRES_USER}  # Database user
-      - DB_PASSWORD=${POSTGRES_PASSWORD} # Database password
-      - DB_HOST=${POSTGRES_HOST}          # Database hostname (service name of PostgreSQL container)
-      - DB_PORT=5432        # Database port
-      - DJANGO_SETTINGS_MODULE=srisu.settings
-      - REDIS_HOST=redis
-      - REDIS_PORT=${REDIS_PORT}
+x-app-environment: &app-environment
+  DJANGO_SETTINGS_MODULE: srisu.settings
+  DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
+  # Development only: accept OTP requests without calling the expired Twilio trial.
+  OTP_MOCK_DELIVERY: "${OTP_MOCK_DELIVERY:-true}"
+  OTP_MOCK_CODE: "${OTP_MOCK_CODE:-123456}"
+  # Append the backend laptop's LAN address for native mobile clients.
+  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73}"
+  POSTGRES_DB: "${POSTGRES_DB}"
+  POSTGRES_USER: "${POSTGRES_USER}"
+  POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+  # Container networking must use service names, regardless of host-native .env values.
+  POSTGRES_HOST: srisu_db
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  AUTH_ACCEPT_LEGACY_TOKENS: "${AUTH_ACCEPT_LEGACY_TOKENS:-true}"
+  # Keep chat v2 fail-closed. These are explicit so container behavior can be audited.
+  CHAT_V2_ENCRYPTED_WRITES_ENABLED: "${CHAT_V2_ENCRYPTED_WRITES_ENABLED:-false}"
+  CHAT_V2_PROTOCOL_STATUS: "${CHAT_V2_PROTOCOL_STATUS:-adapter_required}"
+  CHAT_V2_TEST_ADAPTER_ENABLED: "${CHAT_V2_TEST_ADAPTER_ENABLED:-false}"
+  CHAT_V2_ALLOWED_USER_IDS: "${CHAT_V2_ALLOWED_USER_IDS:-}"
+  CHAT_V2_REQUIRE_DEVICE_SESSION: "${CHAT_V2_REQUIRE_DEVICE_SESSION:-true}"
+  CHAT_V2_MAX_ENVELOPE_BYTES: "${CHAT_V2_MAX_ENVELOPE_BYTES:-65536}"
+  CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES: "${CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES:-4000}"
+  CHAT_V2_MAX_ATTACHMENT_BYTES: "${CHAT_V2_MAX_ATTACHMENT_BYTES:-15728640}"
+  CHAT_V2_ATTACHMENT_STAGING_ENABLED: "${CHAT_V2_ATTACHMENT_STAGING_ENABLED:-false}"
+  CHAT_V2_ATTACHMENT_TTL_SECONDS: "${CHAT_V2_ATTACHMENT_TTL_SECONDS:-86400}"
+  CHAT_V2_OUTBOX_RETENTION_SECONDS: "${CHAT_V2_OUTBOX_RETENTION_SECONDS:-604800}"
+  CHAT_V2_OUTBOX_BATCH_SIZE: "${CHAT_V2_OUTBOX_BATCH_SIZE:-100}"
+  CHAT_V2_EDIT_WINDOW_SECONDS: "${CHAT_V2_EDIT_WINDOW_SECONDS:-900}"
+  CHAT_V2_DELETE_WINDOW_SECONDS: "${CHAT_V2_DELETE_WINDOW_SECONDS:-172800}"
+  CHAT_LEGACY_MEDIA_TTL_SECONDS: "${CHAT_LEGACY_MEDIA_TTL_SECONDS:-86400}"
+  CHAT_MEDIA_CLEANUP_BATCH_SIZE: "${CHAT_MEDIA_CLEANUP_BATCH_SIZE:-100}"
 
-
-  # Database service (PostgreSQL)
+x-app-dependencies: &app-dependencies
   srisu_db:
-    image: postgres:17      # Use the official PostgreSQL image, version 17
-    container_name: srisuDB
-    restart: always          # Automatically restart the container if it crashes
-    environment:             # Environment variables for PostgreSQL
-      POSTGRES_USER: ${POSTGRES_USER} # PostgreSQL username
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # PostgreSQL password
-      POSTGRES_DB: ${POSTGRES_DB}
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+x-app-base: &app-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - .env
+  environment: *app-environment
+  volumes:
+    - .:/app
+  depends_on: *app-dependencies
+  init: true
+
+services:
+  web:
+    <<: *app-base
+    command: daphne -b 0.0.0.0 -p 8000 srisu.asgi:application
     ports:
-      - "5433:5432"         # Map port 5432 on the host to port 5432 in the container
+      - "8000:8000"
+    restart: unless-stopped
+
+  # Durable chat changes are published as content-free WebSocket hints. HTTP
+  # history/changes remain authoritative when a hint is missed.
+  chat_outbox:
+    <<: *app-base
+    command: python manage.py dispatch_chat_outbox --watch --poll-interval 1 --limit 100
+    restart: unless-stopped
+
+  # Local/development lifecycle for bounded private-media and published-outbox
+  # cleanup. Production uses the one-shot command from an external scheduler.
+  chat_maintenance:
+    <<: *app-base
+    command: python manage.py run_chat_media_cleanup --poll-interval 300 --limit 100
+    restart: unless-stopped
+
+  srisu_db:
+    image: postgres:17
+    container_name: srisuDB
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    ports:
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Persist database data to a Docker volume
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
 
   redis:
-      image: redis:latest
-      container_name: redis_server
-      ports:
-        - "6379:6379"
-      restart: unless-stopped
+    image: redis:7-alpine
+    container_name: redis_server
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
 
-# Define named volumes for persistent data storage
 volumes:
-  postgres_data:              # Volume for storing PostgreSQL data
+  postgres_data:

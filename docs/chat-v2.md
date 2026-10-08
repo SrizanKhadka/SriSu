@@ -53,6 +53,75 @@ enable staging or permit non-empty `attachment_ids`. Only `text` is advertised;
 image, video, and audio remain unsupported until an attachment AEAD format is
 reviewed.
 
+## Development Compose and another-laptop setup
+
+Pulling the branch, applying migrations, and starting Docker does **not** enable
+secure messaging. The checked-in configuration intentionally reports
+`protocol_status=adapter_required` and keeps encrypted writes, the synthetic
+test adapter, and attachment staging disabled. Do not change those values merely
+to bypass the client unavailable screen: this branch has no production protocol
+adapter or device/prekey registration contract yet.
+
+On a new laptop, check out `codex/couple-chat-rebuild` in both repositories. In
+the backend checkout, create the ignored local environment once and replace every
+placeholder with local development values. Set `SRISU_DEV_LAN_HOST` to the
+backend laptop's current LAN address; keep `POSTGRES_HOST=127.0.0.1` for commands
+run directly on the host and `POSTGRES_PORT=5433` for Compose's published host
+port. Compose overrides those values with the `srisu_db` service name and port
+`5432` inside containers.
+
+```sh
+cp .env.example .env
+docker compose build
+docker compose up -d srisu_db redis
+```
+
+For an existing database, run the read-only lifecycle preflight before applying
+the new migrations:
+
+```sh
+docker compose run --rm web python manage.py preflight_relationship_lifecycle
+```
+
+A brand-new empty PostgreSQL volume has no legacy schema to preflight; skip that
+standalone command because the migrations run their own guards at the appropriate
+point. Then apply the committed migrations in either case:
+
+```sh
+docker compose run --rm web python manage.py migrate
+```
+
+Do not run `makemigrations` for setup. The required migrations are committed.
+After migration, check and complete the resumable legacy sequence backfill. If
+the check reports remaining rows, repeat the bounded backfill command until the
+final check reports `remaining=0`.
+
+```sh
+docker compose run --rm web python manage.py backfill_chat_v2 --check
+docker compose run --rm web python manage.py backfill_chat_v2 --batch-size 500 --max-batches 10
+docker compose run --rm web python manage.py backfill_chat_v2 --check
+docker compose up -d web chat_outbox chat_maintenance
+docker compose exec web python manage.py chat_v2_status
+docker compose ps
+```
+
+`chat_outbox` continuously publishes bounded, content-free WebSocket wake-up
+hints. `chat_maintenance` runs the existing bounded private-media/published-
+outbox cleanup every five minutes. They are local/development supervisors; a
+production deployment must schedule the one-shot commands using its own process
+supervisor and monitoring.
+
+The status command exposes no account IDs, message content, keys, credentials,
+or allowlist contents. On this foundation branch, the expected safe output still
+includes `encrypted_writes_enabled=false`, `protocol_status=adapter_required`,
+and `attachment_staging_enabled=false`.
+
+The app must use the backend laptop's LAN origin, not its own `localhost`. After
+Authentication's device-session migration, sign out and sign in again on both
+clients so their access tokens contain current `sid` claims. That is necessary
+for the eventual secure path, but it cannot supply the missing E2EE adapter by
+itself.
+
 ## HTTP contract
 
 `GET /api/chat/v2/rooms/{roomId}/messages/?before_sequence=&limit=20` returns
@@ -226,12 +295,14 @@ an atomic two-repository release.
 5. Deploy/restart only the new backend code and resume legacy traffic. Keep v2
    writes disabled.
 6. Run `.venv/bin/python manage.py dispatch_chat_outbox --limit 100` from a
-   frequent supervised job. One invocation publishes one bounded batch. Failures
+   frequent externally supervised production job. One invocation publishes one
+   bounded batch. Failures
    return rows to pending with bounded exponential backoff, jitter,
    `available_at`, and a non-sensitive error code. Redis/Channels is only a wakeup
    hint; clients recover from `changes/`.
-7. Schedule `.venv/bin/python manage.py cleanup_chat_media --limit 100` as a
-   bounded recurring job. It removes expired/unclaimed legacy uploads and
+7. Schedule `.venv/bin/python manage.py cleanup_chat_media --limit 100` through
+   the production scheduler as a bounded recurring job. It removes
+   expired/unclaimed legacy uploads and
    cancelled, expired, or tombstoned attachment blobs. A storage deletion
    failure retains its database row for a later retry. It also prunes bounded
    published outbox-delivery metadata after seven days by default while

@@ -100,7 +100,7 @@ DATABASES = {
         "USER": config("POSTGRES_USER"),
         "PASSWORD": config("POSTGRES_PASSWORD"),
         "HOST": config("POSTGRES_HOST"),
-        "PORT": "5432",
+        "PORT": config("POSTGRES_PORT", default=5432, cast=int),
     }
 }
 
