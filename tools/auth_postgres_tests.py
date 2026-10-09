@@ -46,7 +46,7 @@ def main():
             settings.MEDIA_ROOT = str(Path(temporary) / "media")
             settings.ALLOWED_HOSTS = ["testserver", "127.0.0.1", "localhost"]
             # Native libpq uses only the explicit disposable DB configuration above.
-            # All Python socket egress is forbidden; Channels tests are in-memory.
+            # All Python socket egress is forbidden.
             def denied(*args, **kwargs):
                 raise RuntimeError("Network forbidden in isolated PostgreSQL tests")
             with patch.object(socket.socket, "connect", denied), \

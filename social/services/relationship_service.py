@@ -3,25 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import logging
 from uuid import UUID
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
 from authentication.models import UserModel
 from chat.models import ChatRoom
-from chat.websocket.events import ChatSocketEvents
-from chat.websocket.responses import socket_event
+from chat.services.matrix_provisioning import (
+    ensure_matrix_mapping_records,
+    mark_matrix_room_revoke_pending,
+    schedule_matrix_room_provisioning,
+    schedule_matrix_room_revocation,
+)
 from social.models import CoupleConnectionModel, CoupleMembershipModel, CoupleModel
 from social.services.couple_profile_service import (
     CoupleProfileConflict,
     create_or_get_couple_for_connection,
 )
-from utils.choices import ChatTypeChoices, CoupleConnectionStatus
+from utils.choices import CoupleConnectionStatus
 
 
 class RelationshipConflict(ValueError):
@@ -30,63 +31,6 @@ class RelationshipConflict(ValueError):
 
 class RelationshipPermissionDenied(ValueError):
     pass
-
-
-logger = logging.getLogger(__name__)
-
-
-def _publish_relationship_changed(
-    *,
-    connection: CoupleConnectionModel,
-    room: ChatRoom,
-    user_ids: list[int],
-) -> None:
-    """Best-effort, content-free wake-up hint; HTTP remains authoritative."""
-    wire_status = (
-        "ENDED"
-        if connection.connection_status == CoupleConnectionStatus.BREAKUP
-        else connection.connection_status
-    )
-    payload = socket_event(
-        action=ChatSocketEvents.RELATIONSHIP_CHANGED,
-        data={
-            "connection_id": connection.pk,
-            "chat_room_id": str(room.pk),
-            "revision": connection.revision,
-            "status": wire_status,
-        },
-    )
-    event = {
-        "type": "chat.broadcast",
-        "room_id": str(room.pk),
-        "payload": payload,
-    }
-    try:
-        layer = get_channel_layer()
-        for user_id in user_ids:
-            async_to_sync(layer.group_send)(f"chat_user_{user_id}", event)
-    except Exception:
-        logger.warning("relationship_publication_unavailable")
-
-
-def _notify_relationship_changed_on_commit(
-    *,
-    connection: CoupleConnectionModel,
-    room: ChatRoom,
-    user_ids: list[int],
-) -> None:
-    connection_snapshot = CoupleConnectionModel(
-        id=connection.pk,
-        revision=connection.revision,
-        connection_status=connection.connection_status,
-    )
-    transaction.on_commit(
-        lambda: _publish_relationship_changed(
-            connection=connection_snapshot,
-            room=room,
-            user_ids=user_ids,
-        )
-    )
 
 
 @dataclass(frozen=True)
@@ -137,7 +81,6 @@ def ensure_relationship_chat_room(couple: CoupleModel) -> ChatRoom:
         defaults={
             "user_one": users[0],
             "user_two": users[1],
-            "chat_type": ChatTypeChoices.COUPLE,
         },
     )
     updates = []
@@ -145,9 +88,6 @@ def ensure_relationship_chat_room(couple: CoupleModel) -> ChatRoom:
         if getattr(room, f"{name}_id") != value.id:
             setattr(room, name, value)
             updates.append(name)
-    if room.chat_type != ChatTypeChoices.COUPLE:
-        room.chat_type = ChatTypeChoices.COUPLE
-        updates.append("chat_type")
     if updates:
         room.save(update_fields=[*updates, "updated_at"])
     return room
@@ -290,18 +230,15 @@ def accept_connection(
     except CoupleProfileConflict as exc:
         raise RelationshipConflict(str(exc)) from exc
     room = ensure_relationship_chat_room(couple)
+    matrix_mapping = ensure_matrix_mapping_records(room)
+    schedule_matrix_room_provisioning(matrix_mapping)
     UserModel.objects.filter(pk__in=[user.pk for user in users]).update(is_engaged=True)
-    _notify_relationship_changed_on_commit(
-        connection=connection,
-        room=room,
-        user_ids=[user.pk for user in users],
-    )
     return AcceptedRelationship(connection=connection, couple=couple, chat_room=room, replayed=replayed)
 
 
 @transaction.atomic
 def end_connection(*, connection_id: int, actor: UserModel) -> CoupleConnectionModel:
-    """End current membership without deleting either relationship or chat history."""
+    """End current membership and schedule Matrix room revocation."""
     snapshot = CoupleConnectionModel.objects.filter(pk=connection_id).first()
     if snapshot is None:
         raise RelationshipConflict("Connection does not exist.")
@@ -330,17 +267,14 @@ def end_connection(*, connection_id: int, actor: UserModel) -> CoupleConnectionM
             couple=couple,
             ended_at__isnull=True,
         ).update(ended_at=ended_at)
+    if room is not None:
+        matrix_mapping = mark_matrix_room_revoke_pending(room)
+        schedule_matrix_room_revocation(matrix_mapping)
     connection.connection_status = CoupleConnectionStatus.BREAKUP
     connection.ended_at = ended_at
     connection.revision += 1
     connection.save(update_fields=["connection_status", "ended_at", "revision", "updated_at"])
     UserModel.objects.filter(pk__in=[user.pk for user in users]).update(is_engaged=False)
-    if room is not None:
-        _notify_relationship_changed_on_commit(
-            connection=connection,
-            room=room,
-            user_ids=[user.pk for user in users],
-        )
     return connection
 
 

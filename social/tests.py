@@ -451,71 +451,18 @@ class CoupleConnectionSecurityTests(APITestCase):
                 accepted.couple.pk,
             )
 
-    def test_acceptance_publishes_content_free_reconciliation_hints(self):
+    def test_acceptance_and_end_do_not_depend_on_legacy_transport_hints(self):
         connection = CoupleConnectionModel.objects.create(
             **self._payload(),
             connection_status=CoupleConnectionStatus.PENDING,
         )
-        published = []
+        accepted = accept_connection(connection_id=connection.pk, actor=self.receiver)
+        ended = end_connection(connection_id=connection.pk, actor=self.sender)
 
-        class Layer:
-            async def group_send(self, group, event):
-                published.append((group, event))
-
-        with patch(
-            "social.services.relationship_service.get_channel_layer",
-            return_value=Layer(),
-        ):
-            with self.captureOnCommitCallbacks(execute=True):
-                result = accept_connection(connection_id=connection.pk, actor=self.receiver)
-                self.assertEqual(published, [])
-
-        self.assertEqual(
-            {group for group, _ in published},
-            {f"chat_user_{self.sender.pk}", f"chat_user_{self.receiver.pk}"},
-        )
-        for _, event in published:
-            self.assertEqual(event["room_id"], str(result.chat_room.pk))
-            self.assertEqual(event["payload"]["action"], "relationship_changed")
-            self.assertEqual(
-                event["payload"]["data"],
-                {
-                    "connection_id": connection.pk,
-                    "chat_room_id": str(result.chat_room.pk),
-                    "revision": result.connection.revision,
-                    "status": CoupleConnectionStatus.ACCEPTED,
-                },
-            )
-            self.assertNotIn(self.sender.phone_number, str(event))
-            self.assertNotIn(self.receiver.phone_number, str(event))
-
-        published.clear()
-        with patch(
-            "social.services.relationship_service.get_channel_layer",
-            return_value=Layer(),
-        ):
-            with self.captureOnCommitCallbacks(execute=True):
-                ended = end_connection(connection_id=connection.pk, actor=self.sender)
-                self.assertEqual(published, [])
-
-        self.assertEqual(
-            {group for group, _ in published},
-            {f"chat_user_{self.sender.pk}", f"chat_user_{self.receiver.pk}"},
-        )
-        for _, event in published:
-            self.assertEqual(event["room_id"], str(result.chat_room.pk))
-            self.assertEqual(event["payload"]["action"], "relationship_changed")
-            self.assertEqual(
-                event["payload"]["data"],
-                {
-                    "connection_id": connection.pk,
-                    "chat_room_id": str(result.chat_room.pk),
-                    "revision": ended.revision,
-                    "status": "ENDED",
-                },
-            )
-            self.assertNotIn(self.sender.phone_number, str(event))
-            self.assertNotIn(self.receiver.phone_number, str(event))
+        self.assertEqual(accepted.connection.pk, connection.pk)
+        self.assertEqual(accepted.chat_room.couple_id, accepted.couple.pk)
+        self.assertEqual(ended.connection_status, CoupleConnectionStatus.BREAKUP)
+        self.assertEqual(ended.pk, connection.pk)
 
     def test_acceptance_invalidates_other_stale_pending_requests(self):
         stale = CoupleConnectionModel.objects.create(

@@ -17,7 +17,7 @@ from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.throttling import UserRateThrottle
-from chat.utils.chatutils import *
+from social.services.phone_identity import has_permission, is_user_valid
 from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
 from social.services.relationship_service import (

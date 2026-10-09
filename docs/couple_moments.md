@@ -8,7 +8,7 @@ Work stays on `dev-couple-moments`. Relevant history:
 - `41a0619` added page-number pagination, replacement and photo deletion. It saved changes before checking the combined photo count; returning HTTP 400 inside `atomic` could commit those changes. Object-level creator permissions, expiry and validated image uploads were missing.
 - `05daf44` replaced gender-specific partners with exclusive couple memberships. The new API uses that membership architecture and accepted connections, rather than trusting `is_engaged` or client ownership fields.
 
-The existing route names, moment metadata and list envelope remain. Views delegate validation to DRF serializers and transactional writes to `social/services/moment_service.py`. Existing chat rooms have two-user/couple participant semantics and websocket broadcasting, which do not match sender-plus-two-private-recipients appreciation. Notes therefore use a small separate model and API; there are no public comments, ratings or broadcasts. Existing `SingleConnectionModel.BLOCKED` records are honored in either direction. No reporting API was found.
+The existing route names, moment metadata and list envelope remain. Views delegate validation to DRF serializers and transactional writes to `social/services/moment_service.py`. Notes use a small separate model and API; there are no public comments, ratings or broadcasts. Existing `SingleConnectionModel.BLOCKED` records are honored in either direction. No reporting API was found. Chat is now a separate Matrix E2EE transport and is not reused for Moment notes.
 
 ## Product and authorization defaults
 
@@ -152,7 +152,9 @@ Database and storage cannot commit atomically. Process death or simultaneous sto
 
 Final verification on 2026-09-14: **48 social tests passed on PostgreSQL 17**, including partner replies, private embedded threads, concurrent unique views, concurrent photo writes and migration backfill. Django system checks, migration consistency (`makemigrations --check --dry-run`) and `git diff --check` passed. The earlier 32-test SQLite run passed as well; PostgreSQL was used for the final expanded suite.
 
-Full repository test discovery is blocked by the pre-existing `chat/tests.py`: it imports the undeclared `websockets` dependency and calls a live WebSocket deletion script at import time. That unrelated script was not changed or executed; chat integration behavior is unverified.
+Historical note: full discovery was previously blocked by an import-time legacy
+WebSocket script. That script and transport were removed by the Matrix-only chat
+cutover; current verification uses the maintained workspace suite allowlist.
 
 Commands:
 

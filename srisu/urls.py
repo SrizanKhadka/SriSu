@@ -25,7 +25,6 @@ from django.views.static import serve
 import posixpath
 import os
 from django.utils._os import safe_join
-from chat.api.media_delivery import LegacyChatMediaDelivery
 
 
 def deny_direct_moment_media(request, **kwargs):
@@ -38,12 +37,13 @@ def serve_public_media(request, path, **kwargs):
     root = kwargs["document_root"]
     target = os.path.normcase(os.path.realpath(safe_join(root, normalized)))
     for prefix in (
+        "chats/media",
+        "chats_media",
+        "messages/media",
+        "chat_encrypted",
         "couples/moments",
         "couples/profile_private",
         "couples/profile_photos",
-        "chats/media",
-        "messages/media",
-        "chat_encrypted",
     ):
         private_root = os.path.normcase(os.path.realpath(os.path.join(root, *prefix.split("/"))))
         if (normalized.casefold() == prefix or normalized.casefold().startswith(prefix + "/")
@@ -53,12 +53,17 @@ def serve_public_media(request, path, **kwargs):
 
 
 urlpatterns = [
+    # These retired private prefixes stay denied until the explicit storage
+    # purge has completed on every deployment.
     re_path(
-        r"^media/(?P<kind>chats/media|messages/media)/(?P<path>.+)$",
-        LegacyChatMediaDelivery.as_view(),
-        name="authorized-chat-media",
+        r"^[mM][eE][dD][iI][aA]/(?:"
+        r"[cC][hH][aA][tT][sS]/[mM][eE][dD][iI][aA]|"
+        r"[cC][hH][aA][tT][sS]_[mM][eE][dD][iI][aA]|"
+        r"[mM][eE][sS][sS][aA][gG][eE][sS]/[mM][eE][dD][iI][aA]|"
+        r"[cC][hH][aA][tT]_[eE][nN][cC][rR][yY][pP][tT][eE][dD]"
+        r")(?:/.*)?$",
+        deny_direct_moment_media,
     ),
-    re_path(r"^media/chat_encrypted/", deny_direct_moment_media),
     re_path(r"^media/couples/(?:moments|profile_private|profile_photos)/", deny_direct_moment_media),
     path("admin/", admin.site.urls),
     path("api/auth/", include('authentication.urls')),

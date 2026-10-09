@@ -1,5 +1,5 @@
 {
-  "scope": "All first-party HTTP operations currently called by the KMP client. External city lookup and WebSocket are separate contracts.",
+  "scope": "All first-party HTTP operations currently called by the KMP client. External city lookup and standard Matrix client APIs are separate contracts.",
   "endpoints": {
     "send-otp": {
       "method": "POST",
@@ -49,27 +49,9 @@
       "query": [],
       "public": true
     },
-    "rooms": {
-      "method": "GET",
-      "path": "/api/chat/rooms/",
-      "query": [
-        "limit",
-        "cursor"
-      ],
-      "public": false
-    },
-    "history": {
-      "method": "GET",
-      "path": "/api/chat/rooms/{uuid}/messages/",
-      "query": [
-        "limit",
-        "cursor"
-      ],
-      "public": false
-    },
-    "media-upload": {
+    "matrix-session": {
       "method": "POST",
-      "path": "/api/chat/media-upload/",
+      "path": "/api/chat/v2/rooms/{uuid}/matrix/session/",
       "query": [],
       "public": false
     },

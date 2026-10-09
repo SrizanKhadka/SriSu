@@ -8,7 +8,11 @@ from social.services.couple_profile_service import (
 )
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
 from authentication.models import UserModel
-from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
+from social.services.phone_identity import (
+    is_number_same,
+    is_number_valid,
+    user_with_number_exists,
+)
 from datetime import date
 from utils.choices import CoupleConnectionStatus, SingleConnectionStatus
 

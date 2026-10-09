@@ -19,5 +19,5 @@ COPY . .
 
 EXPOSE 8000
 
-# Use daphne for ASGI (WebSockets) support
+# Daphne serves Django's plain ASGI HTTP application; chat traffic uses Synapse.
 CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "srisu.asgi:application"]

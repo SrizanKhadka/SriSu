@@ -249,6 +249,34 @@ class CouplePlanModel(models.Model):
         indexes = [models.Index(fields=["couple", "starts_at", "id"], name="couple_plan_date_idx")]
 
 
+class CoupleStoryInviteModel(models.Model):
+    """A durable profile prompt; delivery is intentionally not a chat side effect."""
+
+    couple = models.ForeignKey(
+        CoupleModel,
+        on_delete=models.CASCADE,
+        related_name="story_invites",
+    )
+    created_by = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="couple_story_invites",
+    )
+    request_id = models.UUIDField()
+    prompt = models.CharField(max_length=32)
+    audience_membership_ids = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["couple", "created_by", "request_id"],
+                name="unique_couple_story_invite_request",
+            )
+        ]
+
+
 class CoupleFaveModel(models.Model):
     """A personal, one-way preference. Never shared with the user's partner."""
 

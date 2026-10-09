@@ -158,862 +158,6 @@
       ],
       "additionalProperties": true
     },
-    "message": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "chat_room_id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "sender_id": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "receiver_id": {
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "message_type": {
-          "type": "string"
-        },
-        "text": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "media_url": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "sticker_url": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "medias": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "integer",
-                "minimum": 1
-              },
-              "media_url": {
-                "type": "string"
-              },
-              "uploaded_at": {
-                "type": "string",
-                "format": "date-time"
-              }
-            },
-            "required": [
-              "id",
-              "media_url",
-              "uploaded_at"
-            ],
-            "additionalProperties": true
-          }
-        },
-        "reply_to": {
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "is_deleted": {
-          "type": "boolean"
-        },
-        "is_read": {
-          "type": "boolean"
-        },
-        "is_delivered": {
-          "type": "boolean"
-        },
-        "is_edited": {
-          "type": "boolean"
-        },
-        "is_sent": {
-          "type": "boolean"
-        },
-        "deleted_message": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "delete_option": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "reactions": {
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "chat_room_id",
-        "sender_id",
-        "receiver_id",
-        "message_type",
-        "text",
-        "media_url",
-        "sticker_url",
-        "medias",
-        "reply_to",
-        "is_deleted",
-        "is_read",
-        "is_delivered",
-        "is_edited",
-        "is_sent",
-        "deleted_message",
-        "delete_option",
-        "reactions",
-        "timestamp"
-      ],
-      "additionalProperties": true
-    },
-    "historyData": {
-      "type": "object",
-      "properties": {
-        "chat_room_id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "messages": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/message"
-          }
-        },
-        "has_more": {
-          "type": "boolean"
-        },
-        "next_cursor": {
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "chat_room_id",
-        "messages",
-        "has_more",
-        "next_cursor"
-      ],
-      "additionalProperties": true
-    },
-    "history": {
-      "type": "object",
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "data": {
-          "$ref": "#/$defs/historyData"
-        }
-      },
-      "required": [
-        "message",
-        "data"
-      ],
-      "additionalProperties": true
-    },
-    "room": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "last_message": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/message"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "updated_at"
-      ],
-      "additionalProperties": true
-    },
-    "rooms": {
-      "type": "object",
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "chat_rooms": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/room"
-              }
-            },
-            "has_more": {
-              "type": "boolean"
-            },
-            "next_cursor": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "limit": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 50
-            }
-          },
-          "required": [
-            "chat_rooms",
-            "has_more",
-            "next_cursor",
-            "limit"
-          ],
-          "additionalProperties": true
-        }
-      },
-      "required": [
-        "message",
-        "data"
-      ],
-      "additionalProperties": true
-    },
-    "socketError": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "const": "error"
-        },
-        "action": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "request_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "protocol_version": {
-          "const": 1
-        },
-        "error": {
-          "$ref": "#/$defs/error"
-        }
-      },
-      "required": [
-        "type",
-        "action",
-        "request_id",
-        "protocol_version",
-        "error"
-      ],
-      "additionalProperties": true
-    },
-    "socketEvent": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "const": "event"
-        },
-        "action": {
-          "type": "string"
-        },
-        "protocol_version": {
-          "const": 1
-        },
-        "event_id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "emitted_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "data": {
-          "type": "object"
-        }
-      },
-      "required": [
-        "type",
-        "action",
-        "protocol_version",
-        "event_id",
-        "emitted_at",
-        "data"
-      ],
-      "additionalProperties": true,
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "message_created",
-                  "message_updated",
-                  "message_deleted",
-                  "send_message",
-                  "edit_message",
-                  "delete_message"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/mutationData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "fetch_messages"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/historyData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "chat_room_updated"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/room"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "set_typing",
-                  "typing_updated"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/typingData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "mark_read",
-                  "message_read",
-                  "mark_delivered",
-                  "message_delivered"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/receiptData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "react_to_message",
-                  "message_reacted"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/reactionData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "access_revoked"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "type": "object",
-                "properties": {
-                  "chat_room_id": {
-                    "type": "string",
-                    "format": "uuid"
-                  }
-                },
-                "required": [
-                  "chat_room_id"
-                ],
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "get_chat_rooms",
-                  "chat_rooms_fetched"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "type": "object",
-                "properties": {
-                  "chat_rooms": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/$defs/room"
-                    }
-                  },
-                  "next_cursor": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 50
-                  }
-                },
-                "required": [
-                  "chat_rooms",
-                  "next_cursor",
-                  "limit"
-                ],
-                "additionalProperties": true
-              }
-            }
-          }
-        }
-      ]
-    },
-    "socketAck": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "const": "success"
-        },
-        "action": {
-          "type": "string"
-        },
-        "request_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "protocol_version": {
-          "const": 1
-        },
-        "data": {
-          "type": [
-            "object",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "type",
-        "action",
-        "request_id",
-        "protocol_version",
-        "data"
-      ],
-      "additionalProperties": true,
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "message_created",
-                  "message_updated",
-                  "message_deleted",
-                  "send_message",
-                  "edit_message",
-                  "delete_message"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/mutationData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "fetch_messages"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/historyData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "chat_room_updated"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/room"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "set_typing",
-                  "typing_updated"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/typingData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "mark_read",
-                  "message_read",
-                  "mark_delivered",
-                  "message_delivered"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/receiptData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "react_to_message",
-                  "message_reacted"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "$ref": "#/$defs/reactionData"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "access_revoked"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "type": "object",
-                "properties": {
-                  "chat_room_id": {
-                    "type": "string",
-                    "format": "uuid"
-                  }
-                },
-                "required": [
-                  "chat_room_id"
-                ],
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "action": {
-                "enum": [
-                  "get_chat_rooms",
-                  "chat_rooms_fetched"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "data": {
-                "type": "object",
-                "properties": {
-                  "chat_rooms": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/$defs/room"
-                    }
-                  },
-                  "next_cursor": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "limit": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 50
-                  }
-                },
-                "required": [
-                  "chat_rooms",
-                  "next_cursor",
-                  "limit"
-                ],
-                "additionalProperties": true
-              }
-            }
-          }
-        }
-      ]
-    },
-    "command": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "type": "string",
-          "maxLength": 64
-        },
-        "request_id": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "maxLength": 128
-        },
-        "payload": {
-          "type": "object"
-        }
-      },
-      "required": [
-        "action",
-        "payload"
-      ],
-      "additionalProperties": true
-    },
-    "mutationData": {
-      "type": "object",
-      "properties": {
-        "message": {
-          "$ref": "#/$defs/message"
-        },
-        "chat_room": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/room"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "message"
-      ],
-      "additionalProperties": true
-    },
-    "typingData": {
-      "type": "object",
-      "properties": {
-        "chat_room_id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "typing_users": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "boolean"
-          }
-        }
-      },
-      "required": [
-        "chat_room_id",
-        "typing_users"
-      ],
-      "additionalProperties": true
-    },
-    "receiptData": {
-      "type": "object",
-      "properties": {
-        "chat_room_id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "message_ids": {
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 1
-          }
-        }
-      },
-      "required": [
-        "chat_room_id",
-        "message_ids"
-      ],
-      "additionalProperties": true
-    },
-    "reactionData": {
-      "type": "object",
-      "properties": {
-        "message_id": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "user_id": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "reaction": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "was_removed": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "message_id",
-        "user_id",
-        "reaction",
-        "was_removed"
-      ],
-      "additionalProperties": true
-    },
     "profileProgress": {
       "type": "object",
       "properties": {
@@ -1630,6 +774,108 @@
       },
       "required": [
         "message",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "matrixSessionData": {
+      "type": "object",
+      "properties": {
+        "protocol_id": {
+          "const": "matrix-e2ee-v1"
+        },
+        "homeserver_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "room_id": {
+          "type": "string",
+          "pattern": "^!"
+        },
+        "room_alias": {
+          "type": "string",
+          "pattern": "^#"
+        },
+        "membership_epoch": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "relationship_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "self_user_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "self_matrix_user_id": {
+          "type": "string",
+          "pattern": "^@"
+        },
+        "partner_user_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "partner_matrix_user_id": {
+          "type": "string",
+          "pattern": "^@"
+        },
+        "initiator_user_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "login_type": {
+          "const": "org.matrix.login.jwt"
+        },
+        "login_token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "login_token_expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "login_token_one_time": {
+          "const": false
+        },
+        "refresh_token_enabled": {
+          "const": false
+        },
+        "access_token_expires_in_seconds": {
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 900
+        }
+      },
+      "required": [
+        "protocol_id",
+        "homeserver_url",
+        "room_id",
+        "room_alias",
+        "membership_epoch",
+        "relationship_id",
+        "self_user_id",
+        "self_matrix_user_id",
+        "partner_user_id",
+        "partner_matrix_user_id",
+        "initiator_user_id",
+        "login_type",
+        "login_token",
+        "login_token_expires_at",
+        "login_token_one_time",
+        "refresh_token_enabled",
+        "access_token_expires_in_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "matrixSession": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/matrixSessionData"
+        }
+      },
+      "required": [
         "data"
       ],
       "additionalProperties": false

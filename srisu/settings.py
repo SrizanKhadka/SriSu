@@ -33,7 +33,6 @@ ALLOWED_HOSTS = [host.strip() for host in config("DJANGO_ALLOWED_HOSTS", default
 # Application definition
 
 INSTALLED_APPS = [
-    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -47,7 +46,6 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "chat",
     "rest_framework_simplejwt.token_blacklist",
-    "channels",
     "social"
 ]
 
@@ -150,18 +148,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 ASGI_APPLICATION = "srisu.asgi.application"
 
-CHANNEL_LAYERS = {
-    "default":{
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts":[(config("REDIS_HOST", default="redis"),config("REDIS_PORT", default=6379))],
-        },
-    },
-}
-
 AUTH_USER_MODEL = "authentication.UserModel"
 
-# Separate namespace from Channels. Only short-lived ordered IDs are cached.
+# Dedicated namespace for short-lived couple-feed ordering IDs.
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
     "couple_feed": {
@@ -181,12 +170,8 @@ COUPLE_FEED_WEIGHTS = {"interests": 40, "location": 25, "fave": 20, "freshness":
 
 REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
-        "chat_reads": "120/min",
-        "chat_media_uploads": "10/min",
         "partner_discovery": "20/min",
-        "chat_v2_reads": "120/min",
-        "chat_v2_writes": "60/min",
-        "chat_v2_attachments": "10/min",
+        "chat_matrix_session": "10/min",
     },
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "authentication.sessions.SessionJWTAuthentication",
@@ -218,58 +203,47 @@ OTP_MOCK_DELIVERY = config("OTP_MOCK_DELIVERY", default=False, cast=bool)
 OTP_MOCK_CODE = config("OTP_MOCK_CODE", default="")
 
 
-# Native clients use bearer headers; browser origins are explicitly allowlisted.
-WEBSOCKET_ALLOWED_ORIGINS = [origin.strip() for origin in config("WEBSOCKET_ALLOWED_ORIGINS", default="").split(",") if origin.strip()]
-WS_MAX_FRAME_BYTES = 64 * 1024
-WS_COMMAND_BURST = 30
-WS_COMMANDS_PER_SECOND = 10
-WS_MAX_SUBSCRIPTIONS = 20
-
-# Chat v2 is a storage/synchronization foundation, not a home-grown crypto
-# implementation.  Production writes stay off until a reviewed client protocol
-# adapter is available on every supported platform.
-CHAT_V2_ENCRYPTED_WRITES_ENABLED = config(
-    "CHAT_V2_ENCRYPTED_WRITES_ENABLED", default=False, cast=bool
+# Private Matrix remains fail-closed until a deployment supplies a reviewed
+# service adapter and credentials. Django stays authoritative for account and
+# current-couple authorization; Matrix carries encrypted room traffic.
+MATRIX_ENABLED = config("MATRIX_ENABLED", default=False, cast=bool)
+MATRIX_SERVICE_CLASS = config(
+    "MATRIX_SERVICE_CLASS",
+    default="chat.services.matrix_provisioning.DisabledMatrixService",
 )
-CHAT_V2_PROTOCOL_STATUS = config("CHAT_V2_PROTOCOL_STATUS", default="adapter_required")
-# Separate synthetic-test escape hatch. Never enable this in a user-serving
-# environment; capabilities deliberately never advertise test_adapter as ready.
-CHAT_V2_TEST_ADAPTER_ENABLED = config(
-    "CHAT_V2_TEST_ADAPTER_ENABLED", default=False, cast=bool
+MATRIX_HOMESERVER_URL = config("MATRIX_HOMESERVER_URL", default="")
+MATRIX_INTERNAL_HOMESERVER_URL = config("MATRIX_INTERNAL_HOMESERVER_URL", default="")
+MATRIX_SERVER_NAME = config("MATRIX_SERVER_NAME", default="")
+MATRIX_PROTOCOL_ID = config("MATRIX_PROTOCOL_ID", default="matrix-e2ee-v1")
+MATRIX_SESSION_TTL_SECONDS = config("MATRIX_SESSION_TTL_SECONDS", default=120, cast=int)
+MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS = config(
+    "MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS",
+    default=5 * 60,
+    cast=int,
 )
-CHAT_V2_ALLOWED_USER_IDS = {
-    int(value)
-    for value in config("CHAT_V2_ALLOWED_USER_IDS", default="").split(",")
-    if value.strip().isdecimal()
-}
-CHAT_V2_REQUIRE_DEVICE_SESSION = config(
-    "CHAT_V2_REQUIRE_DEVICE_SESSION", default=True, cast=bool
+MATRIX_PROVISIONING_LOCALPART = config(
+    "MATRIX_PROVISIONING_LOCALPART",
+    default="srisu_provisioner",
 )
-CHAT_V2_MAX_ENVELOPE_BYTES = config("CHAT_V2_MAX_ENVELOPE_BYTES", default=64 * 1024, cast=int)
-CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES = config(
-    "CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES", default=4000, cast=int
+MATRIX_ROOM_VERSION = config("MATRIX_ROOM_VERSION", default="11")
+MATRIX_JWT_SECRET = config("MATRIX_JWT_SECRET", default="")
+MATRIX_JWT_ALGORITHM = config("MATRIX_JWT_ALGORITHM", default="HS256")
+MATRIX_JWT_ISSUER = config("MATRIX_JWT_ISSUER", default="srisu-django")
+MATRIX_JWT_AUDIENCE = config("MATRIX_JWT_AUDIENCE", default="srisu-matrix")
+MATRIX_HTTP_TIMEOUT_SECONDS = config("MATRIX_HTTP_TIMEOUT_SECONDS", default=5, cast=float)
+MATRIX_PROVISION_LOCK_SECONDS = config("MATRIX_PROVISION_LOCK_SECONDS", default=60, cast=int)
+MATRIX_RETRY_BASE_SECONDS = config("MATRIX_RETRY_BASE_SECONDS", default=5, cast=int)
+MATRIX_RETRY_MAX_SECONDS = config("MATRIX_RETRY_MAX_SECONDS", default=300, cast=int)
+MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS = config(
+    "MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS",
+    default=300,
+    cast=int,
 )
-CHAT_V2_MAX_ATTACHMENT_BYTES = config(
-    "CHAT_V2_MAX_ATTACHMENT_BYTES", default=15 * 1024 * 1024, cast=int
+MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS = config(
+    "MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS",
+    default=300,
+    cast=int,
 )
-CHAT_V2_ATTACHMENT_STAGING_ENABLED = config(
-    "CHAT_V2_ATTACHMENT_STAGING_ENABLED", default=False, cast=bool
-)
-CHAT_V2_ATTACHMENT_TTL_SECONDS = config(
-    "CHAT_V2_ATTACHMENT_TTL_SECONDS", default=24 * 60 * 60, cast=int
-)
-CHAT_LEGACY_MEDIA_TTL_SECONDS = config(
-    "CHAT_LEGACY_MEDIA_TTL_SECONDS", default=24 * 60 * 60, cast=int
-)
-CHAT_MEDIA_CLEANUP_BATCH_SIZE = config(
-    "CHAT_MEDIA_CLEANUP_BATCH_SIZE", default=100, cast=int
-)
-CHAT_V2_OUTBOX_RETENTION_SECONDS = config(
-    "CHAT_V2_OUTBOX_RETENTION_SECONDS", default=7 * 24 * 60 * 60, cast=int
-)
-CHAT_V2_OUTBOX_BATCH_SIZE = config("CHAT_V2_OUTBOX_BATCH_SIZE", default=100, cast=int)
-CHAT_V2_EDIT_WINDOW_SECONDS = config("CHAT_V2_EDIT_WINDOW_SECONDS", default=15 * 60, cast=int)
-CHAT_V2_DELETE_WINDOW_SECONDS = config("CHAT_V2_DELETE_WINDOW_SECONDS", default=48 * 60 * 60, cast=int)
 
 LOGGING = {
     "version": 1,

@@ -58,7 +58,7 @@ current membership. Existing core-1 error header/envelope behavior is reused.
 | POST plans/ | request_id UUID, title, starts_at; 201 new / 200 exact replay |
 | GET plans/{plan_id}/ | Current membership-bound private plan |
 | PATCH plans/{plan_id}/ | expected_revision integer; response+note OR completed |
-| POST story-invites/ | request_id UUID, prompt; private chat message/room IDs |
+| POST story-invites/ | request_id UUID, prompt; idempotent saved domain record, never fake chat delivery IDs |
 
 Unknown JSON fields and invalid values return 400 with field-level errors. Missing,
 blocked, inactive or unauthorized protected resources return 404; unauthenticated
@@ -127,6 +127,10 @@ with a reviewed forward-compatible data plan.
 
 ## Validation (2026-10-01)
 
+The counts below are the historical profile baseline. References to profile chat
+cards/recovery are superseded by the Matrix-only cutover: plans now save without
+a server-authored message, and story invites return a saved domain record.
+
 - Baseline selected offline suites:136 passed,10 PostgreSQL-only skips.
 - `.venv/bin/python tools/workspace.py check`: passed.
 - `.venv/bin/python tools/workspace.py migrations`: passed, no missing migrations.
@@ -135,7 +139,7 @@ with a reviewed forward-compatible data plan.
 - core-1 schema and15 shared fixtures passed.
 - Client `JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home'
   python3 tools/core_integration.py --backend ../SriSu-backend`: passed against a
-  disposable real HTTP/WebSocket server: saves/conflicts, validated multipart media,
+  disposable real HTTP server: saves/conflicts, validated multipart media,
   publication/revocation, visitor denial, question/plan cards, auth and chat recovery.
 - Tests use synthetic accounts and isolated databases. No unrestricted discovery,
   production data, live Twilio calls or deployment.

@@ -5,28 +5,22 @@
     "interests": "interests",
     "empty_interests": "interests",
     "validation_error": "httpError",
-    "history": "history",
-    "empty_history": "history",
-    "socket_message": "socketEvent",
-    "socket_ack": "socketAck",
-    "socket_error": "socketError",
-    "rooms": "rooms",
     "auth_challenge": "authChallenge",
     "auth_profile": "authProfile",
     "auth_refresh": "authRefresh",
     "couple_profile_member": "coupleProfile",
     "couple_profile_visitor": "coupleProfile",
-    "couple_plan": "couplePlan"
+    "couple_plan": "couplePlan",
+    "matrix_session": "matrixSession"
   },
-  "deployment": "Backend before new KMP; legacy installed clients retain envelopes and query-token socket auth.",
+  "deployment": "Synapse and Django Matrix control plane before the Matrix KMP client; the replacement is not enabled by a migration alone.",
   "http": {
     "opt_in_error_header": {
       "X-SriSu-Contract": "core-1"
     },
     "resources": [
       "GET /api/auth/interests/",
-      "GET /api/chat/rooms/",
-      "GET /api/chat/rooms/{uuid}/messages/",
+      "POST /api/chat/v2/rooms/{uuid}/matrix/session/",
       "POST /api/auth/send-otp/",
       "POST /api/auth/verify-otp/",
       "GET/PATCH/PUT /api/auth/setup-profile/",
@@ -34,19 +28,15 @@
       "POST /api/auth/logout/"
     ],
     "success": "Existing message/data envelope; empty/204, raw resources and existing paginated APIs retain their own shape.",
-    "pagination": "messages by descending integer ID; rooms by descending updated_at, UUID; room cursor signed/actor-bound/900s expiry; invalid cursor 400",
     "retry": "Bounded opt-in GET/HEAD. No automatic write replay. auth-1 refresh: single-flight, stable request_id; replay same rotation for 60s only.",
     "route_inventory": "routes.json"
   },
-  "websocket": {
-    "path": "/ws/chat/",
-    "version": 1,
-    "authentication": "Bearer header preferred; legacy token query adapter; native clients omit Origin, browsers allowlisted.",
-    "ack": "success request_id after service transaction returns; ack loss is ambiguous and must not auto-replay.",
-    "event_delivery": "At-most observed bounded client dedupe by event_id; events can be lost, duplicated, reordered. Content-free socket hints trigger catch-up; HTTP snapshot recovery runs on reconnect, foreground, or explicit manual recovery.",
-    "subscription": "fetch_messages or subscribe_room subscribes; unsubscribe_room removes; disconnect removes all; max20 rooms per connection.",
-    "limits": "64KiB command,30 burst/10 per second per connection,4000 text,10 media,50 page items. Not distributed abuse protection.",
-    "unknown": "Ignore unknown fields; unknown/malformed events invalidate snapshots; unsupported commands receive unknown_action."
+  "matrix": {
+    "version": "matrix-e2ee-v1",
+    "authorization": "Current accepted couple membership, no either-direction SingleConnection BLOCKED edge, and a current Django device-session sid; former, blocked, and unrelated users receive concealed 404. Both relationship and session are rechecked after remote work immediately before the response.",
+    "login": "Short-lived replayable org.matrix.login.jwt credential; client supplies and verifies its stable device_id, requests no refresh token, and validates the returned MXID/device.",
+    "session": "The replayable Matrix login credential lasts 120 seconds by default (maximum 300); Synapse caps the resulting non-refreshable access and total session lifetime at 300 seconds by default (maximum 900). Clients call standard Matrix logout on SriSu logout/account switch. Already-issued access is bounded, not synchronously revocable through Django; the default worst case from bootstrap issuance is 420 seconds.",
+    "transport": "After login, sync, encrypted events, keys, receipts, to-device messages and media use standard Synapse APIs; Django stores no Matrix message content or device keys. A dedicated provisioning identity creates locked private v11 rooms, leaves after setup, and exact membership/policy is verified before activation."
   },
   "authentication": {
     "opt_in_header": {
@@ -63,7 +53,7 @@
     "visibility": "Authenticated viewers receive only sections approved by both current partners for exact content and membership. Either partner can revoke immediately.",
     "conflict": "PATCH sections require expected_revision from that viewer projection. Stale section -> 409 section_changed; different sections/author story contributions do not overwrite each other.",
     "media": "First-party authenticated guarded URLs; private no-store; uploaded covers under couples/profile_private must not be served by a public bucket/proxy. Moment references retain original audience and expiry.",
-    "chat": "Optional server-authored profile_action on chat message: kind story or plan, couple_id, prompt or plan_id. No client flags confer access.",
-    "rollout": "Additive social 0011-0013 and chat 0003 migrations, backend first, then KMP. Legacy routes retained; cover URLs now require authenticated delivery, including old profile_photos paths. Block private prefixes at any proxy/bucket. No deployment is implied."
+    "story_invites": "Idempotent owner-only domain records. The backend does not author plaintext or Matrix events and returns no fake message/room identifiers.",
+    "rollout": "Apply social 0015 and irreversible chat 0006 only after Matrix is configured. Legacy Django chat routes and data do not remain available after cutover. No deployment is implied."
   }
 }

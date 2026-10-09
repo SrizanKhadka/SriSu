@@ -452,32 +452,30 @@ class MomentConcurrencyTests(APITransactionTestCase):
 
 class MomentMigrationTests(APITransactionTestCase):
     def test_existing_moments_backfill_expiry_and_audience(self):
-        from django.db.migrations.executor import MigrationExecutor
-        old_target = [("social", "0007_couple_profile_memberships")]
-        executor = MigrationExecutor(connection)
-        # Restore the current schema, including migrations added after the expiry work.
-        new_target = executor.loader.graph.leaf_nodes()
-        executor.migrate(old_target)
-        try:
-            apps = executor.loader.project_state(old_target).apps
-            User = apps.get_model("authentication", "UserModel")
-            Couple = apps.get_model("social", "CoupleModel")
-            Connection = apps.get_model("social", "CoupleConnectionModel")
-            Membership = apps.get_model("social", "CoupleMembershipModel")
-            Moment = apps.get_model("social", "CoupleMomentModel")
-            users = [User.objects.create(phone_number=f"+12345{i}") for i in range(2)]
-            relationship = Connection.objects.create(
-                sender_number=users[0].phone_number,
-                receiver_number=users[1].phone_number,
-                connection_status="ACCEPTED",
-            )
-            couple = Couple.objects.create(couple_connection=relationship)
-            members = [Membership.objects.create(user=user, couple=couple, position=index + 1) for index, user in enumerate(users)]
-            moment = Moment.objects.create(couple=couple, created_by=users[0], caption="Legacy", moment_date="2026-01-01")
-            old_time = timezone.now() - timedelta(days=5)
-            Moment.objects.filter(pk=moment.pk).update(created_at=old_time)
-        finally:
-            MigrationExecutor(connection).migrate(new_target)
+        from django.apps import apps
+        from importlib import import_module
+        from types import SimpleNamespace
+        from authentication.models import UserModel
+        from social.models import CoupleConnectionModel, CoupleMembershipModel, CoupleModel
+
+        users = [UserModel.objects.create(phone_number=f"+12345{i}") for i in range(2)]
+        relationship = CoupleConnectionModel.objects.create(
+            sender_number=users[0].phone_number,
+            receiver_number=users[1].phone_number,
+            connection_status="ACCEPTED",
+        )
+        couple = CoupleModel.objects.create(couple_connection=relationship)
+        members = [CoupleMembershipModel.objects.create(user=user, couple=couple, position=index + 1) for index, user in enumerate(users)]
+        moment = CoupleMomentModel.objects.create(couple=couple, created_by=users[0], caption="Legacy", moment_date="2026-01-01")
+        old_time = timezone.now() - timedelta(days=5)
+        CoupleMomentModel.objects.filter(pk=moment.pk).update(
+            created_at=old_time,
+            expires_at=old_time,
+            audience_membership_ids=[],
+            audience_user_ids=[],
+        )
+        migration = import_module("social.migrations.0008_moment_expiry_and_notes")
+        migration.backfill_moments(apps, SimpleNamespace(connection=connection))
         migrated = CoupleMomentModel.objects.get(pk=moment.pk)
         self.assertEqual(migrated.created_at, old_time)
         self.assertEqual(migrated.expires_at, old_time + timedelta(hours=24))
@@ -485,85 +483,33 @@ class MomentMigrationTests(APITransactionTestCase):
         self.assertEqual(migrated.audience_user_ids, [u.pk for u in users])
 
     def test_relationship_lifecycle_migration_aborts_on_unlinked_memberships(self):
-        from django.db.migrations.executor import MigrationExecutor
+        from django.apps import apps
+        from importlib import import_module
+        from types import SimpleNamespace
+        from authentication.models import UserModel
+        from social.models import CoupleConnectionModel, CoupleMembershipModel, CoupleModel
 
-        old_target = [("social", "0013_cover_bounds")]
-        executor = MigrationExecutor(connection)
-        new_target = executor.loader.graph.leaf_nodes()
-        executor.migrate(old_target)
-        apps = executor.loader.project_state(old_target).apps
-        User = apps.get_model("authentication", "UserModel")
-        Couple = apps.get_model("social", "CoupleModel")
-        Connection = apps.get_model("social", "CoupleConnectionModel")
-        Membership = apps.get_model("social", "CoupleMembershipModel")
-        users = [User.objects.create(phone_number=f"+12346{i}") for i in range(2)]
-        couple = Couple.objects.create()
-        Membership.objects.create(user=users[0], couple=couple, position=1)
-        Membership.objects.create(user=users[1], couple=couple, position=2)
+        users = [UserModel.objects.create(phone_number=f"+12346{i}") for i in range(2)]
+        couple = CoupleModel.objects.create()
+        CoupleMembershipModel.objects.create(user=users[0], couple=couple, position=1)
+        CoupleMembershipModel.objects.create(user=users[1], couple=couple, position=2)
+        migration = import_module("social.migrations.0014_relationship_lifecycle")
+        editor = SimpleNamespace(connection=connection)
 
         with self.assertRaisesRegex(RuntimeError, "no relationship identity"):
-            MigrationExecutor(connection).migrate(new_target)
+            migration.require_linked_legacy_memberships(apps, editor)
 
         # Recovery is deliberately operator-directed: link the known identity,
         # then the exact same migration can complete without deleting history.
-        relationship = Connection.objects.create(
+        relationship = CoupleConnectionModel.objects.create(
             sender_number=users[0].phone_number,
             receiver_number=users[1].phone_number,
             connection_status="ACCEPTED",
         )
-        Couple.objects.filter(pk=couple.pk).update(couple_connection=relationship)
-        MigrationExecutor(connection).migrate(new_target)
+        CoupleModel.objects.filter(pk=couple.pk).update(couple_connection=relationship)
+        migration.require_linked_legacy_memberships(apps, editor)
         active = CoupleMembershipModel.objects.filter(
             couple_id=couple.pk,
             ended_at__isnull=True,
         )
         self.assertEqual(active.count(), 2)
-
-    def test_chat_v2_migration_requires_private_delete_actor_then_normalizes(self):
-        from django.db.migrations.executor import MigrationExecutor
-        from chat.models import MessageDeletion, MessageModel
-
-        old_target = [
-            ("social", "0014_relationship_lifecycle"),
-            ("chat", "0003_couple_profile_cards"),
-        ]
-        executor = MigrationExecutor(connection)
-        new_target = executor.loader.graph.leaf_nodes()
-        executor.migrate(old_target)
-        apps = executor.loader.project_state(old_target).apps
-        User = apps.get_model("authentication", "UserModel")
-        Room = apps.get_model("chat", "ChatRoom")
-        Message = apps.get_model("chat", "MessageModel")
-        Deletion = apps.get_model("chat", "MessageDeletion")
-        users = [User.objects.create(phone_number=f"+12347{i}") for i in range(2)]
-        room = Room.objects.create(
-            user_one=users[0],
-            user_two=users[1],
-            chat_type="couple",
-        )
-        message = Message.objects.create(
-            chat_room=room,
-            sender=users[0],
-            receiver=users[1],
-            text="legacy ambiguous private deletion",
-            delete_option="DELETE_FOR_ME",
-        )
-
-        with self.assertRaisesRegex(RuntimeError, "no per-user actor"):
-            MigrationExecutor(connection).migrate(new_target)
-
-        Deletion.objects.create(
-            message=message,
-            user=users[0],
-            delete_option="DELETE_FOR_ME",
-        )
-        MigrationExecutor(connection).migrate(new_target)
-        migrated = MessageModel.objects.get(pk=message.pk)
-        self.assertEqual(migrated.delete_option, "NOT_DELETED")
-        self.assertTrue(
-            MessageDeletion.objects.filter(
-                message_id=message.pk,
-                user_id=users[0].pk,
-                delete_option="DELETE_FOR_ME",
-            ).exists()
-        )

@@ -15,23 +15,26 @@ x-app-environment: &app-environment
   REDIS_HOST: redis
   REDIS_PORT: "6379"
   AUTH_ACCEPT_LEGACY_TOKENS: "${AUTH_ACCEPT_LEGACY_TOKENS:-true}"
-  # Keep chat v2 fail-closed. These are explicit so container behavior can be audited.
-  CHAT_V2_ENCRYPTED_WRITES_ENABLED: "${CHAT_V2_ENCRYPTED_WRITES_ENABLED:-false}"
-  CHAT_V2_PROTOCOL_STATUS: "${CHAT_V2_PROTOCOL_STATUS:-adapter_required}"
-  CHAT_V2_TEST_ADAPTER_ENABLED: "${CHAT_V2_TEST_ADAPTER_ENABLED:-false}"
-  CHAT_V2_ALLOWED_USER_IDS: "${CHAT_V2_ALLOWED_USER_IDS:-}"
-  CHAT_V2_REQUIRE_DEVICE_SESSION: "${CHAT_V2_REQUIRE_DEVICE_SESSION:-true}"
-  CHAT_V2_MAX_ENVELOPE_BYTES: "${CHAT_V2_MAX_ENVELOPE_BYTES:-65536}"
-  CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES: "${CHAT_V2_MAX_MESSAGE_PLAINTEXT_BYTES:-4000}"
-  CHAT_V2_MAX_ATTACHMENT_BYTES: "${CHAT_V2_MAX_ATTACHMENT_BYTES:-15728640}"
-  CHAT_V2_ATTACHMENT_STAGING_ENABLED: "${CHAT_V2_ATTACHMENT_STAGING_ENABLED:-false}"
-  CHAT_V2_ATTACHMENT_TTL_SECONDS: "${CHAT_V2_ATTACHMENT_TTL_SECONDS:-86400}"
-  CHAT_V2_OUTBOX_RETENTION_SECONDS: "${CHAT_V2_OUTBOX_RETENTION_SECONDS:-604800}"
-  CHAT_V2_OUTBOX_BATCH_SIZE: "${CHAT_V2_OUTBOX_BATCH_SIZE:-100}"
-  CHAT_V2_EDIT_WINDOW_SECONDS: "${CHAT_V2_EDIT_WINDOW_SECONDS:-900}"
-  CHAT_V2_DELETE_WINDOW_SECONDS: "${CHAT_V2_DELETE_WINDOW_SECONDS:-172800}"
-  CHAT_LEGACY_MEDIA_TTL_SECONDS: "${CHAT_LEGACY_MEDIA_TTL_SECONDS:-86400}"
-  CHAT_MEDIA_CLEANUP_BATCH_SIZE: "${CHAT_MEDIA_CLEANUP_BATCH_SIZE:-100}"
+  SRISU_CONFIRM_DESTROY_LEGACY_CHAT: "${SRISU_CONFIRM_DESTROY_LEGACY_CHAT:-}"
+  # Django controls relationship authorization and issues short-lived Synapse
+  # JWT login credentials. The app then uses only standard Matrix APIs.
+  MATRIX_ENABLED: "${MATRIX_ENABLED:-false}"
+  MATRIX_SERVICE_CLASS: "${MATRIX_SERVICE_CLASS:-chat.services.matrix_provisioning.DisabledMatrixService}"
+  MATRIX_HOMESERVER_URL: "${MATRIX_HOMESERVER_URL:-}"
+  MATRIX_INTERNAL_HOMESERVER_URL: "${MATRIX_INTERNAL_HOMESERVER_URL:-http://synapse:8008}"
+  MATRIX_SERVER_NAME: "${MATRIX_SERVER_NAME:-}"
+  MATRIX_PROTOCOL_ID: "${MATRIX_PROTOCOL_ID:-matrix-e2ee-v1}"
+  MATRIX_SESSION_TTL_SECONDS: "${MATRIX_SESSION_TTL_SECONDS:-120}"
+  MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS: "${MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS:-300}"
+  MATRIX_PROVISIONING_LOCALPART: "${MATRIX_PROVISIONING_LOCALPART:-srisu_provisioner}"
+  MATRIX_ROOM_VERSION: "${MATRIX_ROOM_VERSION:-11}"
+  MATRIX_JWT_SECRET: "${MATRIX_JWT_SECRET:-}"
+  MATRIX_JWT_ALGORITHM: "${MATRIX_JWT_ALGORITHM:-HS256}"
+  MATRIX_JWT_ISSUER: "${MATRIX_JWT_ISSUER:-srisu-django}"
+  MATRIX_JWT_AUDIENCE: "${MATRIX_JWT_AUDIENCE:-srisu-matrix}"
+  MATRIX_HTTP_TIMEOUT_SECONDS: "${MATRIX_HTTP_TIMEOUT_SECONDS:-5}"
+  MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS: "${MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS:-300}"
+  MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS: "${MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS:-300}"
 
 x-app-dependencies: &app-dependencies
   srisu_db:
@@ -59,18 +62,11 @@ services:
       - "8000:8000"
     restart: unless-stopped
 
-  # Durable chat changes are published as content-free WebSocket hints. HTTP
-  # history/changes remain authoritative when a hint is missed.
-  chat_outbox:
+  # Durable retry loop for relationship-driven Matrix provisioning/revocation.
+  # Django remains available if Synapse is temporarily down.
+  matrix_reconciler:
     <<: *app-base
-    command: python manage.py dispatch_chat_outbox --watch --poll-interval 1 --limit 100
-    restart: unless-stopped
-
-  # Local/development lifecycle for bounded private-media and published-outbox
-  # cleanup. Production uses the one-shot command from an external scheduler.
-  chat_maintenance:
-    <<: *app-base
-    command: python manage.py run_chat_media_cleanup --poll-interval 300 --limit 100
+    command: python manage.py reconcile_matrix_rooms --watch --poll-interval 5 --limit 100
     restart: unless-stopped
 
   srisu_db:
@@ -103,5 +99,55 @@ services:
       timeout: 5s
       retries: 30
 
+  synapse_db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${MATRIX_POSTGRES_DB:-srisu_matrix}"
+      POSTGRES_USER: "${MATRIX_POSTGRES_USER:-srisu_matrix}"
+      POSTGRES_PASSWORD: "${MATRIX_POSTGRES_PASSWORD:-}"
+    volumes:
+      - synapse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  synapse:
+    image: ghcr.io/element-hq/synapse:v1.162.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/srisu-config/start-dev.sh"]
+    environment:
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      MATRIX_SERVER_NAME: "${MATRIX_SERVER_NAME:-}"
+      MATRIX_HOMESERVER_URL: "${MATRIX_HOMESERVER_URL:-}"
+      MATRIX_JWT_SECRET: "${MATRIX_JWT_SECRET:-}"
+      MATRIX_JWT_ISSUER: "${MATRIX_JWT_ISSUER:-srisu-django}"
+      MATRIX_JWT_AUDIENCE: "${MATRIX_JWT_AUDIENCE:-srisu-matrix}"
+      MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS: "${MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS:-300}"
+      MATRIX_PROVISIONING_LOCALPART: "${MATRIX_PROVISIONING_LOCALPART:-srisu_provisioner}"
+      MATRIX_POSTGRES_DB: "${MATRIX_POSTGRES_DB:-srisu_matrix}"
+      MATRIX_POSTGRES_USER: "${MATRIX_POSTGRES_USER:-srisu_matrix}"
+      MATRIX_POSTGRES_PASSWORD: "${MATRIX_POSTGRES_PASSWORD:-}"
+      MATRIX_MACAROON_SECRET: "${MATRIX_MACAROON_SECRET:-}"
+      MATRIX_FORM_SECRET: "${MATRIX_FORM_SECRET:-}"
+      PYTHONPATH: /srisu-config
+    volumes:
+      - ./deploy/synapse:/srisu-config:ro
+      - synapse_data:/data
+    ports:
+      - "8008:8008"
+    depends_on:
+      synapse_db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fSs http://localhost:8008/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
 volumes:
   postgres_data:
+  synapse_postgres_data:
+  synapse_data:

@@ -60,32 +60,6 @@ class SingleConnectionStatus(TextChoices):
     REJECTED = "REJECTED", "Rejected"
     BLOCKED = "BLOCKED", "Blocked"
 
-class MessageType(TextChoices):
-    TEXT = "TEXT", "Text"
-    IMAGE = "IMAGE", "Image"
-    VIDEO = "VIDEO", "Video"
-    AUDIO = "AUDIO","Audio"
-
-
-class MessageReaction(TextChoices):
-    HAHA = "HAHA", "Haha"
-    WOW = "WOW", "Wow"
-    SAD = "SAD", "Sad"
-    ANGRY = "ANGRY", "Angry"
-    LOVE = "Love", "Love"
-
-
-class DeleteOption(TextChoices):
-    DELETED = "DELETED","deleted"
-    NOT_DELETED = "NOT_DELETED", "Not deleted"
-    DELETE_FOR_ME = "DELETE_FOR_ME", "Delete for me"
-    DELETE_FOR_EVERYONE = "DELETE_FOR_EVERYONE", "Delete for everyone"
-    CONVERSATION_DELETED = "CONVERSATION_DELETED", "Conversation deleted"
-
-class ChatTypeChoices(TextChoices):
-    SINGLE = "single", "Single"
-    COUPLE = "couple", "Couple"
-    
 class InterestCategoryChoices(TextChoices):
     SPORTS = "SPORTS", "Sports"
     MUSIC = "MUSIC", "Music"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Disposable loopback ASGI server for paired KMP tests; never uses an app DB."""
+"""Disposable loopback HTTP server for paired KMP tests; never uses an app DB."""
 import argparse
 import json
 import os
@@ -31,36 +31,32 @@ def main():
     from authentication.models import UserModel, InterestModel
     from social.models import CoupleConnectionModel
     from social.services.couple_profile_service import create_or_get_couple_for_connection
-    from chat.models import ChatRoom, MessageModel
-    from rest_framework_simplejwt.tokens import AccessToken
+    from chat.models import ChatRoom
+    from authentication.sessions import create_session
     first = UserModel.objects.create_user(phone_number='+15005550101', full_name='Synthetic A', is_phone_verified=True, is_profile_complete=True)
     second = UserModel.objects.create_user(phone_number='+15005550102', full_name='Synthetic B', is_phone_verified=True, is_profile_complete=True)
     couple_link = CoupleConnectionModel.objects.create(sender_number=first.phone_number, receiver_number=second.phone_number, connection_status='ACCEPTED')
     couple = create_or_get_couple_for_connection(couple_link)
-    room = ChatRoom.objects.create(user_one=first, user_two=second, couple=couple, chat_type='couple')
+    room = ChatRoom.objects.create(user_one=first, user_two=second, couple=couple)
     visitor = UserModel.objects.create_user(phone_number='+15005550103', full_name='Synthetic Visitor', is_phone_verified=True, is_profile_complete=True)
-    MessageModel.objects.create(chat_room=room, sender=second, receiver=first, text='Synthetic baseline')
     InterestModel.objects.create(name='Synthetic hiking')
-    # This disposable, short-lived token is shared only through a private temporary file.
-    from datetime import timedelta
-    token = AccessToken.for_user(first); token.set_exp(lifetime=timedelta(minutes=5))
-    payload = {'base_url': f'http://127.0.0.1:{args.port}/', 'room_id': str(room.pk), 'account_id': first.pk, 'access': str(token)}
-    partner_token = AccessToken.for_user(second); partner_token.set_exp(lifetime=timedelta(minutes=5))
-    visitor_token = AccessToken.for_user(visitor); visitor_token.set_exp(lifetime=timedelta(minutes=5))
-    payload.update(couple_id=couple.pk, partner_id=second.pk, partner_access=str(partner_token), visitor_id=visitor.pk, visitor_access=str(visitor_token))
+    # Disposable current-session tokens are shared only through a private temp file.
+    payload = {
+        'base_url': f'http://127.0.0.1:{args.port}/',
+        'room_id': str(room.pk),
+        'account_id': first.pk,
+        'access': create_session(first)['access'],
+        'couple_id': couple.pk,
+        'partner_id': second.pk,
+        'partner_access': create_session(second)['access'],
+        'visitor_id': visitor.pk,
+        'visitor_access': create_session(visitor)['access'],
+    }
     descriptor = os.open(args.fixture, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as file: json.dump(payload, file)
     from srisu.asgi import application
     from daphne.server import Server
-    async def observed(scope, receive, send):
-        if scope['type'] == 'websocket':
-            print('integration_socket_started', flush=True)
-        async def observed_send(event):
-            if event['type'] in ('websocket.accept', 'websocket.close'):
-                print('integration_' + event['type'] + ':' + str(event.get('code', 0)), flush=True)
-            await send(event)
-        await application(scope, receive, observed_send)
-    Server(application=observed, endpoints=[f'tcp:port={args.port}:interface=127.0.0.1'], signal_handlers=False, verbosity=0).run()
+    Server(application=application, endpoints=[f'tcp:port={args.port}:interface=127.0.0.1'], signal_handlers=False, verbosity=0).run()
 
 
 if __name__ == '__main__': main()

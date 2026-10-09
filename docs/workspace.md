@@ -20,7 +20,8 @@ Read the frontend's instructions explicitly before changing it.
 ## Environment
 
 Use Python **3.13.5**, as declared by `Pipfile`/`Pipfile.lock`. The lockfile pins
-Django 6.0.3 and the current Channels dependencies. The older UTF-16
+Django 6.0.3; retired chat WebSocket/Channels dependencies are no longer part
+of the runtime. The older UTF-16
 `requirements.txt` differs and is not used for this workspace environment.
 
 With [uv installed](https://docs.astral.sh/uv/getting-started/installation/),
@@ -47,24 +48,25 @@ The generated requirements and environment stay inside ignored `.venv`.
 ```
 
 The runner uses `srisu.workspace_test_settings`: synthetic credentials, an
-in-memory SQLite test database, in-memory cache/channel layers, and a temporary
+in-memory SQLite test database, in-memory caches, and a temporary
 media directory cleaned on exit. Socket connections and datagram sends are
 blocked for this process. No application server is started.
 
-Tests explicitly select the four existing social suites and `srisu.test_core` plus `authentication.test_auth`.
-The selection also includes `chat.test_v2`; see [chat v2 rollout and contract](chat-v2.md)
-before applying its additive migrations or enabling the fail-closed pilot gates.
+Tests explicitly select the maintained social, core, authentication, Matrix and
+legacy-storage-purge suites. See the [Matrix-only chat cutover](chat-v2.md)
+before applying its intentionally irreversible retirement migration.
 The exporter now also includes `requirements-core-tests.txt` for JSON Schema tests. PostgreSQL-only concurrency
 tests may be skipped on SQLite; run them separately against a disposable local
 PostgreSQL instance using the existing PostgreSQL test settings after inspecting
 that environment. This local runner does not verify production configuration,
 OTP delivery, Android/iOS-to-server requests, or native-device behavior. `tools/core_integration.py` in the frontend separately
-starts a disposable loopback backend for real KMP HTTP/WebSocket traffic; see the
+starts a disposable loopback backend for real KMP HTTP traffic; live Matrix E2EE
+requires the Compose Synapse service and is not simulated by that helper. See the
 core validation record.
 
-Do not run bare `manage.py test`: legacy `chat/tests.py` invokes `asyncio.run`
-at import time and opens a live WebSocket. It needs conversion into a proper
-isolated test suite before unrestricted discovery is suitable for CI.
+The unsafe import-time `chat/tests.py` WebSocket script was deleted with the
+legacy transport. The workspace runner still uses an explicit maintained-suite
+allowlist so additions are reviewed before CI executes them.
 
 ## Cross-repository work
 
@@ -103,9 +105,25 @@ Configure an authorized GitHub login on each laptop when pushing changes; never
 put credentials in the workspace files. Workflow publication uses the connected
 GitHub account and does not copy a local Git login to other machines.
 
-For the chat-v2 feature branch's exact Docker migration, backfill, worker, and
-diagnostic sequence, read [Development Compose and another-laptop
-setup](chat-v2.md#development-compose-and-another-laptop-setup).
+For the Matrix feature branch's exact Docker migration, reconciliation, purge and
+diagnostic sequence, read [Development Compose / another
+laptop](chat-v2.md#development-compose--another-laptop).
+
+The private Matrix development stack is pinned to Synapse 1.162.0 and uses a
+dedicated PostgreSQL service/volume. Configure ignored local secrets with
+`tools/configure_matrix_dev.py`, rebuild both Django `web` and
+`matrix_reconciler` images, and verify the
+configured public Matrix origin from the device network. Apply the additive Django migration through
+`chat/0005a_durable_matrix_revocation.py` while the old web/workers are quiesced,
+reconcile, live-verify every Matrix room, and refresh the short-lived readiness
+attestation after the backup. Readiness also probes the loaded Synapse policy
+module and rejects accepted/current relationships that are missing their
+ChatRoom or ACTIVE mapping. Only then apply the irreversible `0006` cutover
+with the exact one-time confirmation documented in
+[`chat-v2.md`](chat-v2.md). Run
+`reconcile_relationship_rooms --apply` to backfill existing accepted couples,
+and run the `matrix_reconciler` service. The
+normal Django settings remain fail-closed when Matrix configuration is absent.
 
 ## Core contract checks
 
@@ -113,8 +131,8 @@ setup](chat-v2.md#development-compose-and-another-laptop-setup).
 .venv/bin/python tools/check_core_contracts.py
 ```
 
-The normal server now requires environment-backed `DJANGO_SECRET_KEY`,
-`DJANGO_ALLOWED_HOSTS` and optional browser `WEBSOCKET_ALLOWED_ORIGINS`. Use
+The normal server now requires environment-backed `DJANGO_SECRET_KEY` and
+`DJANGO_ALLOWED_HOSTS`. Use
 `.env.example` only for fresh local values; plan any existing signing-key rotation
 with the Authentication rollout. Never use workspace test settings to serve users.
 
@@ -145,7 +163,7 @@ checkout:
 
 ```sh
 git pull --ff-only origin codex/couple-chat-rebuild
-docker compose up -d --force-recreate web chat_outbox chat_maintenance
+docker compose up -d --force-recreate web matrix_reconciler synapse
 curl -i http://192.168.1.73:8000/api/auth/interests/
 ```
 
@@ -161,7 +179,7 @@ Modern Compose also accepts `docker compose` with the same arguments. A containe
 recreation reloads environment values; an application autoreload is insufficient
 when the old value was injected into the container. The catalogue request must
 return 200 JSON. A read-only GET to `send-otp/` returns 405 JSON (it requires POST),
-and unauthenticated `chat/rooms/` returns 401 JSON. Do not send a real OTP simply
+and an unauthenticated Matrix session request returns 401 JSON. Do not send a real OTP simply
 to test connectivity. If the laptop's DHCP address changes, update `SRISU_DEV_LAN_HOST`
 and rebuild the client with the new `srisu.apiBaseUrl` origin.
 
@@ -173,13 +191,13 @@ follow-up Compose default makes pull/recreate sufficient for that LAN address.
 
 ## Full mobile HTTP route inventory
 
-`contracts/core-1/routes.json` lists all 26 first-party HTTP method/path/query
+`contracts/core-1/routes.json` lists the current first-party HTTP method/path/query
 combinations currently called by KMP. `srisu.test_api_routes` resolves each against
 the actual Django URLconf and view methods, and verifies the LAN-host rejection
 and explicit-allowlist fix with mocked SMS. The frontend pins this file and tests
 actual service requests against it. This extends the earlier core fixture subset;
 it is not a complete schema for all legacy response bodies. The external city
-catalogue and WebSocket protocol remain separate.
+catalogue and standard Matrix client APIs remain separate.
 
 ## Navigation-era client contract (2026-10-01)
 
