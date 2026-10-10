@@ -67,42 +67,6 @@ class UserModelSerializer(serializers.ModelSerializer):
         return None
 
 
-class UserSuggestionSerializer(serializers.ModelSerializer):
-    user_interests = UserInterestSerializer(many=True, read_only=True)
-    user_photos = UserPhotoSerializer(many=True, read_only=True)
-    profile_photo = serializers.SerializerMethodField()
-    crushed = serializers.BooleanField()
-
-    class Meta:
-        model = UserModel
-        fields = [
-            "id",
-            "phone_number",
-            "full_name",
-            "username",
-            "user_interests",
-            "user_photos",
-            "profile_photo",
-            "city",
-            "country",
-            "dob",
-            "gender",
-            "zodiac_sign",
-            "mood",
-            "bio",
-            "crushed",
-        ]
-
-    def get_profile_photo(self, obj):
-        request = self.context.get("request")
-        if obj.profile_photo and request:
-            return request.build_absolute_uri(obj.profile_photo.url)
-
-        if obj.profile_photo:
-            base_url = get_base_url(self.context.get("scope", {}))
-            return f"{base_url}{obj.profile_photo.url}"
-
-        return None
 
 
 def normalize_phone(value):

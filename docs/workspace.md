@@ -173,3 +173,10 @@ and explicit-allowlist fix with mocked SMS. The frontend pins this file and test
 actual service requests against it. This extends the earlier core fixture subset;
 it is not a complete schema for all legacy response bodies. The external city
 catalogue and WebSocket protocol remain separate.
+
+## Navigation-era client contract (2026-10-01)
+
+[Dating retirement and compatibility](navigation-retirement.md) supersedes the older
+all-26-calls count and active dating expectations above. Current KMP calls, retired
+paths and preserved personal-preference APIs are separated in routes.json. No database
+migrations or production changes are required by this retirement.

@@ -29,13 +29,12 @@ def main():
     from django.test.utils import setup_databases
     setup_databases(verbosity=0, interactive=False)
     from authentication.models import UserModel, InterestModel
-    from social.models import SingleConnectionModel, CoupleConnectionModel
+    from social.models import CoupleConnectionModel
     from social.services.couple_profile_service import create_or_get_couple_for_connection
     from chat.models import ChatRoom, MessageModel
     from rest_framework_simplejwt.tokens import AccessToken
     first = UserModel.objects.create_user(phone_number='+15005550101', full_name='Synthetic A', is_phone_verified=True, is_profile_complete=True)
     second = UserModel.objects.create_user(phone_number='+15005550102', full_name='Synthetic B', is_phone_verified=True, is_profile_complete=True)
-    link = SingleConnectionModel.objects.create(sender_number=first.phone_number, receiver_number=second.phone_number, connection_status='ACCEPTED')
     couple_link = CoupleConnectionModel.objects.create(sender_number=first.phone_number, receiver_number=second.phone_number, connection_status='ACCEPTED')
     couple = create_or_get_couple_for_connection(couple_link)
     room = ChatRoom.objects.create(user_one=first, user_two=second, couple=couple, chat_type='couple')

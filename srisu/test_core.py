@@ -31,8 +31,8 @@ from utils.exception_handlers import custom_exception_handler
 
 def fixtures():
     users = [UserModel.objects.create_user(phone_number=f'+15005550{i:03}', full_name=f'Synthetic {i}', is_phone_verified=True, is_profile_complete=True) for i in range(3)]
-    link = SingleConnectionModel.objects.create(sender_number=users[0].phone_number, receiver_number=users[1].phone_number, connection_status='ACCEPTED')
-    room = ChatRoom.objects.create(user_one=users[0], user_two=users[1], singles=link)
+    link = CoupleConnectionModel.objects.create(sender_number=users[0].phone_number, receiver_number=users[1].phone_number, connection_status='ACCEPTED')
+    room = ChatRoom.objects.create(user_one=users[0], user_two=users[1], couple=create_or_get_couple_for_connection(link), chat_type='couple')
     return users, link, room
 
 
@@ -88,9 +88,7 @@ class CoreHttpTests(TestCase):
         self.assertLessEqual(len(queries), 8)
 
     def test_membership_revocation_denies_couple_history(self):
-        connection = CoupleConnectionModel.objects.create(sender_number=self.users[0].phone_number, receiver_number=self.users[1].phone_number, connection_status='ACCEPTED')
-        couple = create_or_get_couple_for_connection(connection)
-        ChatRoom.objects.filter(pk=self.room.pk).update(couple=couple)
+        couple = self.room.couple
         self.assertEqual(self.client.get(self.history, **self.headers).status_code, 200)
         CoupleMembershipModel.objects.filter(couple=couple, user=self.users[1]).delete()
         self.assertEqual(self.client.get(self.history, **self.headers).status_code, 404)
@@ -100,10 +98,12 @@ class CoreHttpTests(TestCase):
         other = ChatRoom.objects.create(user_one=self.users[0], user_two=self.users[2], singles=other_link)
         ChatRoom.objects.filter(pk=other.pk).update(updated_at=self.room.updated_at)
         first = self.client.get('/api/chat/rooms/', {'limit': 1}, **self.headers).data['data']
-        second = self.client.get('/api/chat/rooms/', {'limit': 1, 'cursor': first['next_cursor']}, **self.headers).data['data']
-        self.assertNotEqual(first['chat_rooms'][0]['id'], second['chat_rooms'][0]['id'])
+        self.assertEqual([room['id'] for room in first['chat_rooms']], [str(self.room.pk)])
+        self.assertIsNone(first['next_cursor'])
+        from django.core import signing
+        cursor = signing.dumps({'user': self.users[0].pk, 'at': self.room.updated_at.isoformat(), 'id': str(self.room.pk)}, salt='srisu.chat.rooms.core-1')
         self.client.force_authenticate(self.users[1])
-        self.assertEqual(self.client.get('/api/chat/rooms/', {'cursor': first['next_cursor']}, **self.headers).status_code, 400)
+        self.assertEqual(self.client.get('/api/chat/rooms/', {'cursor': cursor}, **self.headers).status_code, 400)
 
     def test_cached_catalogue_query_count_and_committed_invalidation(self):
         category = InterestCategory.objects.create(name='outdoors', label='Outdoors')
@@ -201,7 +201,7 @@ class CoreSocketTests(TransactionTestCase):
             self.assertTrue(await database_sync_to_async(MessageModel.objects.filter(pk=acknowledgment['data']['message']['id']).exists)())
             from channels.layers import get_channel_layer
             layer = get_channel_layer()
-            await database_sync_to_async(SingleConnectionModel.objects.filter(pk=self.link.pk).update)(connection_status='BLOCKED')
+            await database_sync_to_async(CoupleConnectionModel.objects.filter(pk=self.link.pk).update)(connection_status='BLOCKED')
             await layer.group_send(f'chat_room_{self.room.pk}', {'type': 'chat.broadcast', 'room_id': str(self.room.pk), 'payload': socket_event(action='message_created', data={'private': 'must not reach client'})})
             response = await socket.receive_json_from(); self.assertEqual(response['action'], 'access_revoked'); self.assertNotIn('private', str(response))
             await socket.disconnect()
