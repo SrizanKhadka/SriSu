@@ -46,10 +46,16 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
     "chat",
+    "couple_chat",
     "rest_framework_simplejwt.token_blacklist",
     "channels",
     "social"
 ]
+
+# Temporary local preview only: no private-content transport until native E2EE
+# and protected persistence have passed the paired platform spike.
+COUPLE_CHAT_PREVIEW_ENABLED = config("COUPLE_CHAT_PREVIEW_ENABLED", default=True, cast=bool)
+COUPLE_CHAT_ROOM_MEDIA_BYTES = config("COUPLE_CHAT_ROOM_MEDIA_BYTES", default=536870912, cast=int)
 
 MIDDLEWARE = [
     "srisu.api.middleware.RequestContextMiddleware",

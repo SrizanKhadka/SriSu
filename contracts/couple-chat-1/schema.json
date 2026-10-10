@@ -1,0 +1,930 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://srisu.invalid/contracts/couple-chat-1",
+  "title": "Couple chat device and encrypted transport contract",
+  "$defs": {
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "relationship_id",
+        "participant_ids",
+        "sequence",
+        "security_state",
+        "can_send"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "relationship_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "participant_ids": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "security_state": {
+          "enum": [
+            "setup_required",
+            "ready"
+          ]
+        },
+        "can_send": {
+          "type": "boolean"
+        },
+        "participant_names": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "room",
+        "devices"
+      ],
+      "properties": {
+        "contract": {
+          "const": "couple-chat-1"
+        },
+        "room": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/room"
+            }
+          ]
+        },
+        "devices": {
+          "$ref": "#/$defs/devices"
+        }
+      }
+    },
+    "invalidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "type"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "state.changed"
+        }
+      }
+    },
+    "ecKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "public_key"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "public_key": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 44
+        }
+      }
+    },
+    "signedKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "public_key",
+        "signature"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "public_key": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 44
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 88,
+          "maxLength": 88
+        }
+      }
+    },
+    "kyberKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "public_key",
+        "signature"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "public_key": {
+          "type": "string",
+          "minLength": 2092,
+          "maxLength": 2092
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 88,
+          "maxLength": 88
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "user_id",
+        "registration_id",
+        "identity_key",
+        "signed_prekey"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "user_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "registration_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16383
+        },
+        "identity_key": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 44
+        },
+        "signed_prekey": {
+          "$ref": "#/$defs/signedKey"
+        },
+        "prekeys_remaining": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ec",
+            "kyber"
+          ],
+          "properties": {
+            "ec": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "kyber": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        }
+      }
+    },
+    "devices": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_device",
+        "session_owns_device",
+        "partner_device"
+      ],
+      "properties": {
+        "current_device": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/device"
+            }
+          ]
+        },
+        "session_owns_device": {
+          "type": "boolean"
+        },
+        "partner_device": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/device"
+            }
+          ]
+        }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signed_prekey",
+        "ec_prekeys",
+        "kyber_prekeys",
+        "device_id",
+        "registration_id",
+        "identity_key"
+      ],
+      "properties": {
+        "signed_prekey": {
+          "$ref": "#/$defs/signedKey"
+        },
+        "ec_prekeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ecKey"
+          },
+          "maxItems": 100
+        },
+        "kyber_prekeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/kyberKey"
+          },
+          "maxItems": 30
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "replace_device_id": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "uuid"
+            }
+          ]
+        },
+        "registration_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16383
+        },
+        "identity_key": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 44
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signed_prekey",
+        "ec_prekeys",
+        "kyber_prekeys",
+        "device_id",
+        "operation_id"
+      ],
+      "properties": {
+        "signed_prekey": {
+          "$ref": "#/$defs/signedKey"
+        },
+        "ec_prekeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ecKey"
+          },
+          "maxItems": 100
+        },
+        "kyber_prekeys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/kyberKey"
+          },
+          "maxItems": 30
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_id",
+        "recipient_device_id",
+        "operation_id"
+      ],
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recipient_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "user_id",
+        "registration_id",
+        "identity_key",
+        "signed_prekey",
+        "ec_prekey",
+        "kyber_prekey"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "user_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "registration_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16383
+        },
+        "identity_key": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 44
+        },
+        "signed_prekey": {
+          "$ref": "#/$defs/signedKey"
+        },
+        "ec_prekey": {
+          "$ref": "#/$defs/ecKey"
+        },
+        "kyber_prekey": {
+          "$ref": "#/$defs/kyberKey"
+        }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_id",
+        "recipient_device_id",
+        "operation_id",
+        "kind",
+        "target_id",
+        "signal_type",
+        "ciphertext"
+      ],
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recipient_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "enum": [
+            "message",
+            "reaction",
+            "delete",
+            "receipt.delivered",
+            "receipt.read",
+            "receipt.played",
+            "card.response"
+          ]
+        },
+        "target_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reply_to": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "uuid"
+            }
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "signal_type": {
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "ciphertext": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 87384
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "sequence",
+        "applied",
+        "accepted_at"
+      ],
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "applied": {
+          "type": "boolean"
+        },
+        "accepted_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "receivedOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recipient_device_id",
+        "operation_id",
+        "kind",
+        "target_id",
+        "reply_to",
+        "version",
+        "signal_type",
+        "ciphertext",
+        "sender_device_id",
+        "actor_id",
+        "applied",
+        "unavailable",
+        "target_deleted"
+      ],
+      "properties": {
+        "recipient_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "enum": [
+            "message",
+            "reaction",
+            "delete",
+            "receipt.delivered",
+            "receipt.read",
+            "receipt.played",
+            "card.response"
+          ]
+        },
+        "target_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reply_to": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "uuid"
+            }
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "signal_type": {
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "ciphertext": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 44,
+              "maxLength": 87384
+            }
+          ]
+        },
+        "sender_device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "actor_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "applied": {
+          "type": "boolean"
+        },
+        "unavailable": {
+          "type": "boolean"
+        },
+        "target_deleted": {
+          "type": "boolean"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "kind",
+        "created_at",
+        "metadata",
+        "operation"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "room.created",
+            "room.revoked",
+            "device.changed",
+            "operation",
+            "spark.changed"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "operation": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/receivedOperation"
+            }
+          ]
+        }
+      }
+    },
+    "sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changes",
+        "cursor",
+        "high_watermark",
+        "has_more"
+      ],
+      "properties": {
+        "changes": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/change"
+          }
+        },
+        "cursor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "high_watermark": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "has_more": {
+          "type": "boolean"
+        }
+      }
+    },
+    "attachment_init": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attachment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "ciphertext_size": {
+          "type": "integer",
+          "minimum": 29,
+          "maximum": 16777244
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "device_id",
+        "attachment_id",
+        "message_id",
+        "ciphertext_size",
+        "sha256"
+      ]
+    },
+    "attachment_device": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "device_id"
+      ]
+    },
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "ciphertext_size": {
+          "type": "integer",
+          "minimum": 29,
+          "maximum": 16777244
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "uploaded",
+            "ready",
+            "attached",
+            "deleted"
+          ]
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "message_id",
+        "ciphertext_size",
+        "sha256",
+        "state",
+        "expires_at"
+      ]
+    },
+    "media_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "expires_in": {
+          "const": 60
+        }
+      },
+      "required": [
+        "capability",
+        "expires_in"
+      ]
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "activity"
+        },
+        "room_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "online": {
+          "type": "boolean"
+        },
+        "typing": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "room_id",
+        "device_id",
+        "online",
+        "typing"
+      ]
+    },
+    "partner_activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "partner.activity"
+        },
+        "room_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "online": {
+          "type": "boolean"
+        },
+        "typing": {
+          "type": "boolean"
+        },
+        "expires_in_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25000
+        },
+        "typing_expires_in_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "room_id",
+        "online",
+        "typing",
+        "expires_in_ms",
+        "typing_expires_in_ms"
+      ]
+    },
+    "spark": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "submitted": {
+          "type": "boolean"
+        },
+        "partner_submitted": {
+          "type": "boolean"
+        },
+        "revealed": {
+          "type": "boolean"
+        },
+        "answers": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/receivedOperation"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "submitted",
+        "partner_submitted",
+        "revealed",
+        "answers"
+      ]
+    }
+  }
+}

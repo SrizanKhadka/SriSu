@@ -1,4 +1,4 @@
-FROM python:3.13
+FROM python:3.13.5
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -13,7 +13,7 @@ WORKDIR /app
 COPY Pipfile Pipfile.lock ./
 
 # Install project dependencies
-RUN pipenv install --system --dev
+RUN pipenv sync --system --dev
 
 COPY . .
 

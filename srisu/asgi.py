@@ -9,13 +9,14 @@ from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from chat.routing import websocket_urlpatterns
 from chat.middleware import JwtAuthMiddleware
+from couple_chat.routing import websocket_urlpatterns as couple_chat_patterns
+from django.urls import re_path
 
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
-    "websocket": JwtAuthMiddleware(
-        AuthMiddlewareStack(
-            URLRouter(websocket_urlpatterns)
-        )
-    ),
+    "websocket": URLRouter([
+        *couple_chat_patterns,
+        re_path(r"", JwtAuthMiddleware(AuthMiddlewareStack(URLRouter(websocket_urlpatterns)))),
+    ]),
 })

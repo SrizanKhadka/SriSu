@@ -189,10 +189,11 @@ class ProfilePlans(ProfileAPI):
             if not created and (plan.title != data["title"] or plan.starts_at != data["starts_at"] or plan.audience_membership_ids != audience(members)):
                 raise ProfileConflict()
             if created:
-                from social.services.couple_profile_chat import send_profile_card
-                send_profile_card(request.user, couple, members, data["request_id"],
-                    {"kind": "plan", "couple_id": couple.pk, "plan_id": plan.pk},
-                    f"Plan together: {plan.title} — {plan.starts_at.isoformat()}")
+                if data["share_to_legacy_chat"]:
+                    from social.services.couple_profile_chat import send_profile_card
+                    send_profile_card(request.user, couple, members, data["request_id"],
+                        {"kind": "plan", "couple_id": couple.pk, "plan_id": plan.pk},
+                        f"Plan together: {plan.title} — {plan.starts_at.isoformat()}")
                 record_change(couple, request.user, "plans")
             return Response({"message": "Plan saved.", "data": plan_data(plan)}, status=201 if created else 200)
 

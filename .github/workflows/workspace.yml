@@ -2,9 +2,9 @@ name: SriSu backend checks
 
 on:
   push:
-    branches: [dev, codex/workspace-integration]
+    branches: [dev, dev-core-architecture, codex/workspace-integration]
   pull_request:
-    branches: [dev]
+    branches: [dev, dev-core-architecture]
   workflow_dispatch:
 
 permissions:

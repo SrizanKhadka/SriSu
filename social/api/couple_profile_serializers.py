@@ -87,6 +87,9 @@ class CoverInput(SectionInput):
 
 
 class PlanInput(StrictSerializer):
+    # Released clients retain legacy card delivery. E2EE clients explicitly
+    # create their encrypted reference only after this domain operation succeeds.
+    share_to_legacy_chat = serializers.BooleanField(default=True)
     request_id = serializers.UUIDField()
     title = serializers.CharField(max_length=120)
     starts_at = serializers.DateTimeField()

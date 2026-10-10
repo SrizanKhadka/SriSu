@@ -26,7 +26,6 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         sender_number = validated_data["sender_number"]
         receiver_number = validated_data["receiver_number"]
         
-        print(f"Sender Number: {sender_number}, Receiver Number: {receiver_number}")  # Debugging line
 
         if not is_number_valid(number=sender_number):
             raise serializers.ValidationError("Sender_number is Invalid!")
@@ -41,7 +40,6 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         elif not user_with_number_exists(number=receiver_number):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
         
-        print(f"Validation passed for Sender: {sender_number}, Receiver: {receiver_number}")  # Debugging line
 
         return validated_data
     
