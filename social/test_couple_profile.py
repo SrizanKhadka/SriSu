@@ -223,6 +223,15 @@ class CoupleProfileTests(ProfileFixtures, APITestCase):
         self.assertEqual(self.client.get(path).status_code,404)
         self.assertEqual(self.client.get(self.base+'plans/').status_code,404)
 
+    def test_encrypted_chat_plan_does_not_create_legacy_plaintext_message(self):
+        from chat.models import MessageModel
+        before=MessageModel.objects.count()
+        payload={'request_id':str(uuid4()),'title':'Synthetic private plan','starts_at':(timezone.now()+timedelta(days=1)).isoformat(),'share_to_legacy_chat':False}
+        response=self.client.post(self.base+'plans/',payload,format='json')
+        self.assertEqual(response.status_code,201,response.data)
+        self.assertEqual(self.client.post(self.base+'plans/',payload,format='json').status_code,200)
+        self.assertEqual(MessageModel.objects.count(),before)
+
     def test_history_is_bounded_and_private(self):
         from social.models import CoupleProfileChangeModel
         CoupleProfileChangeModel.objects.bulk_create([CoupleProfileChangeModel(couple=self.target,actor=self.first,section='story') for _ in range(23)])

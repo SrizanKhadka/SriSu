@@ -1,0 +1,132 @@
+{
+  "contract": "couple-chat-1",
+  "scope": "Implemented room/key, encrypted operation, private media, short-lived activity and gated Spark transport. Private Ask/card content is a typed E2EE client payload. Plans and Moments retain domain authorization.",
+  "http": [
+    {
+      "method": "GET",
+      "path": "/api/couple-chat/v1/state/",
+      "response": "state"
+    },
+    {
+      "method": "GET",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/",
+      "response": "room"
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/devices/",
+      "response": "device",
+      "request": "registration"
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/devices/keys/",
+      "response": "device",
+      "request": "publication"
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/bundles/claim/",
+      "response": "bundle",
+      "request": "claim"
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/operations/",
+      "response": "acceptance",
+      "request": "envelope"
+    },
+    {
+      "method": "GET",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/changes/",
+      "response": "sync"
+    },
+    {
+      "method": "GET",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/devices/{device_id}/",
+      "response": "device"
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/attachments/",
+      "request": "attachment_init",
+      "response": "attachment"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/attachments/{attachment_id}/upload/",
+      "request": "binary ciphertext",
+      "response": "attachment",
+      "headers": [
+        "Authorization",
+        "X-Chat-Device"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/attachments/{attachment_id}/finalize/",
+      "request": "attachment_device",
+      "response": "attachment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/attachments/{attachment_id}/cancel/",
+      "request": "attachment_device",
+      "response": "attachment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/attachments/{attachment_id}/capability/",
+      "request": "attachment_device",
+      "response": "media_capability"
+    },
+    {
+      "method": "GET",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/attachments/{attachment_id}/content/",
+      "response": "binary ciphertext",
+      "headers": [
+        "Authorization",
+        "X-Chat-Media-Capability"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/sparks/{spark_id}/",
+      "response": "spark",
+      "request": "attachment_device"
+    },
+    {
+      "method": "GET",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/sparks/{spark_id}/",
+      "response": "spark",
+      "query": [
+        "device_id"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/couple-chat/v1/rooms/{room_id}/sparks/{spark_id}/answer/",
+      "response": "spark",
+      "request": "envelope"
+    }
+  ],
+  "socket": {
+    "path": "/ws/couple-chat/v1/updates/",
+    "authentication": "Authorization Bearer header with current sid; no query tokens",
+    "server_frames": [
+      "invalidation",
+      "partner_activity"
+    ],
+    "client_frames": [
+      "activity"
+    ],
+    "recovery": "Fetch state and page the ordered changes after the durable local cursor on foreground/resume/reconnect. Hints are not acknowledgements.",
+    "limits": {
+      "utf8_bytes": 512,
+      "burst": 4,
+      "per_second": 1,
+      "presence_ttl_ms": 25000,
+      "typing_ttl_ms": 5000
+    }
+  }
+}
