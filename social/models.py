@@ -63,10 +63,26 @@ class CoupleModel(models.Model):
     )
 
     cover_photo = models.ImageField(
-        upload_to="couples/profile_photos/",
+        upload_to="couples/profile_private/",
         null=True,
         blank=True
     )
+
+    cover_source_moment_photo = models.ForeignKey(
+        "CoupleMomentPhotoModel",
+        on_delete=models.SET_NULL,
+        related_name="couple_profile_covers",
+        null=True,
+        blank=True,
+    )
+    cover_focal_y = models.FloatField(
+        default=0.5,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+    )
+    revision = models.PositiveBigIntegerField(default=1)
+    section_revisions = models.JSONField(default=dict, blank=True)
+    privacy_proposal = models.JSONField(null=True, blank=True)
+    privacy_proposal_version = models.PositiveBigIntegerField(default=0)
 
     profile_completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -76,6 +92,7 @@ class CoupleModel(models.Model):
         ordering = ["-created_at"]
         verbose_name = "Couple"
         verbose_name_plural = "Couples"
+        constraints = [models.CheckConstraint(condition=models.Q(cover_focal_y__gte=0, cover_focal_y__lte=1), name="couple_cover_focal_bounds")]
 
     def __str__(self):
         names = list(self.members.values_list("full_name", flat=True)[:2])
@@ -118,6 +135,80 @@ class CoupleMembershipModel(models.Model):
 
     def __str__(self):
         return f"{self.user} in {self.couple_id}"
+
+
+class CoupleStoryAnswerModel(models.Model):
+    PROMPTS = [
+        ("how_met", "Where did you two meet?"),
+        ("first_move", "Who made the first move?"),
+        ("first_impression", "First impression, in three words"),
+    ]
+
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="story_answers")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="couple_story_answers")
+    prompt = models.CharField(max_length=32, choices=PROMPTS)
+    answer = models.CharField(max_length=240)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["prompt", "author_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["couple", "author", "prompt"], name="unique_couple_story_answer")
+        ]
+        indexes = [models.Index(fields=["couple", "prompt"], name="couple_story_prompt_idx")]
+
+
+class CoupleSongModel(models.Model):
+    couple = models.OneToOneField(CoupleModel, on_delete=models.CASCADE, related_name="song")
+    title = models.CharField(max_length=120)
+    artist = models.CharField(max_length=120, blank=True)
+    band = models.CharField(max_length=120, blank=True)
+    picked_by = models.ForeignKey(UserModel, on_delete=models.SET_NULL, null=True, related_name="picked_couple_songs")
+    note = models.CharField(max_length=240, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class CouplePrivacyConsentModel(models.Model):
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="privacy_consents")
+    user = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="couple_privacy_consents")
+    proposal_version = models.PositiveBigIntegerField()
+    approved_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["couple", "user"], name="unique_couple_privacy_consent")
+        ]
+
+
+class CoupleProfileChangeModel(models.Model):
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="profile_changes")
+    actor = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="couple_profile_changes")
+    section = models.CharField(max_length=32)
+    action = models.CharField(max_length=20, default="updated")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["couple", "-created_at"], name="couple_profile_history_idx")]
+
+class CouplePlanModel(models.Model):
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="plans")
+    created_by = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="couple_plans")
+    request_id = models.UUIDField()
+    title = models.CharField(max_length=120)
+    starts_at = models.DateTimeField()
+    response = models.CharField(max_length=16, choices=[("pending", "Pending"), ("yes", "Yes"), ("no", "No"), ("another_time", "Another time")], default="pending")
+    response_note = models.CharField(max_length=240, blank=True)
+    completed = models.BooleanField(default=False)
+    revision = models.PositiveBigIntegerField(default=1)
+    audience_membership_ids = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["starts_at", "id"]
+        constraints = [models.UniqueConstraint(fields=["couple", "created_by", "request_id"], name="unique_couple_plan_request")]
+        indexes = [models.Index(fields=["couple", "starts_at", "id"], name="couple_plan_date_idx")]
+
 
 class CoupleFaveModel(models.Model):
     """A personal, one-way preference. Never shared with the user's partner."""

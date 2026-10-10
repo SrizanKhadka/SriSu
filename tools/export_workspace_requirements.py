@@ -20,3 +20,8 @@ for name, spec in sorted(lock["default"].items()):
     extras = "[" + ",".join(spec["extras"]) + "]" if spec.get("extras") else ""
     marker = "; " + spec["markers"] if spec.get("markers") else ""
     print(name + extras + version + marker)
+
+# Shared-contract validation is a test-only addition, independent of app upgrades.
+for line in (root / "requirements-core-tests.txt").read_text().splitlines():
+    if line and not line.startswith("#"):
+        print(line)

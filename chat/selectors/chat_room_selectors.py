@@ -9,6 +9,7 @@ from django.utils.dateparse import parse_datetime
 
 from chat.models import ChatRoom, MessageModel
 from authentication.models import UserModel
+from chat.selectors.access import authorized_rooms
 
 
 def get_user_chat_rooms_queryset(user: UserModel) -> QuerySet[ChatRoom]:
@@ -20,8 +21,7 @@ def get_user_chat_rooms_queryset(user: UserModel) -> QuerySet[ChatRoom]:
     - preloads related users and last_message for efficient room-list rendering
     """
     return (
-        ChatRoom.objects
-        .filter(Q(user_one=user) | Q(user_two=user))
+        authorized_rooms(user)
         .select_related(
             "user_one",
             "user_two",
@@ -36,7 +36,7 @@ def get_user_chat_rooms_queryset(user: UserModel) -> QuerySet[ChatRoom]:
         .prefetch_related(
             "last_message__medias",
         )
-        .order_by("-updated_at")
+        .order_by("-updated_at", "-id")
     )
 
 
@@ -76,9 +76,8 @@ def get_chat_room_for_user(
     This is the main authorization-safe room selector for websocket actions.
     """
     return (
-        ChatRoom.objects
+        authorized_rooms(user)
         .filter(id=chat_room_id)
-        .filter(Q(user_one=user) | Q(user_two=user))
         .select_related("user_one", "user_two", "couple", "singles", "last_message")
         .first()
     )

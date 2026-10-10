@@ -17,7 +17,7 @@ from chat.services.reaction_service import react_to_message
 from chat.services.typing_service import set_typing_status
 from chat.websocket.actions import ChatSocketActions
 from chat.websocket.events import ChatSocketEvents
-from chat.websocket.exceptions import ChatServiceError
+from chat.websocket.exceptions import ChatServiceError, ChatRoomNotFoundError, MessageNotFoundError, PermissionDeniedError
 from chat.websocket.responses import socket_error, socket_event, socket_success
 
 
@@ -39,7 +39,8 @@ class ChatSocketHandlerMixin:
         if not handler:
             return socket_error(
                 action=action,
-                message=f"Unknown action: {action}",
+                message="Unknown action.",
+                code="unknown_action",
                 request_id=request_id,
             )
 
@@ -48,13 +49,15 @@ class ChatSocketHandlerMixin:
         except ChatServiceError as exc:
             return socket_error(
                 action=action,
-                message=str(exc),
+                message="Action not allowed." if isinstance(exc, PermissionDeniedError) else "Unable to complete this command.",
+                status=403 if isinstance(exc, PermissionDeniedError) else 404 if isinstance(exc, (ChatRoomNotFoundError, MessageNotFoundError)) else 400,
                 request_id=request_id,
             )
         except Exception:
             return socket_error(
                 action=action,
                 message="Internal server error",
+                status=500,
                 request_id=request_id,
             )
 
@@ -115,10 +118,12 @@ class ChatSocketHandlerMixin:
             return socket_error(
                 action=ChatSocketActions.FETCH_MESSAGES,
                 message="Chat room not found or access denied",
+                status=404,
                 request_id=request_id,
             )
             
-        # await self.ensure_room_subscription(str(chat_room.id))
+        if not await self.ensure_room_subscription(str(chat_room.id)):
+            return socket_error(action=ChatSocketActions.FETCH_MESSAGES, status=429, message='Subscription limit reached.', request_id=request_id)
 
         messages, has_more, next_cursor = await database_sync_to_async(get_paginated_messages_before)(
             chat_room=chat_room,
@@ -185,7 +190,6 @@ class ChatSocketHandlerMixin:
         )
 
         message_data = await self.serialize_message(message)
-        print("Deleted message data:", message_data)
         
 
         await self.broadcast_to_room(
@@ -318,7 +322,6 @@ class ChatSocketHandlerMixin:
     async def _handle_set_typing(self, *, payload: dict, request_id: str | None):
         user = self.scope["user"]
         
-        print(f"Handling set typing: user={user}, payload={payload}")
         
         result = await database_sync_to_async(set_typing_status)(
             user=user,

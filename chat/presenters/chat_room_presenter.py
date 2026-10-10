@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 
 from chat.presenters.message_presenter import serialize_message_for_socket_sync
 from chat.selectors.chat_room_selectors import get_other_user
@@ -13,7 +13,6 @@ def _serialize_other_user(other_user, base_url: str) -> dict | None:
     profile_photo = getattr(other_user, "profile_photo", None)
     profile_photo_url = None
 
-    print(f"Serializing other user: {other_user}, profile_photo: {profile_photo}, base_url: {base_url}")
 
     if profile_photo:
         try:
@@ -56,11 +55,11 @@ def serialize_chat_room_preview_for_socket_sync(chat_room, me, scope) -> dict:
     }
 
 
-@sync_to_async
+@database_sync_to_async
 def serialize_chat_room_preview_for_socket(chat_room, me, scope) -> dict:
     return serialize_chat_room_preview_for_socket_sync(chat_room, me, scope)
 
 
-@sync_to_async
+@database_sync_to_async
 def serialize_chat_room_list_item_for_socket(chat_room, me, scope) -> dict:
     return serialize_chat_room_preview_for_socket_sync(chat_room, me, scope)

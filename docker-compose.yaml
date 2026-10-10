@@ -14,15 +14,25 @@ services:
     depends_on:
       - srisu_db                  # Ensure the 'db' service starts before 'web'
     environment:            # Environment variables for Django
-      - DEBUG=1             # Set DEBUG mode to true (useful for development)
-      - DB_NAME=${POSTGRES_DB}      # Database name
-      - DB_USER=${POSTGRES_USER}  # Database user
-      - DB_PASSWORD=${POSTGRES_PASSWORD} # Database password
-      - DB_HOST=${POSTGRES_HOST}          # Database hostname (service name of PostgreSQL container)
-      - DB_PORT=5432        # Database port
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
+      # Development only: accept OTP requests without calling the expired Twilio trial.
+      # Set OTP_MOCK_DELIVERY=false to resume real SMS delivery.
+      - OTP_MOCK_DELIVERY=${OTP_MOCK_DELIVERY:-true}
+      # Shared development OTP, used only with mock delivery. Not a real credential.
+      - OTP_MOCK_CODE=${OTP_MOCK_CODE:-123456}
+      # Development server: append the mobile client's backend LAN host even when
+      # an existing .env has a localhost-only allowlist. Empty SRISU_DEV_LAN_HOST
+      # disables this addition; set it to another IP when changing laptops/networks.
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73}
+      # Match the names read by srisu.settings. Inside Docker, connect to the
+      # service DNS name, independently of the host's non-Docker .env address.
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=srisu_db
       - DJANGO_SETTINGS_MODULE=srisu.settings
       - REDIS_HOST=redis
-      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PORT=6379
 
 
   # Database service (PostgreSQL)

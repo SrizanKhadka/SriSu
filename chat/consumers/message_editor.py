@@ -15,7 +15,7 @@ async def handle_edit_message(data):
         message.is_edited = True
         await save_message(message)
         
-        print(f"Message edited:  {message.text}")
+        pass  # Private payloads must not be printed.
         return message
 
 async def handle_mark_messages_read(data):
@@ -23,7 +23,7 @@ async def handle_mark_messages_read(data):
     current_user = data.get("user_id")
 
     if not chat_room_id:
-        print("No ChatRoom ID Provided")
+        pass  # Private payloads must not be printed.
         return None
 
     try:
@@ -43,7 +43,7 @@ async def handle_mark_messages_read(data):
     )()
 
     if not unread_messages:
-        print('No unread messages found')
+        pass  # Private payloads must not be printed.
         return None
 
     # Mark as read
@@ -55,7 +55,7 @@ async def handle_mark_messages_read(data):
         ["is_read"]
     )
     
-    print('All messages marked as read')
+    pass  # Private payloads must not be printed.
 
     return {
         "action": "messages_read",
@@ -88,7 +88,7 @@ async def handle_mark_messages_delivered(data):
     )()
 
     if not undelivered_message:
-        print('No undelivered messages found')
+        pass  # Private payloads must not be printed.
         return None
 
     # Mark as read
@@ -100,7 +100,7 @@ async def handle_mark_messages_delivered(data):
         ["is_delivered"]
     )
 
-    print('All messages marked as delivered')
+    pass  # Private payloads must not be printed.
     return {
         "action": "messages_delivered",
         "chat_room_id": str(chat_room.id),

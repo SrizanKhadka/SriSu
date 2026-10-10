@@ -1,0 +1,69 @@
+{
+  "contract": "core-1",
+  "owner": "SrizanKhadka/SriSu",
+  "fixtures": {
+    "interests": "interests",
+    "empty_interests": "interests",
+    "validation_error": "httpError",
+    "history": "history",
+    "empty_history": "history",
+    "socket_message": "socketEvent",
+    "socket_ack": "socketAck",
+    "socket_error": "socketError",
+    "rooms": "rooms",
+    "auth_challenge": "authChallenge",
+    "auth_profile": "authProfile",
+    "auth_refresh": "authRefresh",
+    "couple_profile_member": "coupleProfile",
+    "couple_profile_visitor": "coupleProfile",
+    "couple_plan": "couplePlan"
+  },
+  "deployment": "Backend before new KMP; legacy installed clients retain envelopes and query-token socket auth.",
+  "http": {
+    "opt_in_error_header": {
+      "X-SriSu-Contract": "core-1"
+    },
+    "resources": [
+      "GET /api/auth/interests/",
+      "GET /api/chat/rooms/",
+      "GET /api/chat/rooms/{uuid}/messages/",
+      "POST /api/auth/send-otp/",
+      "POST /api/auth/verify-otp/",
+      "GET/PATCH/PUT /api/auth/setup-profile/",
+      "POST /api/auth/refresh/",
+      "POST /api/auth/logout/"
+    ],
+    "success": "Existing message/data envelope; empty/204, raw resources and existing paginated APIs retain their own shape.",
+    "pagination": "messages by descending integer ID; rooms by descending updated_at, UUID; room cursor signed/actor-bound/900s expiry; invalid cursor 400",
+    "retry": "Bounded opt-in GET/HEAD. No automatic write replay. auth-1 refresh: single-flight, stable request_id; replay same rotation for 60s only.",
+    "route_inventory": "routes.json"
+  },
+  "websocket": {
+    "path": "/ws/chat/",
+    "version": 1,
+    "authentication": "Bearer header preferred; legacy token query adapter; native clients omit Origin, browsers allowlisted.",
+    "ack": "success request_id after service transaction returns; ack loss is ambiguous and must not auto-replay.",
+    "event_delivery": "At-most observed bounded client dedupe by event_id; events can be lost, duplicated, reordered. HTTP snapshot recovery on reconnect/foreground and every 30s while chat is active.",
+    "subscription": "fetch_messages subscribes; unsubscribe_room removes; disconnect removes all; max20 rooms per connection.",
+    "limits": "64KiB command,30 burst/10 per second per connection,4000 text,10 media,50 page items. Not distributed abuse protection.",
+    "unknown": "Ignore unknown fields; unknown/malformed events invalidate snapshots; unsupported commands receive unknown_action."
+  },
+  "authentication": {
+    "opt_in_header": {
+      "X-SriSu-Auth": "auth-1"
+    },
+    "access_lifetime_seconds": 600,
+    "absolute_session_lifetime_seconds": 2592000,
+    "legacy_cutoff": "AUTH_ACCEPT_LEGACY_TOKENS must be explicitly disabled after announced rollout; no automatic invalidation during migration.",
+    "otp": "Server-managed Twilio Messaging; HMAC protected, 5 min expiry, 5 attempts, 60s resend, 3 sends/phone/10min, database source/global spend reservations.",
+    "profile": "Incremental name then upload or explicit skip; completed legacy accounts retained. No automatic couple creation."
+  },
+  "couple_profile": {
+    "version": "couple-profile-1",
+    "visibility": "Authenticated viewers receive only sections approved by both current partners for exact content and membership. Either partner can revoke immediately.",
+    "conflict": "PATCH sections require expected_revision from that viewer projection. Stale section -> 409 section_changed; different sections/author story contributions do not overwrite each other.",
+    "media": "First-party authenticated guarded URLs; private no-store; uploaded covers under couples/profile_private must not be served by a public bucket/proxy. Moment references retain original audience and expiry.",
+    "chat": "Optional server-authored profile_action on chat message: kind story or plan, couple_id, prompt or plan_id. No client flags confer access.",
+    "rollout": "Additive social 0011-0013 and chat 0003 migrations, backend first, then KMP. Legacy routes retained; cover URLs now require authenticated delivery, including old profile_photos paths. Block private prefixes at any proxy/bucket. No deployment is implied."
+  }
+}

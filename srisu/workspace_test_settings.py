@@ -25,3 +25,6 @@ ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 MEDIA_ROOT = tempfile.mkdtemp(prefix="srisu-workspace-tests-")
 atexit.register(shutil.rmtree, MEDIA_ROOT, ignore_errors=True)
+
+# Keep tests quiet while retaining sanitized failure diagnostics.
+LOGGING["loggers"]["srisu"]["level"] = "WARNING"

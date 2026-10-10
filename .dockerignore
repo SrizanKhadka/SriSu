@@ -1,0 +1,16 @@
+.git
+.cache
+.venv
+venv
+env
+.env
+.env.*
+!.env.example
+media
+profiles
+**/__pycache__
+**/*.pyc
+**/*.log
+**/.pytest_cache
+**/.idea
+**/.vscode

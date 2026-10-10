@@ -25,7 +25,6 @@ def update_room_after_message_created(
             unread_count[receiver_key] = unread_count.get(receiver_key, 0) + 1
 
         locked_room.last_message = message
-        print("Last message updated to:", message.text)
         locked_room.unread_count = unread_count
         locked_room.save(update_fields=["last_message", "unread_count", "updated_at"])
 

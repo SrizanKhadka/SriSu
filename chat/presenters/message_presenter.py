@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 
 from chat.models import MessageModel
 from utils.helpers import get_base_url
@@ -30,6 +30,7 @@ def serialize_message_for_socket_sync(message: MessageModel, scope) -> dict:
         "receiver_id": message.receiver_id,
         "message_type": message.message_type,
         "text": message.text,
+        "profile_action": message.profile_action if not message.is_deleted else None,
         "media_url": _absolute_url(base_url, message.media.url if message.media else message.media_url),
         "sticker_url": message.sticker_url,
         "medias": [
@@ -62,6 +63,6 @@ def serialize_message_for_socket_sync(message: MessageModel, scope) -> dict:
     }
 
 
-@sync_to_async
+@database_sync_to_async
 def serialize_message_for_socket(message: MessageModel, scope) -> dict:
     return serialize_message_for_socket_sync(message, scope)

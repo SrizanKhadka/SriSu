@@ -1,0 +1,274 @@
+{
+  "interests": {
+    "message": "Interests fetched successfully",
+    "data": {
+      "interests": [
+        {
+          "id": 1,
+          "name": "Hiking",
+          "category": null,
+          "created_date": "2026-09-26T00:00:00Z",
+          "updated_date": "2026-09-26T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "empty_interests": {
+    "message": "Interests fetched successfully",
+    "data": {
+      "interests": []
+    }
+  },
+  "validation_error": {
+    "error": {
+      "code": "validation_failed",
+      "message": "Check the supplied fields.",
+      "fields": {
+        "limit": [
+          "max_value"
+        ]
+      },
+      "retryable": false
+    },
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "server_time": "2026-09-26T00:00:00Z"
+  },
+  "history": {
+    "message": "Messages fetched successfully",
+    "data": {
+      "chat_room_id": "00000000-0000-4000-8000-000000000001",
+      "messages": [
+        {
+          "id": 7,
+          "chat_room_id": "00000000-0000-4000-8000-000000000001",
+          "sender_id": 1,
+          "receiver_id": 2,
+          "message_type": "text",
+          "text": "Synthetic hello",
+          "media_url": null,
+          "sticker_url": null,
+          "medias": [],
+          "reply_to": null,
+          "is_deleted": false,
+          "is_read": false,
+          "is_delivered": false,
+          "is_edited": false,
+          "is_sent": true,
+          "deleted_message": null,
+          "delete_option": null,
+          "reactions": {},
+          "timestamp": "2026-09-26T00:00:00Z"
+        }
+      ],
+      "has_more": false,
+      "next_cursor": 7
+    }
+  },
+  "empty_history": {
+    "message": "Messages fetched successfully",
+    "data": {
+      "chat_room_id": "00000000-0000-4000-8000-000000000001",
+      "messages": [],
+      "has_more": false,
+      "next_cursor": null
+    }
+  },
+  "socket_message": {
+    "type": "event",
+    "action": "message_created",
+    "protocol_version": 1,
+    "event_id": "00000000-0000-4000-8000-000000000002",
+    "emitted_at": "2026-09-26T00:00:00Z",
+    "room_id": "00000000-0000-4000-8000-000000000001",
+    "data": {
+      "message": {
+        "id": 7,
+        "chat_room_id": "00000000-0000-4000-8000-000000000001",
+        "sender_id": 1,
+        "receiver_id": 2,
+        "message_type": "text",
+        "text": "Synthetic hello",
+        "media_url": null,
+        "sticker_url": null,
+        "medias": [],
+        "reply_to": null,
+        "is_deleted": false,
+        "is_read": false,
+        "is_delivered": false,
+        "is_edited": false,
+        "is_sent": true,
+        "deleted_message": null,
+        "delete_option": null,
+        "reactions": {},
+        "timestamp": "2026-09-26T00:00:00Z"
+      },
+      "chat_room": null
+    }
+  },
+  "socket_ack": {
+    "type": "success",
+    "action": "send_message",
+    "request_id": "fixture-command",
+    "protocol_version": 1,
+    "data": {
+      "message": {
+        "id": 7,
+        "chat_room_id": "00000000-0000-4000-8000-000000000001",
+        "sender_id": 1,
+        "receiver_id": 2,
+        "message_type": "text",
+        "text": "Synthetic hello",
+        "media_url": null,
+        "sticker_url": null,
+        "medias": [],
+        "reply_to": null,
+        "is_deleted": false,
+        "is_read": false,
+        "is_delivered": false,
+        "is_edited": false,
+        "is_sent": true,
+        "deleted_message": null,
+        "delete_option": null,
+        "reactions": {},
+        "timestamp": "2026-09-26T00:00:00Z"
+      }
+    }
+  },
+  "socket_error": {
+    "type": "error",
+    "action": "send_message",
+    "request_id": "fixture-command",
+    "protocol_version": 1,
+    "error": {
+      "code": "not_found",
+      "message": "This resource is unavailable.",
+      "fields": {},
+      "retryable": false
+    }
+  },
+  "rooms": {
+    "message": "Chat rooms fetched successfully",
+    "data": {
+      "chat_rooms": [],
+      "has_more": false,
+      "limit": 20,
+      "next_cursor": null
+    }
+  },
+  "auth_challenge": {
+    "data": {
+      "challenge_id": "00000000-0000-4000-8000-000000000003",
+      "expires_at": "2030-01-01T00:05:00Z",
+      "resend_at": "2030-01-01T00:01:00Z",
+      "server_time": "2030-01-01T00:00:00Z",
+      "retry_after_seconds": 60
+    }
+  },
+  "auth_profile": {
+    "data": {
+      "user": {
+        "id": 1,
+        "full_name": "Synthetic User",
+        "username": "synthetic",
+        "profile_photo": null,
+        "is_phone_verified": true,
+        "is_profile_complete": false
+      },
+      "progress": {
+        "phone_verified": true,
+        "profile_complete": false,
+        "next_step": "photo",
+        "photo_skipped": false,
+        "membership": "unlinked",
+        "couple_id": null
+      }
+    }
+  },
+  "auth_refresh": {
+    "data": {
+      "tokens": {
+        "access": "non-credential-fixture",
+        "refresh": "non-credential-fixture"
+      }
+    }
+  },
+  "couple_profile_member": {
+    "message": "Profile fetched.",
+    "data": {
+      "id": 1,
+      "viewer": "member",
+      "can_edit": true,
+      "can_fave": false,
+      "can_view_moments": true,
+      "is_faved": false,
+      "published_sections": [],
+      "visible_moment_count": 0,
+      "members": [
+        {
+          "id": 1,
+          "name": "Synthetic One",
+          "photo_url": null
+        },
+        {
+          "id": 2,
+          "name": "Synthetic Two",
+          "photo_url": null
+        }
+      ],
+      "story": [],
+      "song": null,
+      "interests": {
+        "shared": [],
+        "mine": [],
+        "partner": []
+      },
+      "cover": {
+        "url": null,
+        "focal_y": 0.5
+      },
+      "anniversary_date": null,
+      "days_together": 0,
+      "plan_count": 0,
+      "revisions": {
+        "story": "0000000000000000000000000000000000000000000000000000000000000000",
+        "song": "0000000000000000000000000000000000000000000000000000000000000000",
+        "interests": "0000000000000000000000000000000000000000000000000000000000000000",
+        "cover": "0000000000000000000000000000000000000000000000000000000000000000",
+        "date": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sharing": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "sharing": {
+        "proposal": [],
+        "proposal_version": 0,
+        "approved_by": [],
+        "valid_proposal": false
+      }
+    }
+  },
+  "couple_profile_visitor": {
+    "message": "Profile fetched.",
+    "data": {
+      "id": 1,
+      "viewer": "visitor",
+      "can_edit": false,
+      "can_fave": true,
+      "can_view_moments": true,
+      "is_faved": false,
+      "published_sections": [],
+      "visible_moment_count": 0
+    }
+  },
+  "couple_plan": {
+    "message": "Plan saved.",
+    "data": {
+      "id": 1,
+      "created_by": 1,
+      "title": "A walk",
+      "starts_at": "2030-01-01T15:00:00Z",
+      "response": "pending",
+      "response_note": "",
+      "completed": false,
+      "revision": 1
+    }
+  }
+}

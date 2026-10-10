@@ -22,12 +22,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-*k)0ig12u-)enjdf*333992j$6sy(9_fynofk&!($43%wfbt*_"
+SECRET_KEY = config("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [host.strip() for host in config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if host.strip()]
 
 
 # Application definition
@@ -46,12 +46,19 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
     "chat",
+    "couple_chat",
     "rest_framework_simplejwt.token_blacklist",
     "channels",
     "social"
 ]
 
+# Temporary local preview only: no private-content transport until native E2EE
+# and protected persistence have passed the paired platform spike.
+COUPLE_CHAT_PREVIEW_ENABLED = config("COUPLE_CHAT_PREVIEW_ENABLED", default=True, cast=bool)
+COUPLE_CHAT_ROOM_MEDIA_BYTES = config("COUPLE_CHAT_ROOM_MEDIA_BYTES", default=536870912, cast=int)
+
 MIDDLEWARE = [
+    "srisu.api.middleware.RequestContextMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -179,8 +186,9 @@ COUPLE_FEED_RANKING_VERSION = "couple-v1"
 COUPLE_FEED_WEIGHTS = {"interests": 40, "location": 25, "fave": 20, "freshness": 15}
 
 REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_RATES": {"chat_reads": "120/min"},
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "authentication.sessions.SessionJWTAuthentication",
     ],
     "EXCEPTION_HANDLER": "utils.exception_handlers.custom_exception_handler",
     "DEFAULT_PARSER_CLASSES" :[
@@ -203,3 +211,29 @@ TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE_NUMBER = config("TWILIO_PHONE_NUMBER")
 
+# Explicit development delivery switch. Normal deployments still use Twilio.
+OTP_MOCK_DELIVERY = config("OTP_MOCK_DELIVERY", default=False, cast=bool)
+# Empty outside development Compose; ignored entirely when real delivery is enabled.
+OTP_MOCK_CODE = config("OTP_MOCK_CODE", default="")
+
+
+# Native clients use bearer headers; browser origins are explicitly allowlisted.
+WEBSOCKET_ALLOWED_ORIGINS = [origin.strip() for origin in config("WEBSOCKET_ALLOWED_ORIGINS", default="").split(",") if origin.strip()]
+WS_MAX_FRAME_BYTES = 64 * 1024
+WS_COMMAND_BURST = 30
+WS_COMMANDS_PER_SECOND = 10
+WS_MAX_SUBSCRIPTIONS = 20
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"core": {"()": "srisu.api.logging.CoreJsonFormatter"}},
+    "handlers": {"core": {"class": "logging.StreamHandler", "formatter": "core"}},
+    "loggers": {"srisu": {"handlers": ["core"], "level": "INFO", "propagate": False}},
+}
+
+# Temporary compatibility during auth-1 rollout; disable after the announced cutoff.
+AUTH_ACCEPT_LEGACY_TOKENS = config("AUTH_ACCEPT_LEGACY_TOKENS", default=True, cast=bool)
+
+OTP_GLOBAL_HOURLY_LIMIT = config("OTP_GLOBAL_HOURLY_LIMIT", default=100, cast=int)
+OTP_IP_HOURLY_LIMIT = config("OTP_IP_HOURLY_LIMIT", default=10, cast=int)

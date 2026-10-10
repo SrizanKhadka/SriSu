@@ -23,7 +23,7 @@ def get_chat_room(chat_room_id):
     try:
         return ChatRoom.objects.filter(id=chat_room_id).first()
     except Exception as e:
-        print(f"Error in get_chat_room: {e}")
+        pass  # Private payloads must not be printed.
         return None
 
 @sync_to_async
@@ -31,21 +31,21 @@ def get_user(user_id):
     try:
         return UserModel.objects.filter(id=user_id).first()
     except Exception as e:
-        print(f"Error in get_user: {e}")
+        pass  # Private payloads must not be printed.
         return None
 @sync_to_async
 def get_couple(couple_id):
     try:
         return CoupleModel.objects.filter(id=couple_id).first()
     except Exception as e:
-        print(f"Error in get_couple: {e}")
+        pass  # Private payloads must not be printed.
         return None
 @sync_to_async
 def get_single(single_id):
     try:
         return SingleConnectionModel.objects.filter(id=single_id).first()
     except Exception as e:
-        print(f"Error in get_single: {e}")
+        pass  # Private payloads must not be printed.
         return None
 
 @sync_to_async
@@ -54,7 +54,7 @@ def get_message(message_id):
         message = MessageModel.objects.filter(id=message_id).first()
         return message
     except Exception as e:
-        print(f"Error in get_message: {e}")
+        pass  # Private payloads must not be printed.
         return None
 
 @sync_to_async #for fetching list of messages.
@@ -62,7 +62,7 @@ def get_messages(message_ids):
     try:
         return list(MessageModel.objects.filter(id__in=message_ids))
     except Exception as e:
-        print(f"Error in get_messages: {e}")
+        pass  # Private payloads must not be printed.
         return []
 
 
@@ -71,7 +71,7 @@ def create_message(**kwargs):
     try:
         return MessageModel.objects.create(**kwargs)
     except Exception as e:
-        print(f"Error in create_message: {e}")
+        pass  # Private payloads must not be printed.
         return None
 
 @sync_to_async
@@ -79,14 +79,14 @@ def save_message(message):
     try:
         message.save()
     except Exception as e:
-        print(f"Error in save_message: {e}")
+        pass  # Private payloads must not be printed.
 
 @sync_to_async
 def delete_message(message):
     try:
         message.delete()
     except Exception as e:
-        print(f"Error in delete_message: {e}")
+        pass  # Private payloads must not be printed.
         
 def serialize_message_sync(message, scope):
     base_url = get_base_url(scope)
