@@ -1,6 +1,6 @@
 from datetime import timedelta
 from uuid import uuid4
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from django.db import transaction
 from django.test import override_settings
 from django.utils import timezone
@@ -52,6 +52,36 @@ class NotificationTests(ProtocolFixtures, APITestCase):
         self.assertEqual(self.bind(version=1).status_code, 409)
         self.ready(); sender=Mock(); run_once(sender); sender.assert_not_called()
         self.assertEqual(Installation.objects.get().user_id, self.third.pk)
+
+    def test_registered_fid_uses_fid_target_without_token(self):
+        target="c"+"a"*21
+        self.assertEqual(self.bind(version=2,target_kind="fid",target=target).status_code,200)
+        self.send(self.envelope())
+        wire=message(Delivery.objects.get(),audible=False)
+        self.assertEqual(wire.fid,target)
+        self.assertIsNone(wire.token)
+        self.assertEqual(set(wire.data),{"schema","delivery_id","expires_at"})
+
+    def test_invalid_provider_payload_does_not_retire_installation(self):
+        from firebase_admin.exceptions import InvalidArgumentError
+        self.send(self.envelope());self.ready()
+        with patch("notifications.provider.app",return_value=object()), \
+                patch("firebase_admin.messaging.send",side_effect=InvalidArgumentError("Synthetic invalid payload")):
+            run_once()
+        self.assertTrue(Installation.objects.get().active)
+        self.assertEqual(Delivery.objects.get().outcome,"configuration")
+
+    def test_cascade_after_claim_does_not_crash_worker(self):
+        from notifications.worker import claim
+        self.send(self.envelope());self.ready()
+        def claim_then_delete():
+            result=claim()
+            Event.objects.all().delete()
+            return result
+        sender=Mock()
+        with patch("notifications.worker.claim",side_effect=claim_then_delete):
+            self.assertTrue(run_once(sender))
+        sender.assert_not_called()
 
     def test_invalid_target_response_cannot_retire_rotated_binding(self):
         self.send(self.envelope()); self.ready()

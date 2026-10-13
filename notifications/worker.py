@@ -51,12 +51,17 @@ def run_once(sender=send):
     if not claimed:
         return False
     delivery_id, lease = claimed
-    row = Delivery.objects.select_related("event__recipient", "event__room__couple", "installation__session").get(pk=delivery_id)
+    row = Delivery.objects.select_related("event__recipient", "event__room__couple", "installation__session").filter(pk=delivery_id).first()
+    if row is None:
+        # Account/relationship deletion may cascade after the lease commits.
+        return True
     state, outcome, retry = "suppressed", "stale", None
     if eligible(row):
         # Reserve the sound budget per installation, serializing competing workers.
         with transaction.atomic():
-            install = Installation.objects.select_for_update().get(pk=row.installation_id)
+            install = Installation.objects.select_for_update().filter(pk=row.installation_id).first()
+            if install is None:
+                return True
             audible = not install.last_alert_at or install.last_alert_at < timezone.now() - timedelta(seconds=30)
             if audible:
                 install.last_alert_at = timezone.now()
