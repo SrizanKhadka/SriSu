@@ -135,6 +135,16 @@ No live database migration or Docker deployment is claimed by a local build/test
 
 ### Windows Docker Desktop host
 
+Inspection of the actual host found an existing, already-applied local repair,
+`social.0014_partner_insert_compatibility`. It preserves INSERT compatibility with
+required columns retained from the old chat-v2 schema by supplying absent database
+defaults; it never rewrites existing rows. The deployment branch carries forward
+that exact host migration and its three PostgreSQL regression tests, together with
+the existing PostgreSQL/Redis health checks. Both web and notification worker wait
+for those dependencies. The original Windows checkout and its uncommitted files
+are preserved; deploy the feature from a separate worktree with the same explicit
+Compose project and mounts for the existing media and environment.
+
 Apple enrollment/APNs is deferred at the user's request (2026-10-13). Deploy and
 validate Android first; this does not require Apple membership.
 

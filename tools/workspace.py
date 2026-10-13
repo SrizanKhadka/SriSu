@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEST_LABELS = [
     "notifications.tests", "srisu.test_core", "srisu.test_api_routes", "authentication.test_auth",
     "social.tests", "social.test_moments", "social.test_moment_replies",
-    "social.test_couple_feed", "social.test_couple_profile",
+    "social.test_couple_feed", "social.test_couple_profile", "social.test_legacy_schema",
     "couple_chat.tests", "couple_chat.test_protocol", "couple_chat.test_media", "couple_chat.test_activity", "couple_chat.test_sparks",
 ]
 
