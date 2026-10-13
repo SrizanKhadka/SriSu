@@ -133,6 +133,75 @@ Rollback: disable the flag in web and worker and recreate them. Retain additive
 migrations/data while old and new mobile clients coexist; do not drop the tables.
 No live database migration or Docker deployment is claimed by a local build/test.
 
+### Windows Docker Desktop host
+
+Apple enrollment/APNs is deferred at the user's request (2026-10-13). Deploy and
+validate Android first; this does not require Apple membership.
+
+The existing manual-development checkout was recorded at `D:\Djangos\SriSu` on
+Windows, with Docker Desktop/WSL and LAN address `192.168.1.69`. Recheck these values
+on that laptop before using them. Remote access should use Windows OpenSSH on the
+private LAN, using the same Windows account that runs Docker Desktop. Keep Docker
+Desktop running and the laptop awake. Run `docker` on Windows through SSH; no raw
+Docker TCP socket, router forwarding, WSL SSH server or copied Mac credentials are
+required. If the checkout lives in WSL instead, inspect its distribution/path first
+and execute through `wsl.exe` under that same Windows account.
+
+Install Windows' built-in OpenSSH Server through an elevated PowerShell session;
+authorize only a dedicated public key whose private key stays on the Mac. Restrict
+that key and the new firewall rule to the Mac's current LAN address. Administrative
+accounts use `%ProgramData%\ssh\administrators_authorized_keys`, with access only
+for SYSTEM and Administrators; standard accounts use their own `.ssh\authorized_keys`.
+Do not replace existing authorized keys. Compare the Windows Ed25519 host-key
+fingerprint locally before trusting the first SSH connection. Passwords, private
+keys, ADC files and `.env` contents must not be pasted into chat.
+
+Official instructions: [Windows OpenSSH installation](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+and [key authorization](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement).
+
+After remote access is established, deploy in this order:
+
+1. Inspect `git status`, current branch/commit, `docker compose ls`, the existing
+   Compose project name, running services and PostgreSQL volume. Preserve local
+   changes and the original Compose project/volume; a different checkout name must
+   not silently create another database. The development source bind mount means
+   switching the active checkout can immediately reload the running web service.
+   Schedule the brief web/worker stop before switching that checkout, leaving the
+   database and Redis running.
+2. Fetch `origin codex/notifications-crashlytics-v1`; verify the published commit
+   before switching/fast-forwarding. Keep the existing `.env`, signing key, media
+   and PostgreSQL credentials. Take a host-local database backup before migrations;
+   never commit or upload that backup. Do not use `down -v`, volume pruning or reset.
+3. Build the new image with sending disabled. Run Django checks and migration-plan
+   inspection, then apply migrations against the verified existing database.
+4. Authenticate Google Cloud **on the Windows host** with the dedicated sender's
+   impersonation ADC. This requires the account holder's interactive sign-in:
+
+   ```powershell
+   gcloud auth application-default login --impersonate-service-account=srisu-notification-sender@srisu-ef431.iam.gserviceaccount.com
+   ```
+
+   For this personal development host only, set `SRISU_FIREBASE_ADC_PATH` in its
+   ignored `.env` to the actual ADC path under `%APPDATA%\gcloud`, expressed with
+   forward slashes for Compose. Expand `%APPDATA%` locally; do not put that literal
+   expression in `.env`. The file contains a developer refresh credential and must
+   remain private to the authorized operator. Shared/production hosts need an
+   appropriate workload identity instead. The Docker context excludes local ADC
+   paths and key files as well as `.env`.
+5. Perform an FCM validation-only request from the worker context, enable sending
+   in web/worker, and start both with the `notifications` profile. Verify aggregate
+   `notification_status`, heartbeat/health, and public read-only API responses.
+6. Install the configured Android debug build on a Play-enabled device using the
+   confirmed Windows LAN origin. Use synthetic partner accounts for permission,
+   registration, background delivery/tap, mute, logout and account-switch checks.
+   Opt in to diagnostics on the test device before controlled Crashlytics probes;
+   confirm reports in Firebase. A server `sent` outcome alone is not device proof.
+
+The repositories carry code, not Firebase app configs or credentials. Download the
+Android app config into its ignored location if building on the second laptop.
+Remove the task's public-key entry and task firewall rule when remote work is done;
+stop SSH only if it was enabled exclusively for this task.
+
 ## Verification
 
 Use `tools/workspace.py test` (explicit allowlist, offline SQLite) and
