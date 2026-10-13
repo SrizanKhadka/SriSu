@@ -422,3 +422,11 @@ internally to `srisu_db`; Redis uses its internal port 6379. The existing local
 config --quiet` passed. The Docker daemon timed out during the read-only status
 check, so this follow-up did not build/start the manual-test server or migrate its
 database; run the commands above after Docker Desktop's engine is ready.
+
+### Notifications V1
+
+[The notification contract](notifications.md) adds a transactional outbox beside
+Change dispatch. Redis publication and push delivery have separate retry state.
+Chat state advertises `notification-plan-1` and message envelopes accept its optional,
+authorized Plan reference. Old envelope digests remain unchanged when the field is
+absent. Push is generic and restricted to the original recipient-device session.

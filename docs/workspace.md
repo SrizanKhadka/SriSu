@@ -188,3 +188,9 @@ catalogue and WebSocket protocol remain separate.
 all-26-calls count and active dating expectations above. Current KMP calls, retired
 paths and preserved personal-preference APIs are separated in routes.json. No database
 migrations or production changes are required by this retirement.
+
+## Notifications V1
+
+See [notifications deployment and privacy](notifications.md). Workspace test setup
+now installs the additive, pinned `requirements-notifications.txt`; this does not
+upgrade the existing Pipfile lock. The maintained runner includes `notifications.tests`.

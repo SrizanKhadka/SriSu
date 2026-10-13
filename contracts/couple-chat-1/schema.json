@@ -81,6 +81,12 @@
         },
         "devices": {
           "$ref": "#/$defs/devices"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -496,6 +502,10 @@
           },
           "maxItems": 3,
           "uniqueItems": true
+        },
+        "notification_plan_id": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },

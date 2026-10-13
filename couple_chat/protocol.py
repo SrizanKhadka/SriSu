@@ -207,7 +207,7 @@ def operation_result(operation):
 @transaction.atomic
 def accept_operation(user, sid, room_id, data):
     room, device = lock_room(user, sid, room_id, data["device_id"])
-    fingerprint = digest({key:value for key,value in data.items() if key != "attachments" or value})
+    fingerprint = digest({key:value for key,value in data.items() if key not in ("attachments", "notification_plan_id") or value})
     existing = Operation.objects.select_related("change").filter(room=room, actor=user,
         operation_id=data["operation_id"]).first()
     if existing:
@@ -269,6 +269,9 @@ def accept_operation(user, sid, room_id, data):
         target_id=data["target_id"], version=data["version"], applied=applied,
         signal_type=data["signal_type"], ciphertext=data["ciphertext"], digest=fingerprint,
         attachment_ids=[str(value) for value in data.get("attachments",[])])
+    if data["kind"] == "message":
+        from notifications.domain import message_accepted
+        message_accepted(operation, data.get("notification_plan_id"))
     return operation_result(operation)
 
 

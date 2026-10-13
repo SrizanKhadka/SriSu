@@ -1,0 +1,22 @@
+[
+  {
+    "method": "PUT",
+    "path": "api/notifications/v1/installations/"
+  },
+  {
+    "method": "DELETE",
+    "path": "api/notifications/v1/installations/"
+  },
+  {
+    "method": "GET",
+    "path": "api/notifications/v1/preferences/"
+  },
+  {
+    "method": "PUT",
+    "path": "api/notifications/v1/preferences/"
+  },
+  {
+    "method": "GET",
+    "path": "api/notifications/v1/deliveries/{delivery_id}/"
+  }
+]

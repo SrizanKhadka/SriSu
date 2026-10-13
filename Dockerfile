@@ -21,3 +21,6 @@ EXPOSE 8000
 
 # Use daphne for ASGI (WebSockets) support
 CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "srisu.asgi:application"]
+
+# Additive, pinned push-provider dependencies. Existing Pipfile packages stay locked.
+RUN pip install --no-deps -r requirements-notifications.txt && pip check

@@ -91,5 +91,7 @@ class SparkAnswerView(ChatView):
                 envelope=json.loads(json.dumps(data,default=str)),digest=fingerprint)
             if spark.answers.count()==2:
                 spark.revealed_at=timezone.now();spark.save(update_fields=["revealed_at"])
+                from notifications.services import emit
+                emit("spark.revealed", other.user, spark.pk, spark.pk, room=room, device=other)
             append_change(room,"spark.changed",{"message_id":str(spark_id)})
         return Response({"data":status(spark,request.user)})

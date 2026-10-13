@@ -43,10 +43,11 @@ def main():
     InterestModel.objects.create(name='Synthetic hiking')
     # This disposable, short-lived token is shared only through a private temporary file.
     from datetime import timedelta
-    token = AccessToken.for_user(first); token.set_exp(lifetime=timedelta(minutes=5))
+    from authentication.sessions import create_session
+    token = AccessToken(create_session(first)["access"]); token.set_exp(lifetime=timedelta(minutes=5))
     payload = {'base_url': f'http://127.0.0.1:{args.port}/', 'room_id': str(room.pk), 'account_id': first.pk, 'access': str(token)}
-    partner_token = AccessToken.for_user(second); partner_token.set_exp(lifetime=timedelta(minutes=5))
-    visitor_token = AccessToken.for_user(visitor); visitor_token.set_exp(lifetime=timedelta(minutes=5))
+    partner_token = AccessToken(create_session(second)["access"]); partner_token.set_exp(lifetime=timedelta(minutes=5))
+    visitor_token = AccessToken(create_session(visitor)["access"]); visitor_token.set_exp(lifetime=timedelta(minutes=5))
     payload.update(couple_id=couple.pk, partner_id=second.pk, partner_access=str(partner_token), visitor_id=visitor.pk, visitor_access=str(visitor_token))
     descriptor = os.open(args.fixture, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as file: json.dump(payload, file)

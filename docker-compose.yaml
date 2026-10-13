@@ -14,6 +14,8 @@ services:
     depends_on:
       - srisu_db                  # Ensure the 'db' service starts before 'web'
     environment:            # Environment variables for Django
+      - NOTIFICATIONS_ENABLED=${NOTIFICATIONS_ENABLED:-false}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-srisu-ef431}
       - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
       # Development only: accept OTP requests without calling the expired Twilio trial.
       # Set OTP_MOCK_DELIVERY=false to resume real SMS delivery.
@@ -34,6 +36,30 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
 
+
+  notification_worker:
+    profiles: [notifications]
+    build: .
+    command: python manage.py dispatch_notifications
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/srisu-notification-worker.heartbeat') < 120"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: srisu.settings
+      POSTGRES_HOST: srisu_db
+      REDIS_HOST: redis
+      NOTIFICATIONS_ENABLED: ${NOTIFICATIONS_ENABLED:-false}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-srisu-ef431}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-adc.json
+    volumes:
+      - .:/app
+      - ${SRISU_FIREBASE_ADC_PATH:-./.local/firebase-adc.json}:/run/secrets/firebase-adc.json:ro
+    depends_on: [srisu_db, redis]
 
   # Database service (PostgreSQL)
   srisu_db:

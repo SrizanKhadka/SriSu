@@ -135,3 +135,7 @@ cython_debug/
 
 /profiles
 /media/couples/couple_chat_private/
+
+.local/
+*service-account*.json
+*firebase-adc*.json

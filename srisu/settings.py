@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "chat",
     "couple_chat",
+    "notifications",
     "rest_framework_simplejwt.token_blacklist",
     "channels",
     "social"
@@ -237,3 +238,8 @@ AUTH_ACCEPT_LEGACY_TOKENS = config("AUTH_ACCEPT_LEGACY_TOKENS", default=True, ca
 
 OTP_GLOBAL_HOURLY_LIMIT = config("OTP_GLOBAL_HOURLY_LIMIT", default=100, cast=int)
 OTP_IP_HOURLY_LIMIT = config("OTP_IP_HOURLY_LIMIT", default=10, cast=int)
+
+# Kill switch also stops new events, so re-enabling cannot replay disabled history.
+NOTIFICATIONS_ENABLED = config("NOTIFICATIONS_ENABLED", default=False, cast=bool)
+NOTIFICATION_INSTALLATION_MAX_AGE_DAYS = config("NOTIFICATION_INSTALLATION_MAX_AGE_DAYS", default=30, cast=int)
+FIREBASE_PROJECT_ID = config("FIREBASE_PROJECT_ID", default="srisu-ef431")

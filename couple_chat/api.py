@@ -76,7 +76,7 @@ class ChatView(APIView):
 class StateView(ChatView):
     def get(self, request):
         room = available_rooms(request.user).first()
-        return Response({"data": {"contract": "couple-chat-1", "room": describe(room) if room else None,
+        return Response({"data": {"contract": "couple-chat-1", "capabilities": ["notification-plan-1"], "room": describe(room) if room else None,
             "devices": protocol.device_state(request.user, request.auth["sid"], room)}})
 
 

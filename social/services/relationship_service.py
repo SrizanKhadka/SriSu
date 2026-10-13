@@ -50,8 +50,11 @@ def invite(actor, receiver_number):
         pair_query(actor.phone_number, receiver_number), connection_status=Status.PENDING).order_by("id").first()
     if existing:
         return existing, False
-    return CoupleConnectionModel.objects.create(sender_number=actor.phone_number,
-        receiver_number=receiver_number, connection_status=Status.PENDING), True
+    connection = CoupleConnectionModel.objects.create(sender_number=actor.phone_number,
+        receiver_number=receiver_number, connection_status=Status.PENDING)
+    from notifications.services import emit
+    emit("invite.received", next(u for u in users if u.pk != actor.pk), connection.pk, connection.pk)
+    return connection, True
 
 
 @transaction.atomic
@@ -81,7 +84,8 @@ def transition(actor, connection_id, desired, sender_number, receiver_number):
         ).exclude(pk=connection.pk)
         if competing.exists():
             raise RelationshipConflict()
-        if connection.connection_status != Status.ACCEPTED:
+        newly_accepted = connection.connection_status != Status.ACCEPTED
+        if newly_accepted:
             connection.connection_status = Status.ACCEPTED
             connection.save(update_fields=["connection_status", "updated_at"])
         try:
@@ -96,6 +100,9 @@ def transition(actor, connection_id, desired, sender_number, receiver_number):
             Q(sender_number__in=[u.phone_number for u in users]) | Q(receiver_number__in=[u.phone_number for u in users]),
             connection_status=Status.PENDING,
         ).exclude(pk=connection.pk).update(connection_status=Status.NOTHING)
+        if newly_accepted:
+            from notifications.services import emit
+            emit("invite.accepted", next(u for u in users if u.pk != actor.pk), connection.pk, couple.pk, room=room)
         return connection, couple, room
     if desired == connection.connection_status:
         return connection, None, None

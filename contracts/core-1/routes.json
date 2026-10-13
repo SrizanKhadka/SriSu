@@ -247,6 +247,30 @@
         "cursor"
       ],
       "public": false
+    },
+    "notification-register": {
+      "method": "PUT",
+      "path": "/api/notifications/v1/installations/",
+      "query": [],
+      "public": false
+    },
+    "notification-preferences": {
+      "method": "GET",
+      "path": "/api/notifications/v1/preferences/",
+      "query": [],
+      "public": false
+    },
+    "notification-preferences-save": {
+      "method": "PUT",
+      "path": "/api/notifications/v1/preferences/",
+      "query": [],
+      "public": false
+    },
+    "notification-resolve": {
+      "method": "GET",
+      "path": "/api/notifications/v1/deliveries/{uuid}/",
+      "query": [],
+      "public": false
     }
   },
   "retired_endpoints": {

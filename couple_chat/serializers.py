@@ -79,6 +79,7 @@ class Claim(StrictSerializer):
 
 
 class Envelope(Claim):
+    notification_plan_id = serializers.IntegerField(min_value=1, required=False)
     kind = serializers.ChoiceField(choices=["message", "reaction", "delete", "receipt.delivered", "receipt.read", "receipt.played", "card.response"])
     target_id = serializers.UUIDField()
     reply_to = serializers.UUIDField(allow_null=True, default=None)
@@ -97,6 +98,8 @@ class Envelope(Claim):
         return value
 
     def validate(self, data):
+        if data.get("notification_plan_id") is not None and data["kind"] != "message":
+            raise serializers.ValidationError("Only messages can correlate a Plan card.")
         if len(set(data["attachments"])) != len(data["attachments"]) or (data["kind"] != "message" and data["attachments"]):
             raise serializers.ValidationError("Only messages can attach up to three different files.")
         if data["kind"] == "message":
