@@ -5,15 +5,17 @@ ENV PYTHONUNBUFFERED=1
 # Install system dependencies
 RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
-RUN pip install pipenv
-
 WORKDIR /app
 
 COPY Pipfile Pipfile.lock ./
 
-# Install project dependencies
-RUN pipenv sync --system --dev
+# Keep build-tool dependencies separate from the application's locked packages.
+# In particular, newer virtualenv releases require a newer packaging than our lock.
+RUN python -m venv /tmp/pipenv-build \
+    && /tmp/pipenv-build/bin/pip install --no-cache-dir pipenv==2026.9.1 \
+    && /tmp/pipenv-build/bin/pipenv requirements --dev --hash > /tmp/requirements.lock \
+    && pip install --no-cache-dir --require-hashes -r /tmp/requirements.lock \
+    && rm -rf /tmp/pipenv-build /tmp/requirements.lock
 
 COPY . .
 
