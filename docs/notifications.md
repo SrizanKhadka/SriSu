@@ -100,8 +100,10 @@ The existing Docker image and PostgreSQL are retained. A supervised
 `notification_worker` service is behind the `notifications` Compose profile. No
 Celery, Firebase Functions, new queue service or new database is required.
 
-1. Deploy this backend branch and install both dependency locks. Docker does this
-   through the existing Pipfile sync plus the additive requirements file.
+1. Deploy this backend branch and install both dependency locks. Docker exports
+   hashed requirements from the existing Pipfile.lock using an isolated, pinned
+   Pipenv build tool, then installs the additive notification requirements. Build
+   tools do not share runtime dependencies; the existing lockfile stays unchanged.
 2. Keep `NOTIFICATIONS_ENABLED=false` while running `python manage.py migrate`.
    New additive migrations are `notifications/0001_initial` and
    `0002_installation_notification_active_session`. No historical source backfill.
@@ -132,6 +134,64 @@ Celery, Firebase Functions, new queue service or new database is required.
 Rollback: disable the flag in web and worker and recreate them. Retain additive
 migrations/data while old and new mobile clients coexist; do not drop the tables.
 No live database migration or Docker deployment is claimed by a local build/test.
+
+### Verified development deployment — 2026-10-14
+
+Backend implementation `784c5aface38e862bb5dae9e7379c515c761a73f` is deployed on the
+user's Windows Docker Desktop laptop at `192.168.1.69:8000`. Frontend implementation
+baseline is `0d65527418c9912d21f205a83c637744f6fd5fd6`, followed by the verified
+preference-write fix `58d6322`, on the matching feature branch.
+The new checkout is `D:\Djangos\SriSu-notifications`; the original
+`D:\Djangos\SriSu` checkout and its uncommitted files were preserved.
+
+- Image `srisu-web:notifications-784c5af` built successfully, including `pip check`.
+  Image ID: `sha256:940512a7cf88d6894c0158b13a3fc060341d0cc4f6a6d0e0dd5a6bb474854ccd`.
+- Django system checks passed. The migration plan contained only the two reviewed
+  notification migrations; both were applied successfully with sending disabled.
+- PostgreSQL custom-format backup was verified with `pg_restore --list`, copied to
+  `D:\SriSu-secrets\backups\srisu-pre-notifications-20261014T162009Z.dump`, and hashed
+  locally. It remains on the host, outside Git; no database contents left the host.
+- Compose project `srisu` retains PostgreSQL volume `srisu_postgres_data` and media
+  mount `D:/Djangos/SriSu/media:/app/media`. Database and Redis were not recreated.
+  Web now binds the new checkout; a separate worker is running and healthy.
+- `NOTIFICATIONS_ENABLED=true` in web and worker. Initial aggregate status showed
+  zero installations and deliveries. LAN interests returned HTTP 200; unauthenticated
+  notification preferences returned HTTP 401.
+- The Windows-local impersonated ADC, mounted read-only into the worker, successfully
+  completed an FCM validation-only request. This did not send a device notification.
+
+Host-specific Compose overrides are in `D:\SriSu-tools\deployment\compose.host.yaml`.
+Use both Compose files and `-p srisu` for subsequent operations. The old image is
+retained as `srisu-web:pre-notifications-20261013`. For rollback, stop the new worker
+and start web from the original checkout with that old image, keeping the explicit
+project name and existing database volume. Retain the additive notification tables.
+
+Docker's desktop credential helper cannot access its interactive logon session over
+SSH. Build commands use a separate task-only Docker client configuration at
+`D:\SriSu-tools\docker-client`, the Docker Desktop Linux named pipe, and an anonymous
+Docker Hub auth-map entry. No registry credentials or user Docker configuration were
+changed. The C: space blocker was resolved before deployment; do not prune user
+volumes or unrelated caches to accommodate a build.
+
+Backend regression evidence before rollout: **245 isolated PostgreSQL tests passed**,
+including three compatibility tests for the host's existing legacy-schema repair.
+Device delivery tests use the same image in a separate `srisu-notifications-e2e`
+Compose project with a disposable PostgreSQL database and synthetic accounts; they
+never write synthetic users/messages into the deployed application database.
+The live API 35 Android emulator test passed: registered FCM FID, foreground signal,
+background OS notification, real PendingIntent/MainActivity launch, authorized typed
+routing, unrelated-user denial, stale invitation rejection, push preference
+suppression, account switching and online logout. Aggregate results were two
+accepted deliveries and zero active installations after logout. Android controlled
+fatal/nonfatal reports were also verified in Firebase; details and coverage limits
+are recorded in the frontend's `docs/flows/notifications.md`.
+
+The live test exposed a frontend default-value serialization defect: ordinary
+preference writes omitted the required `mute` field. Frontend `58d6322` includes it
+and preserves existing mute state. This did not require a backend contract change.
+The normal LAN debug APK is `D:\SriSu-tools\SriSu-notifications-debug.apk`.
+The isolated test project is torn down after verification; real project `srisu`
+remains running. Apple/APNs, physical-device and signed-release checks remain deferred.
 
 ### Windows Docker Desktop host
 
@@ -243,7 +303,8 @@ Local development ADC is outside Git at
 refresh credential, so do not copy it to an untrusted/shared host; the narrow
 impersonated token does not restrict what the source user credential can do. Use
 workload identity or the intended Docker host's authorized development credentials.
-No current remote Docker deployment or live migration has been performed.
+This was the pre-deployment checkpoint. The completed 2026-10-14 remote deployment
+and migration evidence appears above.
 
 `NOTIFICATION_INSTALLATION_MAX_AGE_DAYS` defaults to 30. Foreground reconciliation
 refreshes this timestamp; stale bindings are excluded from fanout/sending and their
