@@ -82,6 +82,10 @@ Django logout. The replayable login credential lasts 120 seconds by default
 seconds by default (maximum 900). Thus the default worst case from bootstrap
 issuance is 420 seconds; once exchanged, remaining access is at most 300
 seconds. Client logout shortens that window when the device is reachable.
+The private Compose homeserver raises Synapse's successful-login burst limits
+because relationship provisioning and every fail-closed room verification use
+short-lived signed JWT sessions. Registration and password login remain disabled,
+and failed login proofs retain a separate strict limiter.
 
 Bootstrap and the reconciler periodically authenticate to Synapse and verify
 the alias-to-room binding, creator, encryption, locked power levels, private
@@ -101,7 +105,8 @@ test -f .env || cp .env.example .env
 python3 tools/configure_matrix_dev.py --public-base-url http://YOUR_LAN_IP:8008
 docker compose config --quiet
 docker compose pull synapse
-docker compose build web matrix_reconciler
+# Both application services use the same image; build it once through `web`.
+docker compose build web
 # Quiesce every old web/chat worker and remove orphan containers. Do not add -v
 # or --volumes: the database and Synapse volumes are intentionally preserved.
 docker compose down --remove-orphans

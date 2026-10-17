@@ -223,6 +223,19 @@ class SynapseConfigRendererTests(SimpleTestCase):
         self.assertIn("alias_creation_rules:", rendered)
         self.assertIn("enable_room_list_search: false", rendered)
         self.assertIn("room_list_publication_rules:", rendered)
+        self.assertIn(
+            "rc_login:\n"
+            "  address:\n"
+            "    per_second: 10\n"
+            "    burst_count: 100\n"
+            "  account:\n"
+            "    per_second: 10\n"
+            "    burst_count: 100\n"
+            "  failed_attempts:\n"
+            "    per_second: 0.17\n"
+            "    burst_count: 3\n",
+            rendered,
+        )
         compose = (ROOT / "docker-compose.yaml").read_text(encoding="utf-8")
         start = (ROOT / "deploy" / "synapse" / "start-dev.sh").read_text(
             encoding="utf-8"

@@ -122,6 +122,20 @@ jwt_config:
   audiences:
     - {quoted(jwt_audience)}
 
+# This private Compose homeserver accepts only signed, short-lived JWT logins;
+# registration and password login are disabled above. Allow the legitimate
+# provisioning and room-verification burst while keeping failed proofs tight.
+rc_login:
+  address:
+    per_second: 10
+    burst_count: 100
+  account:
+    per_second: 10
+    burst_count: 100
+  failed_attempts:
+    per_second: 0.17
+    burst_count: 3
+
 # JWT is a replayable login credential during its short lifetime, and the
 # resulting non-refreshable Matrix session is independently bounded.
 nonrefreshable_access_token_lifetime: {access_token_lifetime}s

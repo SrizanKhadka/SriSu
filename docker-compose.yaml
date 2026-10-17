@@ -43,6 +43,7 @@ x-app-dependencies: &app-dependencies
     condition: service_healthy
 
 x-app-base: &app-base
+  image: srisu-backend-app:local
   build:
     context: .
     dockerfile: Dockerfile
@@ -106,6 +107,9 @@ services:
       POSTGRES_DB: "${MATRIX_POSTGRES_DB:-srisu_matrix}"
       POSTGRES_USER: "${MATRIX_POSTGRES_USER:-srisu_matrix}"
       POSTGRES_PASSWORD: "${MATRIX_POSTGRES_PASSWORD:-}"
+      # Synapse requires bytewise C collation and rejects PostgreSQL's locale
+      # default. This is consumed only when a fresh database volume is created.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - synapse_postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -1,4 +1,4 @@
-FROM python:3.13
+FROM python:3.13.5
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -10,10 +10,11 @@ RUN pip install pipenv
 
 WORKDIR /app
 
-COPY Pipfile Pipfile.lock ./
+COPY Pipfile Pipfile.lock requirements-core-tests.txt ./
 
 # Install project dependencies
-RUN pipenv install --system --dev
+RUN pipenv install --system --dev \
+    && pip install --no-cache-dir -r requirements-core-tests.txt
 
 COPY . .
 
