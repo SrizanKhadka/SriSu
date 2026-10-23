@@ -14,6 +14,7 @@ TEST_LABELS = [
     "chat.test_synapse_policy",
     "social.tests", "social.test_moments", "social.test_moment_replies",
     "social.test_couple_feed", "social.test_couple_profile",
+    "social.test_moment_publication",
 ]
 
 

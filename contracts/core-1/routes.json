@@ -229,6 +229,140 @@
         "cursor"
       ],
       "public": false
+    },
+    "moment-home": {
+      "method": "GET",
+      "path": "/api/social/couple-moments/home/",
+      "query": [],
+      "public": false
+    },
+    "moment-get": {
+      "method": "GET",
+      "path": "/api/social/couple-moments/{id}/",
+      "query": [
+        "record_view"
+      ],
+      "public": false
+    },
+    "moment-sequence": {
+      "method": "GET",
+      "path": "/api/social/couple-moments/sequence/",
+      "query": [
+        "couple",
+        "mode",
+        "page_size",
+        "creator"
+      ],
+      "public": false
+    },
+    "moment-feed": {
+      "method": "GET",
+      "path": "/api/social/couple-feed/",
+      "query": [
+        "section",
+        "page_size"
+      ],
+      "public": false
+    },
+    "moment-viewed": {
+      "method": "POST",
+      "path": "/api/social/couple-moments/{id}/viewed/",
+      "query": [],
+      "public": false
+    },
+    "moment-react": {
+      "method": "PUT",
+      "path": "/api/social/couple-moments/{id}/reaction/",
+      "query": [],
+      "public": false
+    },
+    "moment-caption": {
+      "method": "PATCH",
+      "path": "/api/social/couple-moments/{id}/caption/",
+      "query": [],
+      "public": false
+    },
+    "moment-delete": {
+      "method": "DELETE",
+      "path": "/api/social/couple-moments/{id}/",
+      "query": [],
+      "public": false
+    },
+    "moment-note": {
+      "method": "POST",
+      "path": "/api/social/couple-moments/{id}/notes/",
+      "query": [],
+      "public": false
+    },
+    "moment-notes": {
+      "method": "GET",
+      "path": "/api/social/moment-notes/",
+      "query": [
+        "moment",
+        "page",
+        "page_size"
+      ],
+      "public": false
+    },
+    "moment-note-reply": {
+      "method": "POST",
+      "path": "/api/social/moment-notes/{id}/replies/",
+      "query": [],
+      "public": false
+    },
+    "moment-draft-create": {
+      "method": "POST",
+      "path": "/api/social/moment-drafts/",
+      "query": [],
+      "public": false
+    },
+    "moment-draft-get": {
+      "method": "GET",
+      "path": "/api/social/moment-drafts/{uuid}/",
+      "query": [],
+      "public": false
+    },
+    "moment-draft-delete": {
+      "method": "DELETE",
+      "path": "/api/social/moment-drafts/{uuid}/",
+      "query": [],
+      "public": false
+    },
+    "moment-upload": {
+      "method": "PUT",
+      "path": "/api/social/moment-drafts/{uuid}/photos/{uuid}/",
+      "query": [],
+      "public": false
+    },
+    "moment-upload-remove": {
+      "method": "DELETE",
+      "path": "/api/social/moment-drafts/{uuid}/photos/{uuid}/",
+      "query": [],
+      "public": false
+    },
+    "moment-publish": {
+      "method": "POST",
+      "path": "/api/social/moment-drafts/{uuid}/publish/",
+      "query": [],
+      "public": false
+    },
+    "moment-photo": {
+      "method": "GET",
+      "path": "/api/social/couple-moments/{id}/photos/{id}/",
+      "query": [],
+      "public": false
+    },
+    "moment-creator-photo": {
+      "method": "GET",
+      "path": "/api/social/couple-moments/{id}/creator-photo/",
+      "query": [],
+      "public": false
+    },
+    "moment-staged-photo": {
+      "method": "GET",
+      "path": "/api/social/moment-drafts/{uuid}/photos/{uuid}/",
+      "query": [],
+      "public": false
     }
   },
   "retired_endpoints": {

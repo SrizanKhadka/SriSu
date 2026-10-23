@@ -11,9 +11,13 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
 
 from social.api.moment_serializers import CoupleMomentSerializer, MomentNoteSerializer, MomentNoteReplySerializer
-from social.models import CoupleMomentModel, CoupleMomentNoteModel, CoupleMomentViewModel
+from social.models import (CoupleMomentModel, CoupleMomentNoteModel, CoupleMomentViewModel,
+    CoupleMembershipModel, MomentReaction)
 from social.services.moment_service import (visible_moments, save_moment, compensate_upload,
     may_modify, membership_snapshot, lock_couple, visible_notes)
+from social.services.moment_service import eligible_moments, active_couples, blocked_user_ids
+from django.db.models import Exists, OuterRef, Count, Q, Min
+from django.utils import timezone
 
 
 class CoupleMomentPagination(PageNumberPagination):
@@ -65,35 +69,145 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
     def get_object(self):
         if len(str(self.kwargs["pk"])) > 18:
             raise Http404
-        return super().get_object()
+        try:
+            return super().get_object()
+        except Http404:
+            if self.request.query_params.get("record_view") == "false" and eligible_moments(
+                    self.request.user, include_expired=True).filter(pk=self.kwargs["pk"], expires_at__lte=timezone.now()).exists():
+                from social.services.moment_publication import MomentExpired
+                raise MomentExpired()
+            raise
 
     @transaction.atomic
     def retrieve(self, request, *args, **kwargs):
         obj = self.get_object()
-        if request.method == "GET":
+        if request.method == "GET" and request.query_params.get("record_view") != "false":
             # Serialize with deletion and recheck expiry after waiting for the lock.
             get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
             obj = self.get_object()
             CoupleMomentViewModel.objects.get_or_create(moment=obj, viewer=request.user)
-            obj.total_view_count = obj.views.count()
+            # Rehydrate the bounded viewer projection and aggregate count after insertion.
+            obj = self.get_object()
         return Response(self.get_serializer(obj).data)
+
+    @action(detail=False, methods=["get"])
+    def home(self, request):
+        user = request.user
+        now = timezone.now()
+        own = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).values("couple_id")
+        blocked = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user), ended_at__isnull=True).values("couple_id")
+        couple = active_couples().filter(pk__in=own).exclude(pk__in=blocked).first()
+        result = {"server_time": now, "user": {"id": user.pk, "name": user.full_name or user.username or ""}, "couple": None}
+        if couple:
+            viewed = CoupleMomentViewModel.objects.filter(moment_id=OuterRef("pk"), viewer=user)
+            summaries = {s["created_by_id"]: s for s in eligible_moments(user).filter(couple=couple)
+                .annotate(opened=Exists(viewed)).values("created_by_id").annotate(
+                    active_count=Count("pk"), unseen_count=Count("pk", filter=Q(opened=False)),
+                    next_expiry=Min("expires_at"))}
+            members = []
+            for m in couple.memberships.filter(ended_at__isnull=True).select_related("user").order_by("position"):
+                summary = summaries.get(m.user_id, {})
+                members.append({"id": m.user_id, "name": m.user.full_name or m.user.username or "",
+                    "photo_url": request.build_absolute_uri(f"/api/social/profiles/{couple.pk}/members/{m.user_id}/photo/") if m.user.profile_photo else None,
+                    "active_count": summary.get("active_count", 0), "unseen_count": 0 if m.user_id == user.pk else summary.get("unseen_count", 0),
+                    "next_expiry": summary.get("next_expiry")})
+            result["couple"] = {"id": couple.pk, "anniversary_date": couple.anniversary_date, "members": members}
+        return Response({"data": result})
+
+    @action(detail=True, methods=["post"])
+    def viewed(self, request, pk=None):
+        if request.data:
+            raise ValidationError("No body is accepted.")
+        with transaction.atomic():
+            obj = self.get_object()
+            lock_couple(obj.couple_id)
+            get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
+            obj = self.get_object()
+            if request.user.pk != obj.created_by_id:
+                CoupleMomentViewModel.objects.get_or_create(moment=obj, viewer=request.user)
+        return Response({"data": self.get_serializer(self.get_object()).data})
+
+    @action(detail=True, methods=["put"])
+    def reaction(self, request, pk=None):
+        if set(request.data) != {"reacted"} or type(request.data["reacted"]) is not bool:
+            raise ValidationError({"reacted": "Provide a boolean."})
+        with transaction.atomic():
+            obj = self.get_object()
+            lock_couple(obj.couple_id)
+            get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
+            obj = self.get_object()
+            if request.user.pk not in obj.audience_user_ids or request.user.pk == obj.created_by_id:
+                raise PermissionDenied()
+            if request.data["reacted"]:
+                MomentReaction.objects.get_or_create(moment=obj, user=request.user)
+            else:
+                MomentReaction.objects.filter(moment=obj, user=request.user).delete()
+        return Response({"data": self.get_serializer(self.get_object()).data})
+
+    @action(detail=True, methods=["get"], url_path="creator-photo")
+    def creator_photo(self, request, pk=None):
+        from social.api.couple_profile_views import photo_response
+        return photo_response(self.get_object().created_by.profile_photo)
+
+    @action(detail=True, methods=["patch"])
+    def caption(self, request, pk=None):
+        from rest_framework import serializers
+        from social.api.couple_profile_serializers import StrictSerializer
+        from social.services.moment_publication import MomentConflict
+        class Input(StrictSerializer):
+            caption = serializers.CharField(max_length=1000, allow_blank=True)
+            expected_revision = serializers.IntegerField(min_value=1)
+        data = Input(data=request.data)
+        data.is_valid(raise_exception=True)
+        with transaction.atomic():
+            obj = self.get_object()
+            lock_couple(obj.couple_id)
+            get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
+            obj = self.get_object()
+            if not may_modify(obj, request.user):
+                raise PermissionDenied()
+            if obj.revision != data.validated_data["expected_revision"]:
+                raise MomentConflict()
+            if not data.validated_data["caption"].strip() and not obj.photos.exists():
+                raise ValidationError({"caption": "A caption or photo is required."})
+            obj.caption = data.validated_data["caption"]
+            obj.revision += 1
+            obj.save(update_fields=["caption", "revision", "updated_at"])
+        return Response({"data": self.get_serializer(self.get_object()).data})
 
     def _write(self, request, partial=False, updating=False):
         written = []
         try:
+            initial = self.get_object() if updating else None
+            if initial and not may_modify(initial, request.user):
+                raise PermissionDenied("Only the creator can modify this moment.")
+            context = self.get_serializer_context()
+            context["written_files"] = written
+            serializer = self.get_serializer(initial, data=request.data, partial=partial, context=context)
+            serializer.is_valid(raise_exception=True)
+            # Decode/encode and storage writes finish before publication starts.
+            import uuid
+            from social.models import CoupleMomentPhotoModel
+            prepared = []
+            storage = CoupleMomentPhotoModel._meta.get_field("image").storage
+            for upload in serializer.validated_data.get("photos", []):
+                name = f"couples/moments/{uuid.uuid4().hex}.jpg"
+                written.append(name)
+                saved = storage.save(name, upload)
+                if saved != name:
+                    written.append(saved)
+                prepared.append((saved, upload.moment_dimensions))
+            context["prepared_uploads"] = prepared
             with transaction.atomic():
                 moment = None
                 if updating:
                     # Acquire before reading photos/validating the combined limit.
                     obj = self.get_object()
+                    lock_couple(obj.couple_id)
                     get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
                     moment = self.get_object()  # recheck expiry after waiting for the lock
                     if not may_modify(moment, request.user):
                         raise PermissionDenied("Only the creator can modify this moment.")
-                context = self.get_serializer_context()
-                context["written_files"] = written
-                serializer = self.get_serializer(moment, data=request.data, partial=partial, context=context)
-                serializer.is_valid(raise_exception=True)
                 moment = save_moment(serializer, request.user, moment)
                 data = self.get_serializer(moment).data
         except Exception:
@@ -112,6 +226,7 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
         obj = self.get_object()
+        lock_couple(obj.couple_id)
         get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
         obj = self.get_object()
         if not may_modify(obj, request.user):
@@ -137,8 +252,8 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
     def notes(self, request, **kwargs):
         with transaction.atomic():
             obj = self.get_object()
-            get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
             lock_couple(obj.couple_id)
+            get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
             moment = self.get_object()
             recipients = membership_snapshot(moment.couple)
             if moment.couple.memberships.filter(user=request.user, ended_at__isnull=True).exists():
@@ -175,8 +290,8 @@ class MomentNoteView(PrivateResponseMixin, mixins.ListModelMixin, mixins.Retriev
             return self.get_paginated_response(MomentNoteReplySerializer(page, many=True).data)
         with transaction.atomic():
             note = self.get_object()
-            get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=note.moment_id)
             lock_couple(note.moment.couple_id)
+            get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=note.moment_id)
             get_object_or_404(CoupleMomentNoteModel.objects.select_for_update(), pk=note.pk)
             note = self.get_object()
             if not visible_notes(request.user, recipients_only=True).filter(pk=note.pk).exists():

@@ -12,7 +12,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError, NotFoun
 
 from social.models import (CoupleModel, CoupleConnectionModel, CoupleMembershipModel, CoupleMomentModel,
                            CoupleMomentPhotoModel, MomentFileDeletion, SingleConnectionModel,
-                           CoupleMomentNoteModel)
+                           CoupleMomentNoteModel, CoupleMomentViewModel, CoupleMomentNoteReplyModel)
 from utils.choices import CoupleConnectionStatus
 
 logger = logging.getLogger(__name__)
@@ -38,27 +38,34 @@ def blocked_user_ids(user):
     return UserModel.objects.filter(phone_number__in=numbers).values_list("id", flat=True)
 
 
-def eligible_moments(user, at=None):
+def eligible_moments(user, at=None, *, include_expired=False):
     """Authorization only, without serialization joins or related-object loading."""
     own_couples = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).values("couple_id")
     blocked_couples = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user), ended_at__isnull=True).values("couple_id")
-    return (CoupleMomentModel.objects.filter(
-        couple_id__in=active_couples().values("id"), expires_at__gt=at or timezone.now(),
+    base = CoupleMomentModel.objects.all()
+    if not include_expired:
+        base = base.filter(expires_at__gt=at or timezone.now())
+    return (base.filter(
+        couple_id__in=active_couples().values("id"),
         is_archived=False, is_time_capsule=False,
     ).alias(audience_one=Cast(KeyTextTransform("0", "audience_membership_ids"), BigIntegerField()),
             audience_two=Cast(KeyTextTransform("1", "audience_membership_ids"), BigIntegerField()),
             user_one=Cast(KeyTextTransform("0", "audience_user_ids"), BigIntegerField()),
             user_two=Cast(KeyTextTransform("1", "audience_user_ids"), BigIntegerField()))
-      .filter(couple__memberships__id=F("audience_one"), couple__memberships__user_id=F("user_one"))
-      .filter(couple__memberships__id=F("audience_two"), couple__memberships__user_id=F("user_two"))
+      .filter(couple__memberships__id=F("audience_one"), couple__memberships__user_id=F("user_one"), couple__memberships__ended_at__isnull=True)
+      .filter(couple__memberships__id=F("audience_two"), couple__memberships__user_id=F("user_two"), couple__memberships__ended_at__isnull=True)
       .filter(Q(visibility="public") | Q(couple_id__in=own_couples))
       .exclude(couple_id__in=blocked_couples))
 
 
 def hydrate_moments(queryset, user):
+    views = CoupleMomentViewModel.objects.alias(
+        first_user=Cast(KeyTextTransform("0", "moment__audience_user_ids"), BigIntegerField()),
+        second_user=Cast(KeyTextTransform("1", "moment__audience_user_ids"), BigIntegerField()),
+    ).filter(Q(viewer=user) | Q(viewer_id=F("first_user")) | Q(viewer_id=F("second_user")))
     return (queryset.annotate(total_view_count=Count("views", distinct=True))
-      .select_related("created_by", "couple").prefetch_related("photos", "couple__memberships",
-          Prefetch("notes", queryset=visible_notes(user, recipients_only=True), to_attr="appreciation_notes"))
+      .select_related("created_by", "couple").prefetch_related("photos", Prefetch("views", queryset=views), "reactions", "couple__memberships",
+          Prefetch("notes", queryset=visible_notes(user, recipients_only=True)[:50], to_attr="appreciation_notes"))
       .order_by("-created_at", "-id"))
 
 
@@ -79,7 +86,7 @@ def visible_notes(user, recipients_only=False):
     blocked = list(blocked_user_ids(user))
     return (CoupleMomentNoteModel.objects.filter(allowed).exclude(sender_id__in=blocked).exclude(
         moment__couple__memberships__user_id__in=blocked)
-        .prefetch_related("replies").order_by("-created_at", "-id"))
+        .prefetch_related(Prefetch("replies", queryset=CoupleMomentNoteReplyModel.objects.order_by("-created_at", "-id")[:50], to_attr="recent_replies")).order_by("-created_at", "-id"))
 
 
 def membership_snapshot(couple):
@@ -91,12 +98,19 @@ def may_modify(moment, user):
 
 
 def delete_file(name):
+    from social.models import MomentDraftPhoto
+    # Covers and staged/published photos can briefly share storage during publication.
+    if (CoupleMomentPhotoModel.objects.filter(image=name).exists() or
+            MomentDraftPhoto.objects.filter(image=name).exists() or
+            CoupleModel.objects.filter(cover_photo=name).exists()):
+        MomentFileDeletion.objects.filter(name=name).delete()
+        return
     storage = CoupleMomentPhotoModel._meta.get_field("image").storage
     try:
         storage.delete(name)
         MomentFileDeletion.objects.filter(name=name).delete()
     except Exception:
-        logger.exception("Moment file deletion will be retried: %s", name)
+        logger.warning("Moment file deletion will be retried.")
 
 
 def queue_file_deletion(name):
@@ -168,6 +182,7 @@ def save_moment(serializer, user, moment=None):
         data.pop("couple", None)
         for key, value in data.items():
             setattr(moment, key, value)
+        moment.revision += 1
         moment.save()
     for photo in existing:
         if photo not in retained:
@@ -176,15 +191,8 @@ def save_moment(serializer, user, moment=None):
         if photo.order != index:
             photo.order = index
             photo.save(update_fields=["order"])
-    for index, upload in enumerate(uploads, start=len(retained)):
-        name = f"couples/moments/{uuid.uuid4().hex}{Path(upload.name).suffix.lower()}"
-        # Register before writing, including backends that write then raise.
-        serializer.context["written_files"].append(name)
-        photo = CoupleMomentPhotoModel(moment=moment, order=index)
-        stored = photo.image.storage.save(name, upload)
-        if stored != name:
-            serializer.context["written_files"].append(stored)
-        photo.image = stored
-        photo.save()
+    for index, (stored, dimensions) in enumerate(serializer.context["prepared_uploads"], start=len(retained)):
+        CoupleMomentPhotoModel.objects.create(moment=moment, order=index, image=stored,
+            width=dimensions[0], height=dimensions[1])
     moment._prefetched_objects_cache = {}
     return moment

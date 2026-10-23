@@ -346,6 +346,7 @@ class CoupleMomentModel(models.Model):
     created_at = models.DateTimeField(default=timezone.now, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(editable=False, db_index=True)
+    revision = models.PositiveBigIntegerField(default=1)
     # Snapshot membership identities, not just users: replacement partners never inherit access.
     audience_membership_ids = models.JSONField(default=list, editable=False)
     audience_user_ids = models.JSONField(default=list, editable=False)
@@ -378,6 +379,8 @@ class CoupleMomentPhotoModel(models.Model):
     image = models.ImageField(upload_to="couples/moments/")
 
     order = models.PositiveSmallIntegerField(default=0)
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
 
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -398,6 +401,39 @@ class CoupleMomentNoteModel(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class MomentDraft(models.Model):
+    """Private upload staging, never a feed item. Publication creates the existing Moment."""
+    id = models.UUIDField(primary_key=True, editable=False)
+    owner = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE)
+    audience_membership_ids = models.JSONField(default=list)
+    audience_user_ids = models.JSONField(default=list)
+    revision = models.PositiveBigIntegerField(default=1)
+    created_at = models.DateTimeField(default=timezone.now)
+    published_at = models.DateTimeField(null=True)
+    moment = models.OneToOneField(CoupleMomentModel, on_delete=models.SET_NULL, null=True, related_name="publication_draft")
+    publication_hash = models.CharField(max_length=64, blank=True)
+
+
+class MomentDraftPhoto(models.Model):
+    id = models.UUIDField(primary_key=True, editable=False)
+    draft = models.ForeignKey(MomentDraft, on_delete=models.CASCADE, related_name="photos")
+    image = models.ImageField(upload_to="couples/moments/")
+    digest = models.CharField(max_length=64)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class MomentReaction(models.Model):
+    moment = models.ForeignKey(CoupleMomentModel, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["moment", "user"], name="unique_moment_reaction")]
 
 
 class MomentFileDeletion(models.Model):

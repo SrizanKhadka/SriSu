@@ -243,7 +243,7 @@ class MomentAPITests(APITestCase):
                 with self.assertRaises(DatabaseError):
                     self.client.post(self.url, {"photos": [self.photo()]}, format="multipart")
         self.assertFalse(CoupleMomentModel.objects.exists())
-        self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+        self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
 
     def test_storage_failure_rolls_back_update_and_cleans_previous_upload(self):
         moment = self.create(photos=[self.photo()])
@@ -266,7 +266,7 @@ class MomentAPITests(APITestCase):
                         "photos": [self.photo(), self.photo()]}, format="multipart")
         self.assertEqual(CoupleMomentPhotoModel.objects.count(), 1)
         self.assertEqual(CoupleMomentModel.objects.get().caption, "Coffee together")
-        self.assertEqual(len(list(Path(self.media.name).rglob("*.png"))), 1)
+        self.assertEqual(len([p for p in Path(self.media.name).rglob("*") if p.is_file()]), 1)
 
     def test_delete_queue_cascade_and_cleanup_retention(self):
         moment = self.create(photos=[self.photo()])
@@ -280,7 +280,7 @@ class MomentAPITests(APITestCase):
         self.assertFalse(CoupleMomentNoteModel.objects.exists())
         call_command("cleanup_moments", stdout=StringIO())
         self.assertEqual(MomentFileDeletion.objects.count(), 0)
-        self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+        self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
         old = self.create()
         recent = self.create()
         CoupleMomentModel.objects.filter(pk=old["id"]).update(expires_at=timezone.now() - timedelta(days=31))
@@ -300,7 +300,7 @@ class MomentAPITests(APITestCase):
                     self.creator.delete()
             self.assertFalse(CoupleMomentModel.objects.exists())
             self.assertFalse(CoupleMomentNoteModel.objects.exists())
-            self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+            self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
             if not delete_couple:
                 # Restore a separate active pair for the second cascade scenario.
                 self.creator = UserModel.objects.create_user(phone_number="+9779809999999")
@@ -423,7 +423,7 @@ class MomentConcurrencyTests(APITransactionTestCase):
             statuses = [future.result(timeout=20) for future in futures]
         self.assertEqual(sorted(statuses), [200, 400])
         self.assertEqual(CoupleMomentPhotoModel.objects.count(), 5)
-        self.assertEqual(len(list(Path(self.media.name).rglob("*.png"))), 5)
+        self.assertEqual(len([p for p in Path(self.media.name).rglob("*") if p.is_file()]), 5)
 
     @skipUnlessDBFeature("has_select_for_update")
     def test_concurrent_delete_and_append_leave_no_uploads(self):
@@ -447,7 +447,7 @@ class MomentConcurrencyTests(APITransactionTestCase):
             self.assertEqual(deleting.result(timeout=20), 200)
             self.assertIn(updating.result(timeout=20), [200, 404])
         self.assertFalse(CoupleMomentModel.objects.exists())
-        self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+        self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
 
 
 class MomentMigrationTests(APITransactionTestCase):

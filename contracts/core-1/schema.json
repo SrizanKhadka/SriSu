@@ -879,6 +879,337 @@
         "data"
       ],
       "additionalProperties": false
+    },
+    "moment": {
+      "type": "object",
+      "required": [
+        "id",
+        "couple",
+        "created_by",
+        "creator",
+        "caption",
+        "visibility",
+        "photos",
+        "revision",
+        "published_at",
+        "expires_at",
+        "server_time",
+        "has_opened",
+        "can_edit",
+        "can_delete",
+        "can_reply",
+        "partner_seen_at",
+        "reacted",
+        "partner_reacted"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "couple": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "created_by": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "creator": {
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "photo_url"
+          ],
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "name": {
+              "type": "string"
+            },
+            "photo_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "caption": {
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "private",
+            "public"
+          ]
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "image",
+              "order",
+              "width",
+              "height"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "image": {
+                "type": "string"
+              },
+              "order": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "maxItems": 5
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "published_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "server_time": {
+          "type": "string"
+        },
+        "has_opened": {
+          "type": "boolean"
+        },
+        "can_edit": {
+          "type": "boolean"
+        },
+        "can_delete": {
+          "type": "boolean"
+        },
+        "can_reply": {
+          "type": "boolean"
+        },
+        "partner_seen_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reacted": {
+          "type": "boolean"
+        },
+        "partner_reacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "momentHome": {
+      "type": "object",
+      "required": [
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "type": "object",
+          "required": [
+            "user",
+            "couple",
+            "server_time"
+          ],
+          "properties": {
+            "user": {
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "name": {
+                  "type": "string"
+                },
+                "photo_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "couple": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "required": [
+                "id",
+                "anniversary_date",
+                "members"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "anniversary_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "members": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "name",
+                      "photo_url",
+                      "active_count",
+                      "unseen_count",
+                      "next_expiry"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "photo_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "active_count": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "unseen_count": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "next_expiry": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "server_time": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "momentDraft": {
+      "type": "object",
+      "required": [
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "type": "object",
+          "required": [
+            "id",
+            "couple",
+            "revision",
+            "created_at",
+            "published_at",
+            "moment_id",
+            "server_time",
+            "photos"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "couple": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "published_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "moment_id": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "server_time": {
+              "type": "string"
+            },
+            "photos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "image",
+                  "width",
+                  "height"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "x-named-errors": {

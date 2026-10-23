@@ -11,7 +11,10 @@
     "couple_profile_member": "coupleProfile",
     "couple_profile_visitor": "coupleProfile",
     "couple_plan": "couplePlan",
-    "matrix_session": "matrixSession"
+    "matrix_session": "matrixSession",
+    "moment_private": "moment",
+    "moment_home": "momentHome",
+    "moment_draft": "momentDraft"
   },
   "deployment": "Synapse and Django Matrix control plane before the Matrix KMP client; the replacement is not enabled by a migration alone.",
   "http": {
@@ -55,5 +58,15 @@
     "media": "First-party authenticated guarded URLs; private no-store; uploaded covers under couples/profile_private must not be served by a public bucket/proxy. Moment references retain original audience and expiry.",
     "story_invites": "Idempotent owner-only domain records. The backend does not author plaintext or Matrix events and returns no fake message/room identifiers.",
     "rollout": "Apply social 0015 and irreversible chat 0006 only after Matrix is configured. Legacy Django chat routes and data do not remain available after cutover. No deployment is implied."
+  },
+  "moments": {
+    "version": "moments-1",
+    "rollout": "Apply additive social 0016 and deploy Django before this KMP client. Existing Moment endpoints/records remain supported; legacy detail GET records views, new readers send record_view=false and POST viewed after pixels render.",
+    "publication": "Owned UUID draft and upload IDs; publish retries must reuse the same draft and exact caption/audience/photo order. Lock the couple then draft; media processing/storage outside transactions. Clock begins at successful publication.",
+    "retention": "Visibility: 24h, original audience only. Physical media: existing cleanup 30 days after expiry; staging: 7 days. Published replay tombstones hold IDs/audience/hash only until account/couple deletion. No remotely recalling downloaded copies.",
+    "media": "Authenticated first-party private no-store endpoints, 10 MiB input, 40MP/12000px decoded bound, JPEG/PNG/WebP only, strip metadata and resize to 2560px. No video.",
+    "interactions": "Partner heart is desired-state PUT. Partner replies use encrypted Matrix text with strict srisu://moments/{id}/couples/{id} external_url, IDs only. Visitor appreciation stays in authorized existing moment-notes APIs; no couple chat access.",
+    "errors": "400 validation; 401 expired session; concealed 404 inaccessible; 403 creator/partner-only action; 409 revision/payload conflict; 410 expired eligible reference/draft; 429 retry after throttling.",
+    "ordering": "Sequence ascending published created_at,id with signed requester/creator/couple-bound cursor. New feed retains Global/Faves ranking and session cursor, returns server_time."
   }
 }
