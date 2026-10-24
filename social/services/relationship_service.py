@@ -280,7 +280,8 @@ def end_connection(*, connection_id: int, actor: UserModel) -> CoupleConnectionM
 
 @transaction.atomic
 def reconcile_accepted_relationship(couple_id: int) -> ChatRoom:
-    couple = CoupleModel.objects.select_for_update().select_related("couple_connection").get(pk=couple_id)
+    # The connection FK is nullable; PostgreSQL cannot lock the outer-joined row.
+    couple = CoupleModel.objects.select_for_update(of=("self",)).select_related("couple_connection").get(pk=couple_id)
     if couple.couple_connection.connection_status != CoupleConnectionStatus.ACCEPTED:
         raise RelationshipConflict("Only accepted relationships can have an active room.")
     return ensure_relationship_chat_room(couple)

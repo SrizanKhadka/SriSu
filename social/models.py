@@ -551,3 +551,50 @@ class SparkAnswer(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["spark", "author"], name="one_answer_per_spark_author")]
+
+
+class ChallengeTemplate(models.Model):
+    """Versioned catalogue entry. Instances keep an immutable content snapshot."""
+    id = models.CharField(primary_key=True, max_length=48)
+    collection = models.CharField(max_length=24)
+    content = models.JSONField()
+    published = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+
+class CoupleChallenge(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="challenges")
+    creator = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    template = models.ForeignKey(ChallengeTemplate, on_delete=models.PROTECT)
+    snapshot = models.JSONField()
+    audience_membership_ids = models.JSONField()
+    audience_user_ids = models.JSONField()
+    accepted_by = models.JSONField(default=list)
+    confirmed_by = models.JSONField(default=list)
+    paused_by = models.JSONField(default=list)
+    state = models.CharField(max_length=12, default="invited", choices=[(s, s.title()) for s in
+        ("invited", "active", "paused", "completed", "declined", "cancelled")])
+    revision = models.PositiveBigIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True)
+    card_event_id = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["couple"], condition=models.Q(state__in=["invited", "active", "paused"]), name="one_live_challenge_per_couple")]
+        indexes = [models.Index(fields=["couple", "-created_at"], name="challenge_couple_created_idx")]
+
+
+class ChallengeOperation(models.Model):
+    """A durable retry receipt; never reapply an earlier pause after a resume."""
+    challenge = models.ForeignKey(CoupleChallenge, on_delete=models.CASCADE, related_name="operations")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    request_id = models.UUIDField()
+    action = models.CharField(max_length=16)
+    expected_revision = models.PositiveBigIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["challenge", "author", "request_id"], name="unique_challenge_operation")]
