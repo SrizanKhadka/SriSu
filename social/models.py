@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
 from authentication.models import UserModel
@@ -515,3 +516,38 @@ class UserPreferenceModel(models.Model):
 
     def __str__(self):
         return self.user.full_name or self.user.phone_number
+
+
+class SparkSession(models.Model):
+    """Mutual-reveal gate. Answers contain only client-produced Matrix ciphertext."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="sparks")
+    creator = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="started_sparks")
+    audience_membership_ids = models.JSONField()
+    audience_user_ids = models.JSONField()
+    room_id = models.UUIDField()
+    matrix_room_id = models.CharField(max_length=255)
+    membership_epoch = models.PositiveBigIntegerField()
+    question_id = models.CharField(max_length=40)
+    question = models.CharField(max_length=400)
+    deck = models.CharField(max_length=16)
+    state = models.CharField(max_length=12, default="open", choices=[("open", "Open"), ("revealed", "Revealed"), ("skipped", "Skipped")])
+    revision = models.PositiveBigIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revealed_at = models.DateTimeField(null=True)
+    card_event_id = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["couple"], condition=models.Q(state="open"), name="one_open_spark_per_couple")]
+        indexes = [models.Index(fields=["couple", "-created_at"], name="spark_couple_created_idx")]
+
+
+class SparkAnswer(models.Model):
+    spark = models.ForeignKey(SparkSession, on_delete=models.CASCADE, related_name="answers")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    sender_matrix_id = models.CharField(max_length=255)
+    envelope = models.JSONField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["spark", "author"], name="one_answer_per_spark_author")]

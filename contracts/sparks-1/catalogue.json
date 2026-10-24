@@ -1,0 +1,150 @@
+[
+  {
+    "id": "deep",
+    "name": "Deep",
+    "subtitle": "A little closer",
+    "questions": [
+      {
+        "id": "deep-1-v1",
+        "deck": "deep",
+        "text": "What do you admire about me that you’ve never told me?"
+      },
+      {
+        "id": "deep-2-v1",
+        "deck": "deep",
+        "text": "When do you feel most understood by me?"
+      },
+      {
+        "id": "deep-3-v1",
+        "deck": "deep",
+        "text": "What helps you feel loved on a difficult day?"
+      },
+      {
+        "id": "deep-4-v1",
+        "deck": "deep",
+        "text": "What is something you would like us to understand better about each other?"
+      },
+      {
+        "id": "deep-5-v1",
+        "deck": "deep",
+        "text": "What small thing do I do that means more than I realise?"
+      },
+      {
+        "id": "deep-6-v1",
+        "deck": "deep",
+        "text": "What does feeling safe together mean to you?"
+      }
+    ]
+  },
+  {
+    "id": "memories",
+    "name": "Memories",
+    "subtitle": "Back to us",
+    "questions": [
+      {
+        "id": "memories-1-v1",
+        "deck": "memories",
+        "text": "Which ordinary day together would you happily live again?"
+      },
+      {
+        "id": "memories-2-v1",
+        "deck": "memories",
+        "text": "What do you remember most clearly about our first conversation?"
+      },
+      {
+        "id": "memories-3-v1",
+        "deck": "memories",
+        "text": "When did you first feel that we made a good team?"
+      },
+      {
+        "id": "memories-4-v1",
+        "deck": "memories",
+        "text": "What is a little moment with me that you still smile about?"
+      },
+      {
+        "id": "memories-5-v1",
+        "deck": "memories",
+        "text": "Which place holds a special memory of us?"
+      },
+      {
+        "id": "memories-6-v1",
+        "deck": "memories",
+        "text": "What song takes you back to a moment we shared?"
+      }
+    ]
+  },
+  {
+    "id": "playful",
+    "name": "Playful",
+    "subtitle": "Make room for laughter",
+    "questions": [
+      {
+        "id": "playful-1-v1",
+        "deck": "playful",
+        "text": "If we had a whole day with no responsibilities, what would we do?"
+      },
+      {
+        "id": "playful-2-v1",
+        "deck": "playful",
+        "text": "What would our completely impractical dream date look like?"
+      },
+      {
+        "id": "playful-3-v1",
+        "deck": "playful",
+        "text": "If we opened a tiny shop together, what would we sell?"
+      },
+      {
+        "id": "playful-4-v1",
+        "deck": "playful",
+        "text": "What is our funniest shared habit?"
+      },
+      {
+        "id": "playful-5-v1",
+        "deck": "playful",
+        "text": "Which fictional world would you visit with me for a day?"
+      },
+      {
+        "id": "playful-6-v1",
+        "deck": "playful",
+        "text": "What would you put on a surprise picnic menu for us?"
+      }
+    ]
+  },
+  {
+    "id": "future",
+    "name": "Future",
+    "subtitle": "Things to look forward to",
+    "questions": [
+      {
+        "id": "future-1-v1",
+        "deck": "future",
+        "text": "What is one small tradition you would love us to start?"
+      },
+      {
+        "id": "future-2-v1",
+        "deck": "future",
+        "text": "What would a lovely ordinary weekend together look like a year from now?"
+      },
+      {
+        "id": "future-3-v1",
+        "deck": "future",
+        "text": "What is something new you would like us to learn together?"
+      },
+      {
+        "id": "future-4-v1",
+        "deck": "future",
+        "text": "Which place would you love to explore with me?"
+      },
+      {
+        "id": "future-5-v1",
+        "deck": "future",
+        "text": "What is one way we can make more time for each other?"
+      },
+      {
+        "id": "future-6-v1",
+        "deck": "future",
+        "text": "What shared dream would you like to take one small step towards?"
+      }
+    ]
+  }
+]
