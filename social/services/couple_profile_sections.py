@@ -151,7 +151,7 @@ def profile_data(request, couple, members, is_member):
         plans = couple.plans.filter(audience_membership_ids=audience(members))
         data["plan_count"] = plans.count()
         data["plans_done"] = plans.filter(completed=True).count()
-        data["plans_upcoming"] = plans.filter(starts_at__gte=timezone.now()).count()
+        data["plans_upcoming"] = plans.filter(starts_at__gte=timezone.now(), response="yes", completed=False, cancelled_at__isnull=True).count()
     return data
 
 

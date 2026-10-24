@@ -243,11 +243,31 @@ class CouplePlanModel(models.Model):
     revision = models.PositiveBigIntegerField(default=1)
     audience_membership_ids = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
+    place = models.CharField(max_length=240, blank=True)
+    time_zone = models.CharField(max_length=64, default="", blank=True)
+    pending_change = models.JSONField(default=dict)
+    checklist = models.JSONField(default=list)
+    creation_payload = models.JSONField(default=dict)
+    cancelled_at = models.DateTimeField(null=True)
+    cancelled_by = models.ForeignKey(UserModel, null=True, on_delete=models.SET_NULL, related_name="cancelled_plans")
+    completed_at = models.DateTimeField(null=True)
+    completed_by = models.ForeignKey(UserModel, null=True, on_delete=models.SET_NULL, related_name="completed_plans")
+    card_event_id = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["starts_at", "id"]
         constraints = [models.UniqueConstraint(fields=["couple", "created_by", "request_id"], name="unique_couple_plan_request")]
         indexes = [models.Index(fields=["couple", "starts_at", "id"], name="couple_plan_date_idx")]
+
+
+class PlanOperation(models.Model):
+    plan = models.ForeignKey(CouplePlanModel, on_delete=models.CASCADE, related_name="operations")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    request_id = models.UUIDField()
+    payload = models.JSONField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["plan", "author", "request_id"], name="unique_plan_operation")]
 
 
 class CoupleStoryInviteModel(models.Model):
