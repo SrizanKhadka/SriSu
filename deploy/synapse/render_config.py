@@ -147,8 +147,9 @@ require_auth_for_profile_requests: true
 limit_profile_requests_to_users_who_share_rooms: true
 allow_public_rooms_without_auth: false
 url_preview_enabled: false
+# Presence is visible through authenticated Matrix APIs to users sharing a room.
 presence:
-  enabled: false
+  enabled: true
 """
 
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
