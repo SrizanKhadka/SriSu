@@ -20,7 +20,7 @@ from social.api.moment_drafts import MomentDraftView
 from social.api.sparks import SparkView
 from social.api.challenges import ChallengeView
 from social.api.plans import PlanView
-from social.api.couple_views import CoupleFaveDetail, CoupleFaveList, CoupleFeedView, CoupleMomentSequence
+from social.api.couple_views import CoupleFaveDetail, CoupleFaveList, CoupleFeedView, CoupleMomentSequence, CoupleFeedCheck
 
 social_routers = DefaultRouter()
 social_routers.register("plans", PlanView, basename="plans")
@@ -53,6 +53,7 @@ urlpatterns = [
     path("profiles/<int:couple_id>/plans/", ProfilePlans.as_view(), name="profile-plans"),
     path("profiles/<int:couple_id>/plans/<int:plan_id>/", ProfilePlanDetail.as_view(), name="profile-plan"),
     path("couple-faves/", CoupleFaveList.as_view(), name="couple-faves"),
+    path("couple-feed/visible/", CoupleFeedCheck.as_view(), name="couple-feed-check"),
     path("couple-faves/<str:couple_id>/", CoupleFaveDetail.as_view(), name="couple-fave-detail"),
     path("couple-feed/", CoupleFeedView.as_view(), name="couple-feed"),
     path("couple-moments/sequence/", CoupleMomentSequence.as_view(), name="couple-moment-sequence"),

@@ -619,6 +619,10 @@
         "plans_upcoming": {
           "type": "integer",
           "minimum": 0
+        },
+        "fave_version": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "required": [

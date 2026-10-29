@@ -298,6 +298,12 @@ class CoupleStoryInviteModel(models.Model):
         ]
 
 
+class CoupleFaveVersion(models.Model):
+    """Private mutation barrier; preferences remain in CoupleFaveModel."""
+    user = models.OneToOneField(UserModel, on_delete=models.CASCADE, primary_key=True)
+    version = models.PositiveBigIntegerField(default=0)
+
+
 class CoupleFaveModel(models.Model):
     """A personal, one-way preference. Never shared with the user's partner."""
 

@@ -239,3 +239,35 @@ login JWTs, access tokens, message content and Matrix error bodies must never be
 logged. The development topology is not a production deployment; production
 still needs TLS/reverse proxy, secret management, backups, monitoring and a
 tested Synapse upgrade process.
+
+
+## Partner activity (2026-10-28)
+
+`deploy/synapse/render_config.py` now enables Matrix presence for the chat header.
+The frontend subscribes to the authorized partner's presence and room `m.typing`
+events through Trixnity; no Django endpoint, model or message protocol changes.
+Existing room topology restrictions remain in effect. Missing/stale presence is
+shown as unavailable, not offline. Presence follows Matrix foreground sync and
+server expiry, including other active devices.
+
+Roll out the Synapse configuration and restart Synapse before expecting status in
+new clients. Old clients and presence-disabled servers remain compatible (unknown
+status and no typing from clients that do not publish it). Local development
+Synapse was restarted on 2026-10-28 and its generated configuration confirmed enabled.
+No production deployment or data migration is implied.
+
+Verification: the isolated allowlist passed 294 tests (23 expected skips). Run
+`.venv/bin/python tools/verify_matrix_activity.py` for a separate, disposable
+loopback Synapse 1.162.0 check using temporary SQLite, synthetic users and random
+secrets; it never reads `.env` or uses the existing stack. It verifies presence,
+typing sync/stop/expiry and unrelated-user/identity-spoof rejection, then removes
+the container and database. Requires Docker and the locked Python environment;
+it honors rate limits and keeps generated credentials inside ignored `.venv`.
+This protocol check is not a two-device encrypted message/media integration test.
+
+Frontend handoff: `chat-ui-pure`, base `6d77bc5f534835b201cff00809d20b1184f2d06a`;
+backend base `6e0935c1c4f24267b9a956d259db5d113e9bb903` on
+`codex/couple-chat-rebuild`. See
+`../SriSu/docs/validation/chat-pure/activity/README.md` for the six-palette renders
+and Android/iOS verification. The original visual source is the approved Pure
+preview associated with Figma `LztysD1YvINX7RwZpnhhTt`, message page `1:5`.

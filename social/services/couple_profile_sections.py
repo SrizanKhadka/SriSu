@@ -19,6 +19,7 @@ from social.models import (CoupleModel, CoupleMembershipModel, CoupleConnectionM
     CoupleStoryAnswerModel, CoupleSongModel, CoupleProfileChangeModel,
     CouplePrivacyConsentModel, CoupleFaveModel)
 from social.services.moment_service import active_couples, blocked_user_ids, eligible_moments
+from social.services.fave_service import fave_version
 
 SECTIONS = ("identity", "story", "song", "interests", "cover", "date")
 EDITABLE = ("story", "song", "interests", "cover", "date", "sharing")
@@ -101,6 +102,7 @@ def published_sections(couple, members, raw):
 
 
 def profile_data(request, couple, members, is_member):
+    version = fave_version(request.user)
     raw = raw_sections(couple, members, request.user)
     published = published_sections(couple, members, raw)
     allowed = set(SECTIONS if is_member else published)
@@ -109,6 +111,7 @@ def profile_data(request, couple, members, is_member):
         return request.build_absolute_uri(base + path)
     data = {"id": couple.pk, "viewer": "member" if is_member else "visitor", "can_edit": is_member,
         "published_sections": published, "is_faved": CoupleFaveModel.objects.filter(user=request.user, couple=couple).exists(),
+        "fave_version": version,
         "can_fave": not is_member and settings.COUPLE_FEED_ENABLED,
         "can_view_moments": settings.COUPLE_FEED_ENABLED,
         "visible_moment_count": eligible_moments(request.user).filter(couple=couple).count()}

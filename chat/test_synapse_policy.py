@@ -222,6 +222,9 @@ class SynapseConfigRendererTests(SimpleTestCase):
         self.assertIn('alias: "#srisu_chat_*_e*:matrix.test"', rendered)
         self.assertIn("alias_creation_rules:", rendered)
         self.assertIn("enable_room_list_search: false", rendered)
+        self.assertIn("presence:\n  enabled: true", rendered)
+        self.assertIn("require_auth_for_profile_requests: true", rendered)
+        self.assertIn("limit_profile_requests_to_users_who_share_rooms: true", rendered)
         self.assertIn("room_list_publication_rules:", rendered)
         self.assertIn(
             "rc_login:\n"
