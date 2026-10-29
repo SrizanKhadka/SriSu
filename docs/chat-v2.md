@@ -271,19 +271,3 @@ backend base `6e0935c1c4f24267b9a956d259db5d113e9bb903` on
 `../SriSu/docs/validation/chat-pure/activity/README.md` for the six-palette renders
 and Android/iOS verification. The original visual source is the approved Pure
 preview associated with Figma `LztysD1YvINX7RwZpnhhTt`, message page `1:5`.
-
-Publication: `codex/chat-presence` is based on the published Matrix branch
-`codex/couple-chat-rebuild` at `6e0935c`, and targets that branch because the
-Synapse implementation is not yet on `dev-core-architecture` or `dev`. Only the
-presence renderer, its regression assertions, the disposable verification tool
-and these notes are included. Frontend implementation: `chat-ui-pure` at
-`84e1837dc61e3bbfd7daa6e6f3288e2b9018540e` (published tree identical to local
-implementation commit `045a1b1`).
-
-The isolated publication checkout passed system checks and **286 tests, 264
-passed, 22 expected skips**, plus the disposable Synapse activity check. The
-earlier 294-test count includes unrelated work in the original backend checkout,
-which remains untouched and is excluded from this branch. The first repeat live
-check failed because Docker could not read its temporary-directory bind mount;
-the unchanged check passed after moving the isolated checkout under the normal
-workspace directory. No production service was changed during publication.

@@ -363,6 +363,39 @@
       "path": "/api/social/moment-drafts/{uuid}/photos/{uuid}/",
       "query": [],
       "public": false
+    },
+    "explore-feed": {
+      "method": "GET",
+      "path": "/api/social/couple-feed/",
+      "query": [
+        "section",
+        "scope",
+        "page_size"
+      ],
+      "public": false
+    },
+    "explore-visible": {
+      "method": "GET",
+      "path": "/api/social/couple-feed/visible/",
+      "query": [
+        "couples",
+        "section"
+      ],
+      "public": false
+    },
+    "fave-library": {
+      "method": "GET",
+      "path": "/api/social/couple-faves/",
+      "query": [
+        "page_size"
+      ],
+      "public": false
+    },
+    "fave-state": {
+      "method": "GET",
+      "path": "/api/social/couple-faves/{id}/",
+      "query": [],
+      "public": false
     }
   },
   "retired_endpoints": {
