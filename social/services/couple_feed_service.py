@@ -12,9 +12,10 @@ from redis.exceptions import RedisError
 
 from social.api.couple_pagination import SessionChanged, SessionExpired
 from social.api.couple_serializers import MomentPreviewSerializer
-from social.models import CoupleModel, CoupleMomentViewModel
-from social.repository.couple_repository import discovery_moments, ranked_couples
-from social.services.fave_service import fave_state
+from social.models import CoupleModel, CoupleMomentViewModel, CoupleFaveModel
+from social.repository.couple_repository import discovery_context, discovery_moments, ranked_couples
+from social.services.fave_service import fave_state, fave_version
+from social.services.discovery_identity import identities
 
 logger = logging.getLogger(__name__)
 CACHE_ERRORS = (RedisError, OSError)
@@ -24,12 +25,15 @@ def session_cache():
     return caches["couple_feed"]
 
 
-def start_session(user, section, size):
+def start_session(user, section, size, scope="local"):
     as_of = timezone.now()
     faved_ids, fingerprint = fave_state(user)
-    ids = ranked_couples(user, section, as_of, faved_ids)
+    context = discovery_context(user) if section == "global" else None
+    ids, reasons, coverage = ranked_couples(user, section, as_of, faved_ids, scope, with_context=True)
     state = {"user": user.pk, "section": section, "content": "moments", "size": size,
              "as_of": as_of.isoformat(), "fingerprint": fingerprint, "ids": ids,
+             "scope": scope, "reasons": reasons, "coverage": coverage,
+             "discovery_context": context,
              "ranking_version": settings.COUPLE_FEED_RANKING_VERSION}
     session_id = uuid.uuid4().hex
     try:
@@ -45,7 +49,7 @@ def load_session(user, session_id):
         state = session_cache().get(session_id)
     except CACHE_ERRORS:
         raise SessionExpired()
-    if not state or state["user"] != user.pk:
+    if not state or state["user"] != user.pk or state["ranking_version"] != settings.COUPLE_FEED_RANKING_VERSION:
         raise SessionExpired()
     return state
 
@@ -66,6 +70,8 @@ def cards(request, ids, as_of, faved_ids, section):
     previews = {moment.pk: moment for moment in discovery_moments(request.user, as_of).filter(
         pk__in=[couple.preview_id for couple in summaries]).prefetch_related("photos")}
     result = {}
+    public = identities(request, [couple.pk for couple in summaries])
+    saved = set(CoupleFaveModel.objects.filter(user=request.user, couple_id__in=ids).values_list("couple_id", flat=True))
     for couple in summaries:
         preview = previews.get(couple.preview_id)
         if preview is None or preview.expires_at <= timezone.now():
@@ -73,7 +79,7 @@ def cards(request, ids, as_of, faved_ids, section):
         data = MomentPreviewSerializer(preview, context={"request": request}).data
         if preview.expires_at <= timezone.now():
             continue
-        result[couple.pk] = {"couple": {"id": couple.pk}, "is_faved": couple.pk in faved_ids,
+        result[couple.pk] = {"couple": public.get(couple.pk, {"id": couple.pk}), "is_faved": couple.pk in saved,
             "has_unopened": couple.has_unopened, "active_moment_count": couple.active_count,
             "preview": data, "moments_url": request.build_absolute_uri(reverse("couple-moment-sequence"))
             + f"?couple={couple.pk}&mode=unopened"}
@@ -81,6 +87,8 @@ def cards(request, ids, as_of, faved_ids, section):
 
 
 def serve_page(request, state, position):
+    if state["section"] == "global" and state.get("discovery_context") != discovery_context(request.user):
+        raise SessionChanged("Discovery preferences changed. Refresh for your current city and interests.")
     faved_ids, fingerprint = fave_state(request.user)
     if fingerprint != state["fingerprint"]:
         raise SessionChanged()
@@ -89,7 +97,8 @@ def serve_page(request, state, position):
     while position < len(ids) and len(results) < size:
         batch = ids[position:position + size - len(results)]
         available = cards(request, batch, parse_datetime(state["as_of"]), faved_ids, state["section"])
-        results.extend(available[pk] for pk in batch if pk in available)
+        results.extend({**available[pk], "reason": state.get("reasons", {}).get(str(pk))}
+                       for pk in batch if pk in available)
         position += len(batch)
     # A mutation while the page was being assembled must not return stale Faves.
     if fave_state(request.user)[1] != fingerprint:
@@ -100,4 +109,4 @@ def serve_page(request, state, position):
         pk__in=[card["preview"]["id"] for card in results]).values_list("pk", flat=True))
     results = [card for card in results if card["preview"]["id"] in live_ids
                and parse_datetime(card["preview"]["expires_at"]) > timezone.now()]
-    return results, position, bool(faved_ids)
+    return results, position, CoupleFaveModel.objects.filter(user=request.user).exists()

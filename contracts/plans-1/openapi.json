@@ -1,0 +1,835 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SriSu Plans",
+    "version": "plans-1"
+  },
+  "paths": {
+    "/api/social/plans/home/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "403": {
+            "description": "Incomplete profile"
+          },
+          "404": {
+            "description": "Unavailable to this audience"
+          },
+          "409": {
+            "description": "Stale revision or conflicting request"
+          },
+          "429": {
+            "description": "Write rate limit"
+          }
+        }
+      }
+    },
+    "/api/social/plans/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "403": {
+            "description": "Incomplete profile"
+          },
+          "404": {
+            "description": "Unavailable to this audience"
+          },
+          "409": {
+            "description": "Stale revision or conflicting request"
+          },
+          "429": {
+            "description": "Write rate limit"
+          }
+        },
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "upcoming",
+                "invitations",
+                "past"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "403": {
+            "description": "Incomplete profile"
+          },
+          "404": {
+            "description": "Unavailable to this audience"
+          },
+          "409": {
+            "description": "Stale revision or conflicting request"
+          },
+          "429": {
+            "description": "Write rate limit"
+          },
+          "201": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/plans/{id}/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "403": {
+            "description": "Incomplete profile"
+          },
+          "404": {
+            "description": "Unavailable to this audience"
+          },
+          "409": {
+            "description": "Stale revision or conflicting request"
+          },
+          "429": {
+            "description": "Write rate limit"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/plans/{id}/actions/": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "403": {
+            "description": "Incomplete profile"
+          },
+          "404": {
+            "description": "Unavailable to this audience"
+          },
+          "409": {
+            "description": "Stale revision or conflicting request"
+          },
+          "429": {
+            "description": "Write rate limit"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/plans/{id}/card/": {
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "403": {
+            "description": "Incomplete profile"
+          },
+          "404": {
+            "description": "Unavailable to this audience"
+          },
+          "409": {
+            "description": "Stale revision or conflicting request"
+          },
+          "429": {
+            "description": "Write rate limit"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/plans/reminders/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderSnapshotResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "403": {
+            "description": "Incomplete profile"
+          },
+          "404": {
+            "description": "Unavailable to this audience"
+          },
+          "409": {
+            "description": "Stale revision or conflicting request"
+          },
+          "429": {
+            "description": "Write rate limit"
+          }
+        },
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma separated positive plan IDs, maximum 32; complete authorized snapshot."
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Member": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "photo"
+        ],
+        "additionalProperties": false
+      },
+      "Change": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "place": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "time_zone": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "author": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "starts_at",
+          "place",
+          "time_zone",
+          "author"
+        ],
+        "additionalProperties": false
+      },
+      "Item": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "text": {
+            "type": "string"
+          },
+          "assigned_to": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "checked": {
+            "type": "boolean"
+          },
+          "checked_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "assigned_to",
+          "checked",
+          "checked_by"
+        ],
+        "additionalProperties": false
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "place": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "time_zone": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "id": {
+            "type": "integer"
+          },
+          "couple": {
+            "type": "integer"
+          },
+          "creator": {
+            "type": "integer"
+          },
+          "response": {
+            "enum": [
+              "pending",
+              "yes",
+              "no",
+              "another_time"
+            ]
+          },
+          "response_note": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "invited",
+              "agreed",
+              "change_proposed",
+              "elapsed",
+              "completed",
+              "cancelled",
+              "declined"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "pending_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Change"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checklist": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            }
+          },
+          "cancelled_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancelled_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "room_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matrix_room_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "membership_epoch": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "card_event_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "starts_at",
+          "place",
+          "time_zone",
+          "id",
+          "couple",
+          "creator",
+          "response",
+          "response_note",
+          "state",
+          "revision",
+          "pending_change",
+          "checklist",
+          "cancelled_at",
+          "cancelled_by",
+          "completed_at",
+          "completed_by",
+          "room_id",
+          "matrix_room_id",
+          "membership_epoch",
+          "card_event_id"
+        ],
+        "additionalProperties": false
+      },
+      "Home": {
+        "type": "object",
+        "properties": {
+          "couple": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            }
+          },
+          "next_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Plan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "invitations": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "couple",
+          "members",
+          "next_plan",
+          "invitations"
+        ],
+        "additionalProperties": false
+      },
+      "Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Plan"
+            }
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next"
+        ],
+        "additionalProperties": false
+      },
+      "ReminderSnapshot": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Plan"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "CreateInput": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "place": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "time_zone": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "request_id",
+          "couple",
+          "title",
+          "starts_at"
+        ],
+        "additionalProperties": false
+      },
+      "ActionInput": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "action": {
+            "enum": [
+              "accept",
+              "decline",
+              "propose",
+              "withdraw_change",
+              "cancel",
+              "complete",
+              "undo_complete",
+              "add_item",
+              "set_item",
+              "remove_item"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "description": "Strict per action: propose uses title/starts_at/place/time_zone; add_item text and optional assigned_to; set_item item_id/checked; remove_item item_id; all others empty."
+          }
+        },
+        "required": [
+          "request_id",
+          "expected_revision",
+          "action"
+        ],
+        "additionalProperties": false
+      },
+      "CardInput": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^\\$[^\\s]{1,254}$"
+          }
+        },
+        "required": [
+          "event_id"
+        ],
+        "additionalProperties": false
+      },
+      "PlanResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Plan"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "HomeResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Home"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PageResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Page"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "ReminderSnapshotResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReminderSnapshot"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -145,7 +145,7 @@ class Spark(models.Model):
 
 class SparkAnswer(models.Model):
     spark = models.ForeignKey(Spark, on_delete=models.CASCADE, related_name="answers")
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="legacy_spark_answers")
     operation_id = models.UUIDField()
     envelope = models.JSONField()
     digest = models.CharField(max_length=64)

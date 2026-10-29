@@ -25,3 +25,6 @@ for name, spec in sorted(lock["default"].items()):
 for line in (root / "requirements-core-tests.txt").read_text().splitlines():
     if line and not line.startswith("#"):
         print(line)
+
+# Additive provider dependency lock, shared with the Docker image.
+print("-r " + str(root / "requirements-notifications.txt"))

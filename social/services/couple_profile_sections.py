@@ -19,6 +19,7 @@ from social.models import (CoupleModel, CoupleMembershipModel, CoupleConnectionM
     CoupleStoryAnswerModel, CoupleSongModel, CoupleProfileChangeModel,
     CouplePrivacyConsentModel, CoupleFaveModel)
 from social.services.moment_service import active_couples, blocked_user_ids, eligible_moments
+from social.services.fave_service import fave_version
 
 SECTIONS = ("identity", "story", "song", "interests", "cover", "date")
 EDITABLE = ("story", "song", "interests", "cover", "date", "sharing")
@@ -37,7 +38,7 @@ def digest(value):
 
 def profile_for(user, couple_id=None, *, owner=False, lock=False):
     if couple_id is None:
-        couple_id = CoupleMembershipModel.objects.filter(user=user).values_list("couple_id", flat=True).first()
+        couple_id = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).values_list("couple_id", flat=True).first()
     if not couple_id:
         raise Http404
     if lock:
@@ -45,10 +46,10 @@ def profile_for(user, couple_id=None, *, owner=False, lock=False):
         # cannot pass these row locks during a conditional mutation.
         candidate = get_object_or_404(CoupleModel.objects.select_for_update(), pk=couple_id)
         list(CoupleConnectionModel.objects.select_for_update().filter(pk=candidate.couple_connection_id))
-        list(CoupleMembershipModel.objects.select_for_update().filter(couple_id=couple_id).order_by("id"))
-    blocked = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user)).values("couple_id")
+        list(CoupleMembershipModel.objects.select_for_update().filter(couple_id=couple_id, ended_at__isnull=True).order_by("id"))
+    blocked = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user), ended_at__isnull=True).values("couple_id")
     couple = get_object_or_404(active_couples().exclude(pk__in=blocked), pk=couple_id)
-    members = list(couple.memberships.select_related("user").order_by("position"))
+    members = list(couple.memberships.filter(ended_at__isnull=True).select_related("user").order_by("position"))
     is_member = any(m.user_id == user.pk for m in members)
     if owner and not is_member:
         raise Http404
@@ -101,6 +102,7 @@ def published_sections(couple, members, raw):
 
 
 def profile_data(request, couple, members, is_member):
+    version = fave_version(request.user)
     raw = raw_sections(couple, members, request.user)
     published = published_sections(couple, members, raw)
     allowed = set(SECTIONS if is_member else published)
@@ -109,6 +111,7 @@ def profile_data(request, couple, members, is_member):
         return request.build_absolute_uri(base + path)
     data = {"id": couple.pk, "viewer": "member" if is_member else "visitor", "can_edit": is_member,
         "published_sections": published, "is_faved": CoupleFaveModel.objects.filter(user=request.user, couple=couple).exists(),
+        "fave_version": version,
         "can_fave": not is_member and settings.COUPLE_FEED_ENABLED,
         "can_view_moments": settings.COUPLE_FEED_ENABLED,
         "visible_moment_count": eligible_moments(request.user).filter(couple=couple).count()}
@@ -151,7 +154,7 @@ def profile_data(request, couple, members, is_member):
         plans = couple.plans.filter(audience_membership_ids=audience(members))
         data["plan_count"] = plans.count()
         data["plans_done"] = plans.filter(completed=True).count()
-        data["plans_upcoming"] = plans.filter(starts_at__gte=timezone.now()).count()
+        data["plans_upcoming"] = plans.filter(starts_at__gte=timezone.now(), response="yes", completed=False, cancelled_at__isnull=True).count()
     return data
 
 
@@ -217,9 +220,15 @@ def update_section(couple, members, user, section, data):
             sections = [] if action == "revoke" else data["sections"]
             if "cover" in sections and couple.cover_source_moment_photo_id and couple.cover_source_moment_photo.moment.visibility != "public":
                 raise ValidationError({"sections": "A private Moment cannot be published as a cover. Choose an uploaded cover or an already-public Moment."})
+            proposal = {"sections": sections, "audience": audience(members), "fingerprints": {s: digest(raw[s]) for s in sections}}
+            if proposal == couple.privacy_proposal:
+                return
             couple.privacy_proposal_version += 1
             couple.privacy_proposal = {"sections": sections, "audience": audience(members), "fingerprints": {s: digest(raw[s]) for s in sections}}
             couple.save(update_fields=["privacy_proposal", "privacy_proposal_version"])
             couple.privacy_consents.all().delete()
             CouplePrivacyConsentModel.objects.create(couple=couple, user=user, proposal_version=couple.privacy_proposal_version)
     record_change(couple, user, section)
+    if section == "sharing" and data["action"] == "propose" and data["sections"]:
+        from notifications.services import partner_event
+        partner_event("sharing.proposed", user, couple, couple.pk, f"{couple.pk}:{couple.privacy_proposal_version}", version=couple.privacy_proposal_version)

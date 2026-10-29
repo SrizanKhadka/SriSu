@@ -1,5 +1,9 @@
 # Couple-only navigation contract and dating retirement
 
+> Historical document. Its Django WebSocket/chat retention statements are
+> superseded by the [Matrix-only chat cutover](chat-v2.md); dating retirement
+> and `SingleConnectionModel.BLOCKED` policy remain in force.
+
 2026-10-01, implemented from dev-core-architecture.
 Publication branch: codex/modular-navigation-retire-singles; PR base: dev-core-architecture.
 Backend baseline: 6433d60556d0c55e1ae06a1848e788c0fa487126.
@@ -26,26 +30,25 @@ clients retain the existing APIException envelope. No request creates/accepts a
 relationship or redirects to a phone invitation. Unauthenticated requests require
 sign-in before reaching the tombstone. Unsupported methods use normal API semantics.
 
-The old dating handlers/serializers/scoring modules and unregistered legacy chat
-backup/sender/deleter were removed. Dating-only seed command names fail with CommandError;
-they do not seed real users or modify records. The current consumer in chat/routing.py
-and all its service authorization remain the supported WebSocket path.
+The old dating handlers/serializers/scoring modules and dating-only seed commands
+were removed. The later Matrix cutover also removed the Django chat consumer,
+message transport, transport commands and WebSocket routes.
 
 ## Preserved data and authorization
 
-No migration, table deletion, relationship deletion or backfill is introduced.
-SingleConnectionModel and historical message/room foreign keys remain. BLOCKED
+This navigation change originally introduced no destructive migration. The later
+Matrix cutover deleted legacy message tables while retaining `ChatRoom` relationship
+identity and `SingleConnectionModel`. BLOCKED
 records remain authoritative for existing couple discovery/Moments restrictions.
 The model stays available for administrative historical maintenance; it is not a
 user-facing dating API. Legacy SINGLE enum values and defaults remain for database
 compatibility, and are not evidence of a current partnership.
 
-A dating-only relationship no longer authorizes active chat. The shared room selector
-requires a current accepted couple with both current memberships, affecting HTTP,
-WebSocket reads/writes/subscriptions and delivery. Old messages remain stored but are
-not exposed as active rooms or an archive UI. Do not promise an archive/export without
-an explicit access policy. Relinking the same legitimate pair through the established
-couple service preserves the historical room foreign key rather than erasing it.
+A dating-only relationship does not authorize Matrix bootstrap. The shared room
+selector requires a current accepted couple with both current memberships. Legacy
+messages are destroyed by `chat/0006` and are not an archive/export source. Relinking
+the same legitimate pair through the established couple service preserves the stable
+relationship room UUID rather than restoring the removed transport data.
 
 Individual accounts, personal profile fields, phone invitations (pending/accepted/
 rejected/cancelled), unlinked users, Faves and publication consent are preserved.

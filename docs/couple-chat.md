@@ -1,5 +1,9 @@
 # Couple chat implementation and verification
 
+> Historical libsignal implementation record. The October 29 consolidation uses
+> Matrix; see [the current chat guide](chat-v2.md). Only archival models/migrations
+> from this implementation remain installed; the API and runtime below are retired.
+
 Updated 2026-10-10. The chat implementation is available for local testing and QA
 in both repositories. Encrypted transport, protected offline storage and native
 media interoperability have executable Android/iOS evidence. The remaining device,
@@ -422,3 +426,11 @@ internally to `srisu_db`; Redis uses its internal port 6379. The existing local
 config --quiet` passed. The Docker daemon timed out during the read-only status
 check, so this follow-up did not build/start the manual-test server or migrate its
 database; run the commands above after Docker Desktop's engine is ready.
+
+### Notifications V1
+
+[The notification contract](notifications.md) adds a transactional outbox beside
+Change dispatch. Redis publication and push delivery have separate retry state.
+Chat state advertises `notification-plan-1` and message envelopes accept its optional,
+authorized Plan reference. Old envelope digests remain unchanged when the field is
+absent. Push is generic and restricted to the original recipient-device session.

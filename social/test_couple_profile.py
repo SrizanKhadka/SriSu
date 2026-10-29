@@ -213,6 +213,9 @@ class CoupleProfileTests(ProfileFixtures, APITestCase):
         response=self.client.post(self.base+'plans/',payload,format='json')
         self.assertEqual(response.status_code,201,response.data)
         plan=response.data['data']
+        self.assertNotIn('message_id', plan)
+        self.assertNotIn('room_id', plan)
+        self.assertNotIn('action', plan)
         self.assertEqual(self.client.post(self.base+'plans/',payload,format='json').status_code,200)
         path=self.base+f"plans/{plan['id']}/"
         self.assertEqual(self.client.patch(path,{'expected_revision':1,'response':'yes'},format='json').status_code,400)
@@ -222,15 +225,6 @@ class CoupleProfileTests(ProfileFixtures, APITestCase):
         self.client.force_authenticate(self.viewer)
         self.assertEqual(self.client.get(path).status_code,404)
         self.assertEqual(self.client.get(self.base+'plans/').status_code,404)
-
-    def test_encrypted_chat_plan_does_not_create_legacy_plaintext_message(self):
-        from chat.models import MessageModel
-        before=MessageModel.objects.count()
-        payload={'request_id':str(uuid4()),'title':'Synthetic private plan','starts_at':(timezone.now()+timedelta(days=1)).isoformat(),'share_to_legacy_chat':False}
-        response=self.client.post(self.base+'plans/',payload,format='json')
-        self.assertEqual(response.status_code,201,response.data)
-        self.assertEqual(self.client.post(self.base+'plans/',payload,format='json').status_code,200)
-        self.assertEqual(MessageModel.objects.count(),before)
 
     def test_history_is_bounded_and_private(self):
         from social.models import CoupleProfileChangeModel
@@ -260,20 +254,24 @@ class CoupleProfileTests(ProfileFixtures, APITestCase):
         self.client.force_authenticate(self.viewer)
         self.assertNotIn('members',self.data())
 
-    def test_question_and_plan_cards_are_private_and_idempotent(self):
-        from chat.models import MessageModel
-        from chat.presenters.message_presenter import serialize_message_for_socket_sync
+    def test_story_invites_are_private_idempotent_domain_records(self):
+        from social.models import CoupleStoryInviteModel
         payload={'request_id':str(uuid4()),'prompt':'how_met'}
         url=self.base+'story-invites/'
         response=self.client.post(url,payload,format='json')
         self.assertEqual(response.status_code,201,response.data)
-        self.assertEqual(self.client.post(url,payload,format='json').status_code,200)
-        self.assertEqual(MessageModel.objects.count(),1)
-        message=MessageModel.objects.get()
-        self.assertEqual(message.receiver_id,self.second.pk)
-        self.assertEqual(message.profile_action['couple_id'],self.target.pk)
+        replay=self.client.post(url,payload,format='json')
+        self.assertEqual(replay.status_code,200)
+        self.assertEqual(replay.data['data']['id'],response.data['data']['id'])
+        self.assertNotIn('message_id',response.data['data'])
+        self.assertNotIn('room_id',response.data['data'])
+        self.assertEqual(CoupleStoryInviteModel.objects.count(),1)
+        invite=CoupleStoryInviteModel.objects.get()
+        self.assertEqual(invite.created_by_id,self.first.pk)
+        self.assertEqual(invite.prompt,'how_met')
+        conflict={**payload,'prompt':'first_move'}
+        self.assertEqual(self.client.post(url,conflict,format='json').status_code,409)
         self.client.force_authenticate(self.viewer)
-        self.assertEqual(self.client.get(f'/api/chat/rooms/{message.chat_room_id}/messages/').status_code,404)
         self.assertEqual(self.client.post(url,{'request_id':str(uuid4()),'prompt':'how_met'},format='json').status_code,404)
 
     def test_failed_storage_preserves_existing_cover(self):

@@ -140,12 +140,12 @@ Rollback must not restore plaintext/replayable OTP handling or remove schema whi
 new clients depend on it. Feature rollout is backend-first. No shared database was
 inspected/migrated and no signing credentials were changed during implementation.
 
-Tests are explicitly included in `tools/workspace.py`; never use unrestricted
-legacy chat test discovery. Auth API, protected-profile, upload, session replay,
-legacy restriction and socket-revocation tests use synthetic identities/mocked SMS.
-SQLite skips the row-lock tests; the disposable PostgreSQL 17.11 runner passed all
-122 selected backend tests, including OTP send/consume, username, refresh and
-legacy-upgrade concurrency. See `docs/workspace.md` for its isolated command.
+Tests are explicitly included in `tools/workspace.py`; do not replace its
+allowlist with unrestricted discovery. Auth API, protected-profile, upload,
+session replay, legacy restriction and Matrix-bootstrap session-revocation tests
+use synthetic identities and mocked SMS. SQLite skips row-lock-only cases; use
+the disposable PostgreSQL runner for the same maintained suite and its
+concurrency coverage. See `docs/workspace.md` for the isolated commands.
 
 
 ## Guest client boundary

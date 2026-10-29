@@ -1,61 +1,177 @@
-# Define the services (containers) to be created
-services:
-  # Web service (Django application)
-  web:
-    build:
-      context: .            # Use the current directory as the build context
-      dockerfile: Dockerfile # Specify the Dockerfile to use
-    command: python manage.py runserver 0.0.0.0:8000 # Command to start the Django development server
-    # command: watchfiles "daphne -b 0.0.0.0 -p 8000 srisu.asgi:application"
-    volumes:
-      - .:/app              # Mount the current directory into the container for live updates
-    ports:
-      - "8000:8000"         # Map port 8000 on the host to port 8000 in the container
-    depends_on:
-      - srisu_db                  # Ensure the 'db' service starts before 'web'
-    environment:            # Environment variables for Django
-      - DJANGO_DEBUG=${DJANGO_DEBUG:-false}
-      # Development only: accept OTP requests without calling the expired Twilio trial.
-      # Set OTP_MOCK_DELIVERY=false to resume real SMS delivery.
-      - OTP_MOCK_DELIVERY=${OTP_MOCK_DELIVERY:-true}
-      # Shared development OTP, used only with mock delivery. Not a real credential.
-      - OTP_MOCK_CODE=${OTP_MOCK_CODE:-123456}
-      # Development server: append the mobile client's backend LAN host even when
-      # an existing .env has a localhost-only allowlist. Empty SRISU_DEV_LAN_HOST
-      # disables this addition; set it to another IP when changing laptops/networks.
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73}
-      # Match the names read by srisu.settings. Inside Docker, connect to the
-      # service DNS name, independently of the host's non-Docker .env address.
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=srisu_db
-      - DJANGO_SETTINGS_MODULE=srisu.settings
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+x-app-environment: &app-environment
+  NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
+  FIREBASE_PROJECT_ID: "${FIREBASE_PROJECT_ID:-srisu-ef431}"
+  DJANGO_SETTINGS_MODULE: srisu.settings
+  DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
+  # Development only: accept OTP requests without calling the expired Twilio trial.
+  OTP_MOCK_DELIVERY: "${OTP_MOCK_DELIVERY:-true}"
+  OTP_MOCK_CODE: "${OTP_MOCK_CODE:-123456}"
+  # Append the backend laptop's LAN address for native mobile clients.
+  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73}"
+  POSTGRES_DB: "${POSTGRES_DB}"
+  POSTGRES_USER: "${POSTGRES_USER}"
+  POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+  # Container networking must use service names, regardless of host-native .env values.
+  POSTGRES_HOST: srisu_db
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  AUTH_ACCEPT_LEGACY_TOKENS: "${AUTH_ACCEPT_LEGACY_TOKENS:-true}"
+  SRISU_CONFIRM_DESTROY_LEGACY_CHAT: "${SRISU_CONFIRM_DESTROY_LEGACY_CHAT:-}"
+  # Django controls relationship authorization and issues short-lived Synapse
+  # JWT login credentials. The app then uses only standard Matrix APIs.
+  MATRIX_ENABLED: "${MATRIX_ENABLED:-false}"
+  MATRIX_SERVICE_CLASS: "${MATRIX_SERVICE_CLASS:-chat.services.matrix_provisioning.DisabledMatrixService}"
+  MATRIX_HOMESERVER_URL: "${MATRIX_HOMESERVER_URL:-}"
+  MATRIX_INTERNAL_HOMESERVER_URL: "${MATRIX_INTERNAL_HOMESERVER_URL:-http://synapse:8008}"
+  MATRIX_SERVER_NAME: "${MATRIX_SERVER_NAME:-}"
+  MATRIX_PROTOCOL_ID: "${MATRIX_PROTOCOL_ID:-matrix-e2ee-v1}"
+  MATRIX_SESSION_TTL_SECONDS: "${MATRIX_SESSION_TTL_SECONDS:-120}"
+  MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS: "${MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS:-300}"
+  MATRIX_PROVISIONING_LOCALPART: "${MATRIX_PROVISIONING_LOCALPART:-srisu_provisioner}"
+  MATRIX_ROOM_VERSION: "${MATRIX_ROOM_VERSION:-11}"
+  MATRIX_JWT_SECRET: "${MATRIX_JWT_SECRET:-}"
+  MATRIX_JWT_ALGORITHM: "${MATRIX_JWT_ALGORITHM:-HS256}"
+  MATRIX_JWT_ISSUER: "${MATRIX_JWT_ISSUER:-srisu-django}"
+  MATRIX_JWT_AUDIENCE: "${MATRIX_JWT_AUDIENCE:-srisu-matrix}"
+  MATRIX_HTTP_TIMEOUT_SECONDS: "${MATRIX_HTTP_TIMEOUT_SECONDS:-5}"
+  MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS: "${MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS:-300}"
+  MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS: "${MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS:-300}"
 
-
-  # Database service (PostgreSQL)
+x-app-dependencies: &app-dependencies
   srisu_db:
-    image: postgres:17      # Use the official PostgreSQL image, version 17
-    container_name: srisuDB
-    restart: always          # Automatically restart the container if it crashes
-    environment:             # Environment variables for PostgreSQL
-      POSTGRES_USER: ${POSTGRES_USER} # PostgreSQL username
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # PostgreSQL password
-      POSTGRES_DB: ${POSTGRES_DB}
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+x-app-base: &app-base
+  image: srisu-backend-app:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - .env
+  environment: *app-environment
+  volumes:
+    - .:/app
+  depends_on: *app-dependencies
+  init: true
+
+services:
+  web:
+    <<: *app-base
+    command: daphne -b 0.0.0.0 -p 8000 srisu.asgi:application
     ports:
-      - "5433:5432"         # Map port 5432 on the host to port 5432 in the container
+      - "8000:8000"
+    restart: unless-stopped
+
+  notification_worker:
+    <<: *app-base
+    profiles: [notifications]
+    command: python manage.py dispatch_notifications
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-adc.json
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Persist database data to a Docker volume
+      - .:/app
+      - ${SRISU_FIREBASE_ADC_PATH:-./.local/firebase-adc.json}:/run/secrets/firebase-adc.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/srisu-notification-worker.heartbeat') < 120"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  # Durable retry loop for relationship-driven Matrix provisioning/revocation.
+  # Django remains available if Synapse is temporarily down.
+  matrix_reconciler:
+    <<: *app-base
+    command: python manage.py reconcile_matrix_rooms --watch --poll-interval 5 --limit 100
+    restart: unless-stopped
+
+  srisu_db:
+    image: postgres:17
+    container_name: srisuDB
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
 
   redis:
-      image: redis:latest
-      container_name: redis_server
-      ports:
-        - "6379:6379"
-      restart: unless-stopped
+    image: redis:7-alpine
+    container_name: redis_server
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
 
-# Define named volumes for persistent data storage
+  synapse_db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${MATRIX_POSTGRES_DB:-srisu_matrix}"
+      POSTGRES_USER: "${MATRIX_POSTGRES_USER:-srisu_matrix}"
+      POSTGRES_PASSWORD: "${MATRIX_POSTGRES_PASSWORD:-}"
+      # Synapse requires bytewise C collation and rejects PostgreSQL's locale
+      # default. This is consumed only when a fresh database volume is created.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - synapse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  synapse:
+    image: ghcr.io/element-hq/synapse:v1.162.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/srisu-config/start-dev.sh"]
+    environment:
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      MATRIX_SERVER_NAME: "${MATRIX_SERVER_NAME:-}"
+      MATRIX_HOMESERVER_URL: "${MATRIX_HOMESERVER_URL:-}"
+      MATRIX_JWT_SECRET: "${MATRIX_JWT_SECRET:-}"
+      MATRIX_JWT_ISSUER: "${MATRIX_JWT_ISSUER:-srisu-django}"
+      MATRIX_JWT_AUDIENCE: "${MATRIX_JWT_AUDIENCE:-srisu-matrix}"
+      MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS: "${MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS:-300}"
+      MATRIX_PROVISIONING_LOCALPART: "${MATRIX_PROVISIONING_LOCALPART:-srisu_provisioner}"
+      MATRIX_POSTGRES_DB: "${MATRIX_POSTGRES_DB:-srisu_matrix}"
+      MATRIX_POSTGRES_USER: "${MATRIX_POSTGRES_USER:-srisu_matrix}"
+      MATRIX_POSTGRES_PASSWORD: "${MATRIX_POSTGRES_PASSWORD:-}"
+      MATRIX_MACAROON_SECRET: "${MATRIX_MACAROON_SECRET:-}"
+      MATRIX_FORM_SECRET: "${MATRIX_FORM_SECRET:-}"
+      PYTHONPATH: /srisu-config
+    volumes:
+      - ./deploy/synapse:/srisu-config:ro
+      - synapse_data:/data
+    ports:
+      - "8008:8008"
+    depends_on:
+      synapse_db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fSs http://localhost:8008/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
 volumes:
-  postgres_data:              # Volume for storing PostgreSQL data
+  postgres_data:
+  synapse_postgres_data:
+  synapse_data:

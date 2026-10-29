@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://srisu.example/contracts/notifications-1",
+  "$defs": {
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "proof": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43,128}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "platform": {
+          "enum": [
+            "android",
+            "ios"
+          ]
+        },
+        "target_kind": {
+          "enum": [
+            "fid",
+            "token"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 4096
+        },
+        "permitted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "installation_id",
+        "proof",
+        "version",
+        "platform",
+        "target_kind",
+        "target",
+        "permitted"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "installation_id",
+        "version"
+      ]
+    },
+    "preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "const": "notifications-1"
+        },
+        "push": {
+          "type": "boolean"
+        },
+        "chat": {
+          "type": "boolean"
+        },
+        "activity": {
+          "type": "boolean"
+        },
+        "mute_until": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "mute_forever": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "notification-plan-1",
+              "activity-notifications-1",
+              "spark-notifications-1"
+            ]
+          }
+        }
+      },
+      "required": [
+        "contract",
+        "push",
+        "chat",
+        "activity",
+        "mute_until",
+        "mute_forever",
+        "revision",
+        "capabilities"
+      ]
+    },
+    "preference_write": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "push": {
+          "type": "boolean"
+        },
+        "chat": {
+          "type": "boolean"
+        },
+        "activity": {
+          "type": "boolean"
+        },
+        "mute": {
+          "enum": [
+            "unchanged",
+            "off",
+            "1h",
+            "8h",
+            "forever"
+          ]
+        }
+      },
+      "required": [
+        "expected_revision",
+        "push",
+        "chat",
+        "activity",
+        "mute"
+      ]
+    },
+    "destination": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "conversation"
+            },
+            "room_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "message_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "room_id",
+            "message_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "invitations"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "couple",
+                "sharing"
+              ]
+            },
+            "couple_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "couple_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "plan"
+            },
+            "couple_id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "plan_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "couple_id",
+            "plan_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "spark"
+            },
+            "spark_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "spark_id"
+          ]
+        }
+      ]
+    },
+    "push_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "1"
+        },
+        "delivery_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expires_at": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      },
+      "required": [
+        "schema",
+        "delivery_id",
+        "expires_at"
+      ]
+    }
+  }
+}

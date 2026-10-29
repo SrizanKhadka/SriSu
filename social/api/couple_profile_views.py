@@ -1,5 +1,6 @@
 from uuid import uuid4
 from django.db import transaction
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -14,7 +15,12 @@ from social.api.moment_views import PrivateResponseMixin
 from social.api.couple_pagination import positive_int
 from social.api.couple_profile_serializers import (StoryInput, SongInput, DateInput,
     InterestsInput, SharingInput, CoverInput, PlanInput, PlanResponseInput, StoryInviteInput)
-from social.models import CoupleModel, CoupleMomentPhotoModel, CouplePlanModel
+from social.models import (
+    CoupleModel,
+    CoupleMomentPhotoModel,
+    CouplePlanModel,
+    CoupleStoryInviteModel,
+)
 from social.services.couple_profile_sections import (profile_for, profile_data, raw_sections,
     published_sections, update_section, ensure_revision, record_change, audience, ProfileConflict)
 from social.services.moment_service import eligible_moments, queue_file_deletion, compensate_upload
@@ -159,7 +165,7 @@ class ProfileCoverChoices(ProfileAPI):
 
 def plan_data(plan):
     return {"id": plan.pk, "created_by": plan.created_by_id, "title": plan.title, "starts_at": plan.starts_at,
-            "response": plan.response, "response_note": plan.response_note, "completed": plan.completed, "revision": plan.revision}
+            "response": "no" if plan.cancelled_at else plan.response, "response_note": plan.response_note, "completed": plan.completed, "revision": plan.revision}
 
 
 class ProfilePlans(ProfileAPI):
@@ -169,7 +175,7 @@ class ProfilePlans(ProfileAPI):
         mode = request.query_params.get("mode", "upcoming")
         if mode not in ("upcoming", "past"):
             raise ValidationError({"mode": "Choose upcoming or past."})
-        rows = rows.filter(starts_at__gte=timezone.now()) if mode == "upcoming" else rows.filter(starts_at__lt=timezone.now())
+        rows = rows.filter(starts_at__gte=timezone.now(), cancelled_at__isnull=True) if mode == "upcoming" else rows.filter(Q(starts_at__lt=timezone.now()) | Q(cancelled_at__isnull=False))
         before = request.query_params.get("before")
         if before:
             rows = rows.filter(pk__lt=positive_int(before, "before"))
@@ -189,12 +195,9 @@ class ProfilePlans(ProfileAPI):
             if not created and (plan.title != data["title"] or plan.starts_at != data["starts_at"] or plan.audience_membership_ids != audience(members)):
                 raise ProfileConflict()
             if created:
-                if data["share_to_legacy_chat"]:
-                    from social.services.couple_profile_chat import send_profile_card
-                    send_profile_card(request.user, couple, members, data["request_id"],
-                        {"kind": "plan", "couple_id": couple.pk, "plan_id": plan.pk},
-                        f"Plan together: {plan.title} — {plan.starts_at.isoformat()}")
                 record_change(couple, request.user, "plans")
+                from notifications.services import partner_event
+                partner_event("plan.created", request.user, couple, plan.pk, plan.pk, expires_at=plan.starts_at)
             return Response({"message": "Plan saved.", "data": plan_data(plan)}, status=201 if created else 200)
 
 
@@ -211,9 +214,14 @@ class ProfilePlanDetail(ProfileAPI):
         with transaction.atomic():
             couple, members, _ = profile_for(request.user, couple_id, owner=True, lock=True)
             plan = get_object_or_404(couple.plans.select_for_update(), pk=plan_id, audience_membership_ids=audience(members))
+            if plan.cancelled_at or plan.pending_change:
+                raise ProfileConflict("Open Plans in the updated app to respond to this change.")
             if plan.revision != data["expected_revision"]:
                 raise ProfileConflict()
+            previous = (plan.response, plan.response_note, plan.completed)
             if "response" in data:
+                if plan.completed or plan.starts_at <= timezone.now():
+                    raise ValidationError({"response": "This plan has ended. Create a new invitation."})
                 if plan.created_by_id == request.user.pk:
                     raise ValidationError({"response": "Your partner responds to your invitation."})
                 plan.response = data["response"]
@@ -222,9 +230,16 @@ class ProfilePlanDetail(ProfileAPI):
                 if plan.starts_at > timezone.now() or plan.response != "yes":
                     raise ValidationError({"completed": "Only an agreed past plan can be marked done."})
                 plan.completed = data["completed"]
+                plan.completed_at = timezone.now() if plan.completed else None
+                plan.completed_by = request.user if plan.completed else None
+            if previous == (plan.response, plan.response_note, plan.completed):
+                return Response({"message": "Plan unchanged.", "data": plan_data(plan)})
             plan.revision += 1
-            plan.save(update_fields=["response", "response_note", "completed", "revision"])
+            plan.save(update_fields=["response", "response_note", "completed", "completed_at", "completed_by", "revision"])
             record_change(couple, request.user, "plans")
+            if "response" in data:
+                from notifications.services import partner_event
+                partner_event("plan.responded", request.user, couple, plan.pk, f"{plan.pk}:{plan.revision}", version=plan.revision, expires_at=plan.starts_at)
             return Response({"message": "Plan saved.", "data": plan_data(plan)})
 
 
@@ -235,10 +250,32 @@ class ProfileStoryInvite(ProfileAPI):
         data = serializer.validated_data
         with transaction.atomic():
             couple, members, _ = profile_for(request.user, couple_id, owner=True, lock=True)
-            from social.services.couple_profile_sections import PROMPTS
-            from social.services.couple_profile_chat import send_profile_card
-            message, created = send_profile_card(request.user, couple, members, data["request_id"],
-                {"kind": "story", "couple_id": couple.pk, "prompt": data["prompt"]},
-                "For our profile: " + PROMPTS[data["prompt"]])
-            return Response({"message": "Question sent to your partner chat.", "data": {
-                "message_id": message.pk, "room_id": str(message.chat_room_id)}}, status=201 if created else 200)
+            invite, created = CoupleStoryInviteModel.objects.get_or_create(
+                couple=couple,
+                created_by=request.user,
+                request_id=data["request_id"],
+                defaults={
+                    "prompt": data["prompt"],
+                    "audience_membership_ids": audience(members),
+                },
+            )
+            if not created and (
+                invite.prompt != data["prompt"]
+                or invite.audience_membership_ids != audience(members)
+            ):
+                raise ProfileConflict()
+            if created:
+                record_change(couple, request.user, "story_invites")
+            return Response(
+                {
+                    "message": "Question saved for your shared profile.",
+                    "data": {
+                        "id": invite.pk,
+                        "request_id": str(invite.request_id),
+                        "prompt": invite.prompt,
+                        "created_by": invite.created_by_id,
+                        "created_at": invite.created_at,
+                    },
+                },
+                status=201 if created else 200,
+            )
