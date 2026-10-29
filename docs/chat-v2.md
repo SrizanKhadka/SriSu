@@ -97,6 +97,14 @@ during recovery, revocation completes without provisioning a replacement.
 
 ## Development Compose / another laptop
 
+The merged `dev-core-architecture` runtime was deployed to the Windows Docker
+host on 29 October 2026 using the backup, reconciliation and gated cutover below.
+See [the Windows rollout record](notifications.md#merged-windows-rollout--29-october-2026)
+for host-local recovery paths and the two-file Compose command. Native Android
+two-participant encrypted messaging and typing passed against a separate synthetic
+Windows stack; the application database was not used for those tests. Windows Git
+checkouts now enforce LF for shell entrypoints through `.gitattributes`.
+
 After pulling the same feature branch in both repositories:
 
 ```sh
