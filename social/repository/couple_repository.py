@@ -11,7 +11,7 @@ from social.services.moment_service import eligible_moments
 
 
 def discovery_moments(user, as_of):
-    own = CoupleMembershipModel.objects.filter(user=user).values("couple_id")
+    own = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).values("couple_id")
     return eligible_moments(user).filter(visibility="public", created_at__lte=as_of).exclude(couple_id__in=own)
 
 
@@ -42,10 +42,12 @@ def ranked_couples(user, section, as_of, faved_ids):
     own_interests = interest_set([
         item.interest.name if item.interest_id else item.name for item in interests.filter(user=user)])
     if not own_interests:
-        membership = CoupleMembershipModel.objects.select_related("couple").filter(user=user).first()
+        membership = CoupleMembershipModel.objects.select_related("couple").filter(user=user, ended_at__isnull=True).first()
         own_interests = interest_set(membership.couple.shared_interests) if membership else set()
     ranked = []
     for couple in candidates:
+        # The related manager uses ActiveCoupleMembershipManager; `.all()` also
+        # consumes the bounded prefetch above instead of issuing per-card reads.
         members = [membership.user for membership in couple.memberships.all()]
         tags = interest_set(couple.shared_interests)
         if not tags:

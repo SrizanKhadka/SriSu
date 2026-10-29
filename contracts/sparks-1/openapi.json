@@ -1,0 +1,729 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SriSu Sparks",
+    "version": "sparks-1",
+    "description": "E2EE answers with a server-enforced ciphertext release gate. No answer plaintext or room keys are accepted."
+  },
+  "paths": {
+    "/api/social/sparks/home/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "404": {
+            "description": "Unavailable or unrelated audience"
+          },
+          "409": {
+            "description": "State conflict; refresh"
+          }
+        }
+      }
+    },
+    "/api/social/sparks/": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "404": {
+            "description": "Unavailable or unrelated audience"
+          },
+          "409": {
+            "description": "State conflict; refresh"
+          },
+          "200": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/sparks/{id}/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "404": {
+            "description": "Unavailable or unrelated audience"
+          },
+          "409": {
+            "description": "State conflict; refresh"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/sparks/{id}/answer/": {
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "404": {
+            "description": "Unavailable or unrelated audience"
+          },
+          "409": {
+            "description": "State conflict; refresh"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/sparks/{id}/skip/": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "404": {
+            "description": "Unavailable or unrelated audience"
+          },
+          "409": {
+            "description": "State conflict; refresh"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/sparks/{id}/card/": {
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "404": {
+            "description": "Unavailable or unrelated audience"
+          },
+          "409": {
+            "description": "State conflict; refresh"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/sparks/history/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original-couple response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or missing session"
+          },
+          "404": {
+            "description": "Unavailable or unrelated audience"
+          },
+          "409": {
+            "description": "State conflict; refresh"
+          }
+        },
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Exclusive UUID cursor returned by the preceding page."
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Envelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "const": "m.megolm.v1.aes-sha2"
+          },
+          "ciphertext": {
+            "type": "string",
+            "minLength": 128,
+            "maxLength": 16384,
+            "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+          },
+          "session_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]{43}$"
+          },
+          "sender_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]{43}$"
+          },
+          "device_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "algorithm",
+          "ciphertext",
+          "session_id"
+        ]
+      },
+      "Question": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "deck": {
+            "enum": [
+              "deep",
+              "memories",
+              "playful",
+              "future"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "deck",
+          "text"
+        ]
+      },
+      "Member": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "photo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "photo"
+        ]
+      },
+      "Answer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sender_matrix_id": {
+            "type": "string"
+          },
+          "envelope": {
+            "$ref": "#/components/schemas/Envelope"
+          }
+        },
+        "required": [
+          "author",
+          "sender_matrix_id",
+          "envelope"
+        ]
+      },
+      "Deck": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Question"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "subtitle",
+          "questions"
+        ]
+      },
+      "Session": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "creator": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "room_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "matrix_room_id": {
+            "type": "string"
+          },
+          "membership_epoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "question_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "deck": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "revealed",
+              "skipped"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revealed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "card_event_id": {
+            "type": "string"
+          },
+          "submitted_by": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Answer"
+            },
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "id",
+          "couple",
+          "creator",
+          "room_id",
+          "matrix_room_id",
+          "membership_epoch",
+          "question_id",
+          "question",
+          "deck",
+          "state",
+          "revision",
+          "created_at",
+          "revealed_at",
+          "card_event_id",
+          "submitted_by",
+          "answers"
+        ]
+      },
+      "Home": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "couple": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            },
+            "maxItems": 2
+          },
+          "decks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Deck"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Session"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session"
+            },
+            "maxItems": 30
+          },
+          "unavailable": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "couple",
+          "members",
+          "decks",
+          "active",
+          "recent"
+        ]
+      },
+      "StartInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "question_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "couple",
+          "question_id"
+        ]
+      },
+      "AnswerInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "envelope": {
+            "$ref": "#/components/schemas/Envelope"
+          }
+        },
+        "required": [
+          "envelope"
+        ]
+      },
+      "CardInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^\\$[^\\s]{1,254}$"
+          }
+        },
+        "required": [
+          "event_id"
+        ]
+      },
+      "EmptyInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "SessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Session"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "HomeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Home"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "HistoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ids",
+              "next"
+            ],
+            "properties": {
+              "ids": {
+                "type": "array",
+                "maxItems": 25,
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "next": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

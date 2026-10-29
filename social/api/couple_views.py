@@ -131,7 +131,7 @@ class CoupleFeedView(CoupleAPI):
                 if section == "faves" else "no_active_moments"
         return envelope(results, link, section=section, content_type="moments", as_of=state["as_of"],
                         ranking_version=state["ranking_version"], empty_reason=empty_reason,
-                        pagination_available=session_id is not None)
+                        pagination_available=session_id is not None, server_time=timezone.now())
 
 
 class CoupleMomentSequence(CoupleAPI):
@@ -142,10 +142,16 @@ class CoupleMomentSequence(CoupleAPI):
         if state and couple_id != state["couple"]:
             raise ValidationError({"couple": "Cannot change couple during pagination."})
         mode = selection(request, state, "mode", "unopened", {"unopened", "all"})
+        creator_raw = request.query_params.get("creator", str(state.get("creator")) if state and state.get("creator") else None)
+        creator = positive_int(creator_raw, "creator") if creator_raw is not None else None
+        if state and creator != state.get("creator"):
+            raise ValidationError({"creator": "Cannot change creator during pagination."})
         size = page_size(request, state)
         as_of = parse_datetime(state["as_of"]) if state else timezone.now()
         views = CoupleMomentViewModel.objects.filter(moment_id=OuterRef("pk"), viewer=request.user)
         queryset = eligible_moments(request.user).filter(couple_id=couple_id, created_at__lte=as_of)
+        if creator is not None:
+            queryset = queryset.filter(created_by_id=creator)
         queryset = queryset.annotate(has_opened=Exists(views))
         if mode == "unopened":
             queryset = queryset.filter(has_opened=False)
@@ -160,8 +166,8 @@ class CoupleMomentSequence(CoupleAPI):
                 data = CoupleMomentSerializer(row, context={"request": request}).data
                 if row.expires_at > timezone.now():
                     results.append({**data, "has_opened": row.has_opened})
-        link = next_url(request, "moment-sequence", {"couple": couple_id, "mode": mode,
+        link = next_url(request, "moment-sequence", {"couple": couple_id, "mode": mode, "creator": creator,
             "as_of": as_of.isoformat(), "size": size, "last_at": rows[-1].created_at.isoformat(),
             "last_id": rows[-1].pk}) if more else None
-        return envelope(results, link, couple_id=couple_id, mode=mode, as_of=as_of,
+        return envelope(results, link, couple_id=couple_id, mode=mode, as_of=as_of, server_time=timezone.now(),
                         empty_reason="no_unopened_moments" if not results and mode == "unopened" else None)

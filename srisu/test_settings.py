@@ -5,7 +5,6 @@ os.environ.setdefault("DJANGO_SECRET_KEY", "insecure-disposable-tests-only-never
 from .settings import *  # noqa: F403
 
 DATABASES = {"default": {"ENGINE": "srisu.test_sqlite", "NAME": ":memory:"}}
-CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},

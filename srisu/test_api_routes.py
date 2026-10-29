@@ -51,7 +51,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from authentication.models import UserModel
 from social.models import SingleConnectionModel
-from chat.models import ChatRoom, MessageModel
+from chat.models import ChatRoom
 
 
 class DatingRetirementTests(TestCase):
@@ -71,19 +71,15 @@ class DatingRetirementTests(TestCase):
                     self.assertEqual(response.status_code, 410)
         self.assertEqual(SingleConnectionModel.objects.count(), 0)
 
-    def test_legacy_chat_is_retained_but_cannot_authorize_active_use(self):
-        from chat.selectors.chat_room_selectors import get_chat_room_for_user
-        from chat.services.message_service import send_message, SendMessageInput
-        from chat.websocket.exceptions import ChatRoomNotFoundError
+    def test_retired_chat_transport_is_gone_without_deleting_block_policy(self):
         link = SingleConnectionModel.objects.create(sender_number=self.actor.phone_number,
             receiver_number=self.partner.phone_number, connection_status='ACCEPTED')
-        room = ChatRoom.objects.create(user_one=self.actor, user_two=self.partner, singles=link)
-        message = MessageModel.objects.create(chat_room=room, sender=self.actor, receiver=self.partner, text='Synthetic history')
-        self.assertIsNone(get_chat_room_for_user(room.pk, self.actor))
-        self.assertEqual(self.client.get(f'/api/chat/rooms/{room.pk}/messages/').status_code, 404)
-        with self.assertRaises(ChatRoomNotFoundError):
-            send_message(user=self.actor, payload=SendMessageInput(chat_room_id=str(room.pk), text='Synthetic blocked write'))
-        self.assertTrue(MessageModel.objects.filter(pk=message.pk).exists())
+        self.assertFalse(ChatRoom.objects.filter(
+            user_one=self.actor,
+            user_two=self.partner,
+        ).exists())
+        self.assertEqual(self.client.get('/api/chat/rooms/').status_code, 404)
+        self.assertEqual(self.client.post('/api/chat/media-upload/', {}).status_code, 404)
         self.assertTrue(SingleConnectionModel.objects.filter(pk=link.pk).exists())
 
     def test_tombstones_require_authentication(self):

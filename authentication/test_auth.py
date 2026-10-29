@@ -318,7 +318,8 @@ class AuthenticationTests(TestCase):
 
     def test_incomplete_capabilities_incremental_profile_skip_and_handoff(self):
         self.login()
-        self.assertEqual(self.client.get("/api/chat/rooms/").status_code, 403)
+        protected = "/api/social/have-couple-connection-requested/"
+        self.assertEqual(self.client.get(protected).status_code, 403)
         initial = self.client.get("/api/auth/setup-profile/").data["data"]["progress"]
         self.assertEqual(initial["next_step"], "name")
         named = self.client.patch("/api/auth/setup-profile/", {"full_name": "  सृजन Khadka  ", "username": "srijan"}, format="json")
@@ -329,7 +330,7 @@ class AuthenticationTests(TestCase):
         done = self.client.patch("/api/auth/setup-profile/", {"skip_photo": True}, format="json")
         self.assertEqual(done.data["data"]["progress"]["next_step"], "complete")
         self.assertEqual(done.data["data"]["progress"]["membership"], "unlinked")
-        self.assertEqual(self.client.get("/api/chat/rooms/").status_code, 200)
+        self.assertEqual(self.client.get(protected).status_code, 200)
         from social.models import CoupleModel
         self.assertEqual(CoupleModel.objects.count(), 0)
 
@@ -538,20 +539,21 @@ class SessionRecoveryTests(TransactionTestCase):
         access = str(RefreshToken.for_user(user).access_token)
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION="Bearer " + access)
-        self.assertEqual(client.get("/api/chat/rooms/").status_code, 403)
+        self.assertEqual(
+            client.post(
+                "/api/chat/v2/rooms/12345678-1234-1234-1234-123456789abc/matrix/session/"
+            ).status_code,
+            403,
+        )
         self.assertEqual(client.get("/api/auth/setup-profile/").status_code, 200)
-        from asgiref.sync import async_to_sync
-        from chat.middleware import authenticate_token
-        actor, expiry = async_to_sync(authenticate_token)(access)
-        self.assertFalse(actor.is_authenticated)
-        self.assertIsNone(expiry)
 
-    def test_socket_watchdog_checks_revocation(self):
-        from asgiref.sync import async_to_sync
-        from chat.middleware import user_is_active
+    def test_http_authentication_checks_session_revocation(self):
         user = UserModel.objects.create_user(PHONE, is_phone_verified=True, is_profile_complete=True)
         pair = create_session(user)
         sid = RefreshToken(pair["refresh"])["sid"]
-        self.assertTrue(async_to_sync(user_is_active)(user.pk, sid))
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION="Bearer " + pair["access"])
+        url = "/api/chat/v2/rooms/12345678-1234-1234-1234-123456789abc/matrix/session/"
+        self.assertEqual(client.post(url).status_code, 404)
         DeviceSession.objects.filter(pk=sid).update(revoked_at=now())
-        self.assertFalse(async_to_sync(user_is_active)(user.pk, sid))
+        self.assertEqual(client.post(url).status_code, 401)

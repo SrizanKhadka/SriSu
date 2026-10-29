@@ -29,7 +29,8 @@ def create_or_get_couple_for_connection(connection):
     existing_memberships = {
         membership.user_id: membership
         for membership in CoupleMembershipModel.objects.select_related("couple").filter(
-            user_id__in=[user.id for user in users]
+            user_id__in=[user.id for user in users],
+            ended_at__isnull=True,
         )
     }
     existing_couple_ids = {
@@ -43,7 +44,7 @@ def create_or_get_couple_for_connection(connection):
         raise CoupleProfileConflict("One of the users already belongs to another couple.")
 
     expected_user_ids = {user.id for user in users}
-    if couple.memberships.exclude(user_id__in=expected_user_ids).exists():
+    if couple.memberships.filter(ended_at__isnull=True).exclude(user_id__in=expected_user_ids).exists():
         raise CoupleProfileConflict(
             "The existing couple membership does not match this connection."
         )
@@ -51,6 +52,7 @@ def create_or_get_couple_for_connection(connection):
     for position, user in enumerate(users, start=1):
         CoupleMembershipModel.objects.get_or_create(
             user=user,
+            ended_at__isnull=True,
             defaults={
                 "couple": couple,
                 "position": position,
@@ -58,7 +60,7 @@ def create_or_get_couple_for_connection(connection):
             },
         )
 
-    if couple.memberships.count() != 2:
+    if couple.memberships.filter(ended_at__isnull=True).count() != 2:
         raise CoupleProfileConflict("A couple profile must contain exactly two members.")
 
     return couple

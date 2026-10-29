@@ -1,10 +1,11 @@
 from django.urls import path
 
-from chat.api.views import MediaUploadView
-from chat.api.history import RoomHistoryView, RoomListView
+from chat.api.matrix import MatrixSessionView
 
 urlpatterns = [
-    path("rooms/", RoomListView.as_view(), name="chat-room-list"),
-    path("rooms/<uuid:room_id>/messages/", RoomHistoryView.as_view(), name="chat-room-history"),
-    path("media-upload/", MediaUploadView.as_view(), name="media-upload"),
+    path(
+        "v2/rooms/<uuid:room_id>/matrix/session/",
+        MatrixSessionView.as_view(),
+        name="chat-v2-matrix-session",
+    ),
 ]

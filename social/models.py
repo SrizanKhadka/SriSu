@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
 from authentication.models import UserModel
@@ -14,6 +15,14 @@ class CoupleConnectionModel(models.Model):
         default=CoupleConnectionStatus.NOTHING,
     )
     breakup_reason = models.TextField(null=True, blank=True)
+    # Acceptance is an idempotent relationship transition.  This UUID belongs to
+    # the client operation that first committed the transition; legacy clients
+    # may leave it null and still replay the already-accepted connection safely.
+    request_operation_id = models.UUIDField(null=True, blank=True)
+    acceptance_operation_id = models.UUIDField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    revision = models.PositiveBigIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -27,6 +36,13 @@ class CoupleConnectionModel(models.Model):
         verbose_name = "Couple_Connection"
         indexes = [
             models.Index(fields=["sender_number", "receiver_number","connection_status"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sender_number", "request_operation_id"],
+                condition=models.Q(request_operation_id__isnull=False),
+                name="unique_couple_request_operation",
+            ),
         ]
 
     def __str__(self):
@@ -99,6 +115,18 @@ class CoupleModel(models.Model):
         return " ❤️ ".join(name for name in names if name) or f"Couple {self.pk}"
 
 
+class ActiveCoupleMembershipQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(ended_at__isnull=True)
+
+
+class ActiveCoupleMembershipManager(models.Manager.from_queryset(ActiveCoupleMembershipQuerySet)):
+    """Security boundary: ordinary membership reads mean current membership."""
+
+    def get_queryset(self):
+        return super().get_queryset().active()
+
+
 class CoupleMembershipModel(models.Model):
     class Position(models.IntegerChoices):
         PARTNER_ONE = 1, "Partner one"
@@ -109,15 +137,19 @@ class CoupleMembershipModel(models.Model):
         on_delete=models.CASCADE,
         related_name="memberships",
     )
-    user = models.OneToOneField(
+    user = models.ForeignKey(
         UserModel,
         on_delete=models.CASCADE,
-        related_name="couple_membership",
+        related_name="couple_memberships",
     )
     position = models.PositiveSmallIntegerField(choices=Position.choices)
     nickname = models.CharField(max_length=30, null=True, blank=True)
     is_owner = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    objects = ActiveCoupleMembershipManager()
+    all_objects = models.Manager()
 
     class Meta:
         ordering = ["position"]
@@ -130,8 +162,16 @@ class CoupleMembershipModel(models.Model):
                 fields=["couple", "user"],
                 name="unique_user_per_couple",
             ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(ended_at__isnull=True),
+                name="unique_active_couple_membership",
+            ),
         ]
-        indexes = [models.Index(fields=["couple", "position"])]
+        indexes = [
+            models.Index(fields=["couple", "position"]),
+            models.Index(fields=["user", "ended_at"], name="couple_member_active_idx"),
+        ]
 
     def __str__(self):
         return f"{self.user} in {self.couple_id}"
@@ -203,11 +243,59 @@ class CouplePlanModel(models.Model):
     revision = models.PositiveBigIntegerField(default=1)
     audience_membership_ids = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
+    place = models.CharField(max_length=240, blank=True)
+    time_zone = models.CharField(max_length=64, default="", blank=True)
+    pending_change = models.JSONField(default=dict)
+    checklist = models.JSONField(default=list)
+    creation_payload = models.JSONField(default=dict)
+    cancelled_at = models.DateTimeField(null=True)
+    cancelled_by = models.ForeignKey(UserModel, null=True, on_delete=models.SET_NULL, related_name="cancelled_plans")
+    completed_at = models.DateTimeField(null=True)
+    completed_by = models.ForeignKey(UserModel, null=True, on_delete=models.SET_NULL, related_name="completed_plans")
+    card_event_id = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["starts_at", "id"]
         constraints = [models.UniqueConstraint(fields=["couple", "created_by", "request_id"], name="unique_couple_plan_request")]
         indexes = [models.Index(fields=["couple", "starts_at", "id"], name="couple_plan_date_idx")]
+
+
+class PlanOperation(models.Model):
+    plan = models.ForeignKey(CouplePlanModel, on_delete=models.CASCADE, related_name="operations")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    request_id = models.UUIDField()
+    payload = models.JSONField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["plan", "author", "request_id"], name="unique_plan_operation")]
+
+
+class CoupleStoryInviteModel(models.Model):
+    """A durable profile prompt; delivery is intentionally not a chat side effect."""
+
+    couple = models.ForeignKey(
+        CoupleModel,
+        on_delete=models.CASCADE,
+        related_name="story_invites",
+    )
+    created_by = models.ForeignKey(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="couple_story_invites",
+    )
+    request_id = models.UUIDField()
+    prompt = models.CharField(max_length=32)
+    audience_membership_ids = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["couple", "created_by", "request_id"],
+                name="unique_couple_story_invite_request",
+            )
+        ]
 
 
 class CoupleFaveModel(models.Model):
@@ -279,6 +367,7 @@ class CoupleMomentModel(models.Model):
     created_at = models.DateTimeField(default=timezone.now, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(editable=False, db_index=True)
+    revision = models.PositiveBigIntegerField(default=1)
     # Snapshot membership identities, not just users: replacement partners never inherit access.
     audience_membership_ids = models.JSONField(default=list, editable=False)
     audience_user_ids = models.JSONField(default=list, editable=False)
@@ -311,6 +400,8 @@ class CoupleMomentPhotoModel(models.Model):
     image = models.ImageField(upload_to="couples/moments/")
 
     order = models.PositiveSmallIntegerField(default=0)
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
 
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
@@ -331,6 +422,39 @@ class CoupleMomentNoteModel(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class MomentDraft(models.Model):
+    """Private upload staging, never a feed item. Publication creates the existing Moment."""
+    id = models.UUIDField(primary_key=True, editable=False)
+    owner = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE)
+    audience_membership_ids = models.JSONField(default=list)
+    audience_user_ids = models.JSONField(default=list)
+    revision = models.PositiveBigIntegerField(default=1)
+    created_at = models.DateTimeField(default=timezone.now)
+    published_at = models.DateTimeField(null=True)
+    moment = models.OneToOneField(CoupleMomentModel, on_delete=models.SET_NULL, null=True, related_name="publication_draft")
+    publication_hash = models.CharField(max_length=64, blank=True)
+
+
+class MomentDraftPhoto(models.Model):
+    id = models.UUIDField(primary_key=True, editable=False)
+    draft = models.ForeignKey(MomentDraft, on_delete=models.CASCADE, related_name="photos")
+    image = models.ImageField(upload_to="couples/moments/")
+    digest = models.CharField(max_length=64)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class MomentReaction(models.Model):
+    moment = models.ForeignKey(CoupleMomentModel, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["moment", "user"], name="unique_moment_reaction")]
 
 
 class MomentFileDeletion(models.Model):
@@ -412,3 +536,85 @@ class UserPreferenceModel(models.Model):
 
     def __str__(self):
         return self.user.full_name or self.user.phone_number
+
+
+class SparkSession(models.Model):
+    """Mutual-reveal gate. Answers contain only client-produced Matrix ciphertext."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="sparks")
+    creator = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="started_sparks")
+    audience_membership_ids = models.JSONField()
+    audience_user_ids = models.JSONField()
+    room_id = models.UUIDField()
+    matrix_room_id = models.CharField(max_length=255)
+    membership_epoch = models.PositiveBigIntegerField()
+    question_id = models.CharField(max_length=40)
+    question = models.CharField(max_length=400)
+    deck = models.CharField(max_length=16)
+    state = models.CharField(max_length=12, default="open", choices=[("open", "Open"), ("revealed", "Revealed"), ("skipped", "Skipped")])
+    revision = models.PositiveBigIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revealed_at = models.DateTimeField(null=True)
+    card_event_id = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["couple"], condition=models.Q(state="open"), name="one_open_spark_per_couple")]
+        indexes = [models.Index(fields=["couple", "-created_at"], name="spark_couple_created_idx")]
+
+
+class SparkAnswer(models.Model):
+    spark = models.ForeignKey(SparkSession, on_delete=models.CASCADE, related_name="answers")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    sender_matrix_id = models.CharField(max_length=255)
+    envelope = models.JSONField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["spark", "author"], name="one_answer_per_spark_author")]
+
+
+class ChallengeTemplate(models.Model):
+    """Versioned catalogue entry. Instances keep an immutable content snapshot."""
+    id = models.CharField(primary_key=True, max_length=48)
+    collection = models.CharField(max_length=24)
+    content = models.JSONField()
+    published = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+
+class CoupleChallenge(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE, related_name="challenges")
+    creator = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    template = models.ForeignKey(ChallengeTemplate, on_delete=models.PROTECT)
+    snapshot = models.JSONField()
+    audience_membership_ids = models.JSONField()
+    audience_user_ids = models.JSONField()
+    accepted_by = models.JSONField(default=list)
+    confirmed_by = models.JSONField(default=list)
+    paused_by = models.JSONField(default=list)
+    state = models.CharField(max_length=12, default="invited", choices=[(s, s.title()) for s in
+        ("invited", "active", "paused", "completed", "declined", "cancelled")])
+    revision = models.PositiveBigIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True)
+    card_event_id = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["couple"], condition=models.Q(state__in=["invited", "active", "paused"]), name="one_live_challenge_per_couple")]
+        indexes = [models.Index(fields=["couple", "-created_at"], name="challenge_couple_created_idx")]
+
+
+class ChallengeOperation(models.Model):
+    """A durable retry receipt; never reapply an earlier pause after a resume."""
+    challenge = models.ForeignKey(CoupleChallenge, on_delete=models.CASCADE, related_name="operations")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    request_id = models.UUIDField()
+    action = models.CharField(max_length=16)
+    expected_revision = models.PositiveBigIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["challenge", "author", "request_id"], name="unique_challenge_operation")]

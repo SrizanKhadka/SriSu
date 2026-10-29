@@ -14,6 +14,7 @@ for key, value in {
     "POSTGRES_PASSWORD": "unused_workspace_tests",
     "POSTGRES_HOST": "127.0.0.1",
     "COUPLE_FEED_ENABLED": "true",
+    "SRISU_CONFIRM_DESTROY_LEGACY_CHAT": "DESTROY_LEGACY_CHAT_TRANSPORT_V1",
 }.items():
     os.environ[key] = value
 
