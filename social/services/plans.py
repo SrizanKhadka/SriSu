@@ -71,8 +71,11 @@ def create(user, request_id, couple_id, **values):
         return existing, False
     if values['starts_at'] <= timezone.now():
         raise ValidationError({'starts_at': 'Choose a future time.'})
-    return CouplePlanModel.objects.create(couple=couple, created_by=user, request_id=request_id,
-        audience_membership_ids=[m.pk for m in members], creation_payload=original, **values), True
+    plan = CouplePlanModel.objects.create(couple=couple, created_by=user, request_id=request_id,
+        audience_membership_ids=[m.pk for m in members], creation_payload=original, **values)
+    from notifications.services import partner_event
+    partner_event("plan.created", user, couple, plan.pk, plan.pk, expires_at=plan.starts_at)
+    return plan, True
 
 
 @transaction.atomic
@@ -86,6 +89,7 @@ def act(user, pk, request_id, expected_revision, action, **values):
     if plan.revision != expected_revision: raise PlanConflict()
     if plan.cancelled_at or plan.response == 'no': raise PlanConflict('This plan has ended.')
     if plan.completed and action != 'undo_complete': raise PlanConflict('Undo completion before changing this plan.')
+    previous_proposal = payload(dict(response=plan.response, note=plan.response_note, change=plan.pending_change))
     now = timezone.now()
     change = plan.pending_change
     proposer = change.get('author') if change else plan.created_by_id
@@ -134,4 +138,8 @@ def act(user, pk, request_id, expected_revision, action, **values):
     plan.revision += 1
     plan.save()
     PlanOperation.objects.create(plan=plan, author=user, request_id=request_id, payload=intent)
+    if (action in ('accept', 'decline', 'propose', 'withdraw_change')
+            and previous_proposal != payload(dict(response=plan.response, note=plan.response_note, change=plan.pending_change))):
+        from notifications.services import partner_event
+        partner_event("plan.responded", user, plan.couple, plan.pk, f"{plan.pk}:{plan.revision}", version=plan.revision, expires_at=plan.starts_at)
     return plan

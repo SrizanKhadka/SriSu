@@ -150,15 +150,16 @@ def create_connection_request(
             current.save(update_fields=["request_operation_id", "updated_at"])
         return RequestedRelationship(connection=current, replayed=True)
 
-    return RequestedRelationship(
-        connection=CoupleConnectionModel.objects.create(
+    connection = CoupleConnectionModel.objects.create(
             sender_number=sender_number,
             receiver_number=receiver_number,
             connection_status=CoupleConnectionStatus.PENDING,
             request_operation_id=operation_id,
-        ),
-        replayed=False,
     )
+    from notifications.services import emit
+    recipient = next(user for user in users if user.phone_number == receiver_number)
+    emit("invite.received", recipient, connection.pk, connection.pk)
+    return RequestedRelationship(connection=connection, replayed=False)
 
 
 @transaction.atomic
@@ -233,6 +234,9 @@ def accept_connection(
     matrix_mapping = ensure_matrix_mapping_records(room)
     schedule_matrix_room_provisioning(matrix_mapping)
     UserModel.objects.filter(pk__in=[user.pk for user in users]).update(is_engaged=True)
+    if not replayed:
+        from notifications.services import partner_event
+        partner_event("invite.accepted", actor, couple, connection.pk, connection.pk)
     return AcceptedRelationship(connection=connection, couple=couple, chat_room=room, replayed=replayed)
 
 

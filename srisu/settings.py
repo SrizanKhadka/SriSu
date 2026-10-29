@@ -45,15 +45,11 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
     "chat",
-    "couple_chat",
+    "couple_chat",  # Historical schema/migration compatibility only; no runtime transport.
+    "notifications",
     "rest_framework_simplejwt.token_blacklist",
     "social"
 ]
-
-# Temporary local preview only: no private-content transport until native E2EE
-# and protected persistence have passed the paired platform spike.
-COUPLE_CHAT_PREVIEW_ENABLED = config("COUPLE_CHAT_PREVIEW_ENABLED", default=True, cast=bool)
-COUPLE_CHAT_ROOM_MEDIA_BYTES = config("COUPLE_CHAT_ROOM_MEDIA_BYTES", default=536870912, cast=int)
 
 MIDDLEWARE = [
     "srisu.api.middleware.RequestContextMiddleware",
@@ -264,3 +260,8 @@ AUTH_ACCEPT_LEGACY_TOKENS = config("AUTH_ACCEPT_LEGACY_TOKENS", default=True, ca
 
 OTP_GLOBAL_HOURLY_LIMIT = config("OTP_GLOBAL_HOURLY_LIMIT", default=100, cast=int)
 OTP_IP_HOURLY_LIMIT = config("OTP_IP_HOURLY_LIMIT", default=10, cast=int)
+
+# Kill switch also stops new events, so re-enabling cannot replay disabled history.
+NOTIFICATIONS_ENABLED = config("NOTIFICATIONS_ENABLED", default=False, cast=bool)
+NOTIFICATION_INSTALLATION_MAX_AGE_DAYS = config("NOTIFICATION_INSTALLATION_MAX_AGE_DAYS", default=30, cast=int)
+FIREBASE_PROJECT_ID = config("FIREBASE_PROJECT_ID", default="srisu-ef431")

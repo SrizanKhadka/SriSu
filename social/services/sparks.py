@@ -125,6 +125,9 @@ def submit(user, spark_id, envelope):
         spark.state = "revealed"
         spark.revealed_at = timezone.now()
     spark.save(update_fields=["revision", "state", "revealed_at"])
+    if spark.state == "revealed":
+        from notifications.services import partner_event
+        partner_event("spark.revealed", user, spark.couple, spark.pk, spark.pk)
     return spark
 
 

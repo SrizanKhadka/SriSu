@@ -196,6 +196,8 @@ class ProfilePlans(ProfileAPI):
                 raise ProfileConflict()
             if created:
                 record_change(couple, request.user, "plans")
+                from notifications.services import partner_event
+                partner_event("plan.created", request.user, couple, plan.pk, plan.pk, expires_at=plan.starts_at)
             return Response({"message": "Plan saved.", "data": plan_data(plan)}, status=201 if created else 200)
 
 
@@ -216,6 +218,7 @@ class ProfilePlanDetail(ProfileAPI):
                 raise ProfileConflict("Open Plans in the updated app to respond to this change.")
             if plan.revision != data["expected_revision"]:
                 raise ProfileConflict()
+            previous = (plan.response, plan.response_note, plan.completed)
             if "response" in data:
                 if plan.completed or plan.starts_at <= timezone.now():
                     raise ValidationError({"response": "This plan has ended. Create a new invitation."})
@@ -229,9 +232,14 @@ class ProfilePlanDetail(ProfileAPI):
                 plan.completed = data["completed"]
                 plan.completed_at = timezone.now() if plan.completed else None
                 plan.completed_by = request.user if plan.completed else None
+            if previous == (plan.response, plan.response_note, plan.completed):
+                return Response({"message": "Plan unchanged.", "data": plan_data(plan)})
             plan.revision += 1
             plan.save(update_fields=["response", "response_note", "completed", "completed_at", "completed_by", "revision"])
             record_change(couple, request.user, "plans")
+            if "response" in data:
+                from notifications.services import partner_event
+                partner_event("plan.responded", request.user, couple, plan.pk, f"{plan.pk}:{plan.revision}", version=plan.revision, expires_at=plan.starts_at)
             return Response({"message": "Plan saved.", "data": plan_data(plan)})
 
 

@@ -22,3 +22,24 @@ staticfiles
 db.sqlite3
 
 docs
+
+.cache
+venv
+env
+# Notification credentials are mounted into the worker at runtime, never baked in.
+.local
+**/.local
+**/*service-account*.json
+**/*firebase-adc*.json
+**/application_default_credentials.json
+**/notification-sender-adc.json
+**/*.p8
+**/*.p12
+**/*_ed25519
+**/*_rsa
+profiles
+**/*.pyc
+**/*.log
+**/.pytest_cache
+**/.idea
+**/.vscode

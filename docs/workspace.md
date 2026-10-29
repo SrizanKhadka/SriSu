@@ -41,14 +41,6 @@ The generated requirements and environment stay inside ignored `.venv`.
 
 ## Isolated verification
 
-Verify the installed versions before assuming an existing `.venv` matches the
-lockfile. On 2026-10-10 the Windows `.venv` contained Django 5.1.3; couple-chat
-checks therefore use a separate ignored `.cache/couple-chat-venv` exported from
-the existing lockfile (Django 6.0.3), without replacing the user's environment.
-See [the couple-chat checkpoint](couple-chat.md) for its disposable Docker
-PostgreSQL runner and exact commands. The offline runner now accommodates
-Windows asyncio/Twisted loopback wakeup sockets while continuing to deny egress.
-
 ```sh
 .venv/bin/python tools/workspace.py check
 .venv/bin/python tools/workspace.py test
@@ -213,3 +205,9 @@ catalogue and standard Matrix client APIs remain separate.
 all-26-calls count and active dating expectations above. Current KMP calls, retired
 paths and preserved personal-preference APIs are separated in routes.json. No database
 migrations or production changes are required by this retirement.
+
+## Notifications V1
+
+See [notifications deployment and privacy](notifications.md). Workspace test setup
+now installs the additive, pinned `requirements-notifications.txt`; this does not
+upgrade the existing Pipfile lock. The maintained runner includes `notifications.tests`.

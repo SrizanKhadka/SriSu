@@ -220,9 +220,15 @@ def update_section(couple, members, user, section, data):
             sections = [] if action == "revoke" else data["sections"]
             if "cover" in sections and couple.cover_source_moment_photo_id and couple.cover_source_moment_photo.moment.visibility != "public":
                 raise ValidationError({"sections": "A private Moment cannot be published as a cover. Choose an uploaded cover or an already-public Moment."})
+            proposal = {"sections": sections, "audience": audience(members), "fingerprints": {s: digest(raw[s]) for s in sections}}
+            if proposal == couple.privacy_proposal:
+                return
             couple.privacy_proposal_version += 1
             couple.privacy_proposal = {"sections": sections, "audience": audience(members), "fingerprints": {s: digest(raw[s]) for s in sections}}
             couple.save(update_fields=["privacy_proposal", "privacy_proposal_version"])
             couple.privacy_consents.all().delete()
             CouplePrivacyConsentModel.objects.create(couple=couple, user=user, proposal_version=couple.privacy_proposal_version)
     record_change(couple, user, section)
+    if section == "sharing" and data["action"] == "propose" and data["sections"]:
+        from notifications.services import partner_event
+        partner_event("sharing.proposed", user, couple, couple.pk, f"{couple.pk}:{couple.privacy_proposal_version}", version=couple.privacy_proposal_version)

@@ -67,6 +67,7 @@ urlpatterns = [
     re_path(r"^media/couples/(?:moments|profile_private|profile_photos)/", deny_direct_moment_media),
     path("admin/", admin.site.urls),
     path("api/auth/", include('authentication.urls')),
+    path("api/notifications/", include("notifications.api")),
     path("api/chat/", include('chat.urls')),
     path("api/social/", include('social.urls')),
 ] + static(settings.MEDIA_URL, view=serve_public_media, document_root=settings.MEDIA_ROOT)

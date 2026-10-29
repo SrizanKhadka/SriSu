@@ -140,3 +140,8 @@ cython_debug/
 /media/chats_media/
 /media/messages/media/
 /media/chat_encrypted/
+
+/media/couples/couple_chat_private/
+.local/
+*service-account*.json
+*firebase-adc*.json

@@ -1,4 +1,6 @@
 x-app-environment: &app-environment
+  NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
+  FIREBASE_PROJECT_ID: "${FIREBASE_PROJECT_ID:-srisu-ef431}"
   DJANGO_SETTINGS_MODULE: srisu.settings
   DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
   # Development only: accept OTP requests without calling the expired Twilio trial.
@@ -62,6 +64,24 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+
+  notification_worker:
+    <<: *app-base
+    profiles: [notifications]
+    command: python manage.py dispatch_notifications
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-adc.json
+    volumes:
+      - .:/app
+      - ${SRISU_FIREBASE_ADC_PATH:-./.local/firebase-adc.json}:/run/secrets/firebase-adc.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/srisu-notification-worker.heartbeat') < 120"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   # Durable retry loop for relationship-driven Matrix provisioning/revocation.
   # Django remains available if Synapse is temporarily down.
