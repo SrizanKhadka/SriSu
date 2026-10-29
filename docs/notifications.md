@@ -68,6 +68,73 @@ Implemented on `codex/notifications-crashlytics-v1`, based on backend
 SriZan12/SriSu frontend `9f1a7708f1aa9785fb6e046227e134f23e1ec9f1` plus its notification
 branch. These are implementation baselines, not deployment claims.
 
+### Merged Windows rollout — 29 October 2026
+
+The merged runtime `80a1330` is deployed on the authorized Windows Docker Desktop
+host `192.168.1.69`. The Windows shell entrypoint fix (`8fdfccc`, merged as
+`06b004f`) pins `*.sh` to LF so Synapse starts after a normal Windows Git checkout.
+The paired Android runtime is `5ad8a97`, with additional opt-in deployment/native
+Matrix instrumentation on `codex/windows-core-deployment-20261029`. Follow-up
+documentation and tests are merged into both `dev-core-architecture` branches.
+
+- Checkout: `D:\Djangos\SriSu-core-20261029`, detached at the deployed merge.
+  The original dirty checkout and previous notification checkout are preserved.
+- Compose project: `srisu`, with the checkout's `docker-compose.yaml` and
+  `D:\SriSu-tools\deployment\compose.core-20261029.yaml`. The override pins the
+  built application image, retained external database/Matrix volumes, and original
+  media mount `D:/Djangos/SriSu/media:/app/media` for every application service.
+- Django: `http://192.168.1.69:8000/`; private Synapse:
+  `http://192.168.1.69:8008/`, stable identity `srisu.local`. This is the requested
+  HTTP development deployment with mock OTP delivery, not a production release.
+- Web, Matrix reconciler, PostgreSQL, Redis, Synapse and the notification worker
+  run with persistent restart policies. Notifications were disabled for migration
+  and enabled after the host-local ADC passed an FCM validation-only request.
+  Credentials remain on Windows, mounted read-only into the notification worker.
+
+The old worker was quiesced before cold backups. PostgreSQL volumes, media and
+old configuration were archived and verified under
+`D:\SriSu-secrets\backups\core-20261029T131044Z`. Both Matrix volumes were initially
+empty. The existing relationship preflight passed; additive migrations through
+`chat.0005a` were applied; the existing eligible relationship was reconciled and
+live-verified with no outstanding work. The application and initialized Matrix
+databases were then dumped and **successfully restored into disposable isolated
+PostgreSQL containers**, with hashes retained on Windows. A fresh readiness
+attestation preceded the one-off gated `chat.0006` migration. All later merged
+migrations passed, and `migrate --check` reports no outstanding migration.
+Original media and archival `couple_chat` data are preserved; no media purge ran.
+Rollback across `chat.0006` requires the verified backup and compatible old code,
+not a reverse migration or an old image against the upgraded database.
+
+The exact merged image also ran in a separate `srisu-core-e2e-20261029` project with
+synthetic users and its own PostgreSQL/Synapse volumes. Actual API 35 Android
+instrumentation passed the full foreground/background FCM, tap authorization,
+preference, account-switch and logout test (49.975 seconds). It reported two
+accepted deliveries and no active installations after logout. A second native
+test passed two-participant encrypted messaging/decryption, typing start/stop and
+unrelated-user denial (47.286 seconds); raw Matrix history contained encrypted
+events and no synthetic plaintext. HTTP tests passed Plans create/duplicate
+retry/accept/stale-write denial, Sparks creation/plaintext rejection/skip,
+Challenges/Home, profile/feed and cross-user access checks. The real application
+database received no synthetic test accounts or messages.
+The normal LAN APK separately passed a read-only Android smoke test against the
+deployed application services (11.09 seconds): correct configured origin, catalogue
+200, protected preferences 401, Matrix versions/policy 200 and MainActivity launch.
+
+Use both Compose files for subsequent operations, for example in PowerShell:
+
+```powershell
+Set-Location D:\Djangos\SriSu-core-20261029
+docker compose -p srisu -f docker-compose.yaml `
+  -f D:\SriSu-tools\deployment\compose.core-20261029.yaml `
+  --profile notifications up -d
+```
+
+The normal LAN APK is `D:\SriSu-tools\SriSu-core-debug.apk`; the frontend flow
+record has its hash and device-test details. Apple enrollment/APNs remain skipped.
+No physical-phone app data was changed. Matrix message push is still unavailable;
+activity notifications are the verified V1 scope. Full activity-screen UI coverage,
+signed releases and renewed Crashlytics console verification are separate work.
+
 ## Contract and privacy
 
 `contracts/notifications-1/` owns registration, preference, resolution and provider
