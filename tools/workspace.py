@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run isolated Django checks with in-memory DB/cache/channels and no sockets."""
+"""Run isolated Django checks with an in-memory DB/cache and no network."""
 import argparse
 import os
 from pathlib import Path
@@ -9,8 +9,13 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_LABELS = [
+    "notifications.tests", "notifications.test_matrix_push", "social.test_legacy_schema", "authentication.test_local_test_accounts",
+    "srisu.test_core", "srisu.test_api_routes", "authentication.test_auth",
+    "chat.test_matrix", "chat.test_retirement", "chat.test_storage_purge",
+    "chat.test_synapse_policy",
     "social.tests", "social.test_moments", "social.test_moment_replies",
-    "social.test_couple_feed",
+    "social.test_couple_feed", "social.test_couple_profile",
+    "social.test_moment_publication", "social.test_sparks", "social.test_challenges", "social.test_plans",
 ]
 
 

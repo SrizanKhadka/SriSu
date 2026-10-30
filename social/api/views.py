@@ -1,4 +1,5 @@
 import json
+from uuid import UUID
 
 from .serializers import *
 from rest_framework import status
@@ -10,98 +11,51 @@ from django.db import transaction
 from social.models import *
 from utils.choices import (
     CoupleConnectionStatus,
-    SingleConnectionStatus,
-    ChatTypeChoices,
 )
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.decorators import action, api_view, permission_classes
-from authentication.api.serializers import UserModelSerializer
-from chat.utils.chatutils import *
-from chat.models import ChatRoom
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
+from rest_framework.throttling import UserRateThrottle
+from social.services.phone_identity import has_permission, is_user_valid
 from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
-from social.services.suggestion_service import UserSuggestionService
-from social.api.serializers import UserSuggestionSerializer
-from social.services.couple_profile_service import (
-    CoupleProfileConflict,
-    create_or_get_couple_for_connection,
+from social.services.relationship_service import (
+    RelationshipConflict,
+    RelationshipPermissionDenied,
+    accept_connection,
+    create_connection_request,
+    end_connection,
 )
 
 
-def sync_chat_room(*, user_one, user_two, chat_type, couple=None, singles=None):
-    """
-    Keep one chat room per user pair and attach the latest social relation to it.
-    """
-    ordered_users = sorted([user_one, user_two], key=lambda user: user.id)
-    chat_room, _ = ChatRoom.objects.get_or_create(
-        user_one=ordered_users[0],
-        user_two=ordered_users[1],
-        defaults={
-            "chat_type": chat_type,
-            "couple": couple,
-            "singles": singles,
-        },
-    )
-
-    updates = []
-
-    if chat_room.user_one_id != ordered_users[0].id:
-        chat_room.user_one = ordered_users[0]
-        updates.append("user_one")
-
-    if chat_room.user_two_id != ordered_users[1].id:
-        chat_room.user_two = ordered_users[1]
-        updates.append("user_two")
-
-    if chat_room.chat_type != chat_type:
-        chat_room.chat_type = chat_type
-        updates.append("chat_type")
-
-    if chat_room.couple_id != getattr(couple, "id", None):
-        chat_room.couple = couple
-        updates.append("couple")
-
-    if chat_room.singles_id != getattr(singles, "id", None):
-        chat_room.singles = singles
-        updates.append("singles")
-
-    if updates:
-        updates.append("updated_at")
-        chat_room.save(update_fields=updates)
-
-    return chat_room
+class PartnerDiscoveryThrottle(UserRateThrottle):
+    scope = "partner_discovery"
 
 
 class CoupleConnectionView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
-    queryset = CoupleConnectionModel.objects.all()
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "put", "head", "options"]
 
-    def get_connection(self, sender_number, receiver_number):
-        """
-        Retrieves a connection between two numbers, regardless of direction.
-        """
-        try:
-            return CoupleConnectionModel.objects.get(
-                Q(sender_number=sender_number, receiver_number=receiver_number)
-                | Q(sender_number=receiver_number, receiver_number=sender_number)
-            )
-        except CoupleConnectionModel.DoesNotExist:
-            return None
-
-    def is_already_engaged(self, number):
+    def get_queryset(self):
+        """Conceal relationship records from every non-participant."""
+        phone_number = getattr(self.request.user, "phone_number", None)
+        if not phone_number:
+            return CoupleConnectionModel.objects.none()
         return CoupleConnectionModel.objects.filter(
-            Q(sender_number=number, connection_status=CoupleConnectionStatus.ACCEPTED)
-            | Q(
-                receiver_number=number,
-                connection_status=CoupleConnectionStatus.ACCEPTED,
-            )
-        ).exists()
+            Q(sender_number=phone_number) | Q(receiver_number=phone_number)
+        ).order_by("-updated_at", "-id")
+
+    def _connection_data(self, connection, *, couple=None, room=None, replayed=False):
+        return {
+            **self.get_serializer(connection).data,
+            "chat_room_id": str(room.pk) if room else None,
+            "couple_id": couple.pk if couple else None,
+            "replayed": replayed,
+        }
 
     def create(self, request, *args, **kwargs):
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -117,57 +71,49 @@ class CoupleConnectionView(ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        connection = self.get_connection(sender_number, receiver_number)
-
-        is_sender_engaged = self.is_already_engaged(number=sender_number)
-        is_receiver_engaged = self.is_already_engaged(number=receiver_number)
-
-        if is_sender_engaged:
-            raise ValidationError({"message": "You are already engaged!"})
-
-        if is_receiver_engaged:
-            raise ValidationError({"message": "Requested Person is already engaged!"})
-
-        if not connection or connection.connection_status in [
-            CoupleConnectionStatus.REJECTED,
-            CoupleConnectionStatus.BREAKUP,
-            CoupleConnectionStatus.NOTHING,  # NOTHING is used to cancel the request
-        ]:
-            connection, created = CoupleConnectionModel.objects.update_or_create(
+        operation_id = request.headers.get("Idempotency-Key")
+        try:
+            operation_id = UUID(operation_id) if operation_id else None
+            result = create_connection_request(
                 sender_number=sender_number,
                 receiver_number=receiver_number,
-                defaults={"connection_status": CoupleConnectionStatus.PENDING},
+                actor=request.user,
+                operation_id=operation_id,
             )
-
+        except RelationshipPermissionDenied:
             return Response(
-                {
-                    "message": "Love request sent.",
-                    "data": self.get_serializer(connection).data,
-                },
-                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+                {"message": "You don't have permission to perform this operation."},
+                status=status.HTTP_403_FORBIDDEN,
             )
+        except RelationshipConflict as exc:
+            return Response(
+                {"message": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except ValueError as exc:
+            raise ValidationError({"message": str(exc)}) from exc
 
         return Response(
             {
-                "message": "Love request already exists.",
-                "data": self.get_serializer(connection).data,
+                "message": "Love request already exists." if result.replayed else "Love request sent.",
+                "data": self._connection_data(
+                    result.connection,
+                    replayed=result.replayed,
+                ),
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED,
         )
 
     def perform_create(self, serializer):
         return serializer.save()
 
     def update(self, request, *args, **kwargs):
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-
         sender_number = data["sender_number"]
         receiver_number = data["receiver_number"]
         current_user_number = request.user.phone_number
-
         if not has_permission(
             request.user.phone_number, sender_number, receiver_number
         ):
@@ -175,19 +121,23 @@ class CoupleConnectionView(ModelViewSet):
                 {"message": "You don't have permission to perform this operation."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
         connection_status = request.data.get("connection_status")
-        connection = self.get_connection(
-            sender_number=sender_number, receiver_number=receiver_number
-        )
-
+        connection = self.get_queryset().filter(pk=kwargs.get("pk")).first()
         if not connection:
             return Response(
                 {"message": "Connection does not exist."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if {connection.sender_number, connection.receiver_number} != {
+            sender_number,
+            receiver_number,
+        }:
+            return Response(
+                {"message": "Connection does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-            # sender user can make it accept or reject but can cancel (nothing) the connection
+        # The sender may cancel, but cannot accept or reject their own request.
         if current_user_number == connection.sender_number and connection_status in [
             CoupleConnectionStatus.ACCEPTED,
             CoupleConnectionStatus.REJECTED,
@@ -206,145 +156,173 @@ class CoupleConnectionView(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if connection_status == CoupleConnectionStatus.ACCEPTED:
+            operation_id = request.headers.get("Idempotency-Key")
+            try:
+                operation_id = UUID(operation_id) if operation_id else None
+                result = accept_connection(
+                    connection_id=connection.pk,
+                    actor=request.user,
+                    operation_id=operation_id,
+                )
+            except RelationshipPermissionDenied:
+                return Response(
+                    {"message": "You don't have permission to perform this operation."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            except (RelationshipConflict, ValueError):
+                return Response(
+                    {"message": "The relationship could not be accepted."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return Response(
+                {
+                    "message": "Love request accepted!",
+                    "data": self._connection_data(
+                        result.connection,
+                        couple=result.couple,
+                        room=result.chat_room,
+                        replayed=result.replayed,
+                    ),
+                    "couple_connection": self.get_serializer(result.connection).data,
+                    "couple": CoupleModelSerializer(result.couple).data,
+                    "chat_room_id": str(result.chat_room.pk),
+                    "replayed": result.replayed,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        if connection_status == CoupleConnectionStatus.BREAKUP:
+            try:
+                connection = end_connection(connection_id=connection.pk, actor=request.user)
+            except RelationshipPermissionDenied:
+                return Response(
+                    {"message": "You don't have permission to perform this operation."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            except RelationshipConflict:
+                return Response(
+                    {"message": "The relationship could not be ended."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            return Response(
+                {
+                    "message": "Relationship ended.",
+                    "data": self._connection_data(connection),
+                    "couple_connection": self.get_serializer(connection).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         if connection_status in [
-            CoupleConnectionStatus.ACCEPTED,
             CoupleConnectionStatus.REJECTED,
-            CoupleConnectionStatus.BREAKUP,
-            CoupleConnectionStatus.NOTHING,  # NOTHING is used to cancel the request
+            CoupleConnectionStatus.NOTHING,
         ]:
+            if (
+                connection_status == CoupleConnectionStatus.REJECTED
+                and current_user_number != connection.receiver_number
+            ) or (
+                connection_status == CoupleConnectionStatus.NOTHING
+                and current_user_number != connection.sender_number
+            ):
+                return Response(
+                    {"message": "You don't have permission to perform this operation."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            operation_id = request.headers.get("Idempotency-Key")
+            try:
+                UUID(operation_id) if operation_id else None
+            except ValueError as exc:
+                raise ValidationError({"message": "Idempotency-Key must be a UUID."}) from exc
             with transaction.atomic():
-                connection.connection_status = connection_status
-                connection.save(update_fields=["connection_status", "updated_at"])
-
-                if (
-                    connection
-                    and connection.connection_status == CoupleConnectionStatus.REJECTED
-                ):
-                    message = "Sorry! Love request rejected"
+                connection = CoupleConnectionModel.objects.select_for_update().get(pk=connection.pk)
+                replayed = connection.connection_status == connection_status
+                if not replayed and connection.connection_status != CoupleConnectionStatus.PENDING:
                     return Response(
-                        {
-                            "message": message,
-                            "couple_connection": self.get_serializer(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
+                        {"message": "Unsupported operation."},
+                        status=status.HTTP_409_CONFLICT,
                     )
-                elif (
-                    connection
-                    and connection.connection_status == CoupleConnectionStatus.BREAKUP
-                ):
-                    message = "Sorry For your break-up. But no worries, You can have better choices."
-                    return Response(
-                        {
-                            "message": message,
-                            "couple_connection": self.get_serializer(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-                elif (
-                    connection
-                    and connection.connection_status == CoupleConnectionStatus.NOTHING
-                ):
-                    message = "Love request cancelled."
-                    return Response(
-                        {
-                            "message": message,
-                            "couple_connection": self.get_serializer(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-
-                if connection and connection_status == CoupleConnectionStatus.ACCEPTED:
-                    try:
-                        couple = self.createCouple(couple_connection=connection)
-                        UserModel.objects.filter(phone_number=connection.sender_number).update(is_engaged=True)
-                        UserModel.objects.filter(phone_number=connection.receiver_number).update(is_engaged=True)
-                        
-                    except ValueError as exc:
-                        connection.connection_status = CoupleConnectionStatus.PENDING
-                        connection.save(
-                            update_fields=["connection_status", "updated_at"]
-                        )
-                        return Response(
-                            {"error": str(exc)},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-
-                    if couple:
-                        couple_users = [
-                            membership.user
-                            for membership in couple.memberships.select_related("user")
-                            .order_by("position")
-                        ]
-                        sync_chat_room(
-                            user_one=couple_users[0],
-                            user_two=couple_users[1],
-                            chat_type=ChatTypeChoices.COUPLE,
-                            couple=couple,
-                        )
-                        return Response(
-                            {
-                                "message": "Love request accepted!",
-                                "couple_connection": self.get_serializer(
-                                    connection
-                                ).data,
-                                "couple": CoupleModelSerializer(couple).data,
-                            },
-                            status=status.HTTP_200_OK,
-                        )
-                    else:
-                        connection.connection_status = CoupleConnectionStatus.PENDING
-                        connection.save(
-                            update_fields=["connection_status", "updated_at"]
-                        )
-                        return Response(
-                            {"error": "Couple connection failed."},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
+                if not replayed:
+                    connection.connection_status = connection_status
+                    connection.revision += 1
+                    connection.save(update_fields=["connection_status", "revision", "updated_at"])
+            return Response(
+                {
+                    "message": "Love request rejected" if connection_status == CoupleConnectionStatus.REJECTED else "Love request cancelled.",
+                    "data": self._connection_data(connection, replayed=replayed),
+                    "couple_connection": self.get_serializer(connection).data,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         return Response(
             {"message": "Unsupported operation."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    def createCouple(self, couple_connection):
-        try:
-            return create_or_get_couple_for_connection(couple_connection)
-        except CoupleProfileConflict as exc:
-            raise ValueError(str(exc)) from exc
-
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def have_couple_connection_requested(request):
-    sender_number = getattr(request.user, "phone_number", None)
+    phone_number = getattr(request.user, "phone_number", None)
 
-    if not sender_number:
+    if not phone_number:
         return Response(
             {"error": "Phone number is missing."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    connection = (
-        CoupleConnectionModel.objects.filter(
-            sender_number=sender_number,
-            connection_status=CoupleConnectionStatus.PENDING,
+    membership = (
+        CoupleMembershipModel.objects.select_related("couple__couple_connection")
+        .filter(
+            user=request.user,
+            ended_at__isnull=True,
+            couple__couple_connection__connection_status=CoupleConnectionStatus.ACCEPTED,
+            couple__couple_connection__ended_at__isnull=True,
         )
-        .order_by("-created_at")
+        .order_by("-joined_at", "-id")
         .first()
     )
+    room = None
+    if membership is not None:
+        connection = membership.couple.couple_connection
+        room = membership.couple.chat_rooms.order_by("-updated_at", "-created_at").first()
+    else:
+        connection = (
+            CoupleConnectionModel.objects.filter(
+                sender_number=phone_number,
+                connection_status=CoupleConnectionStatus.PENDING,
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
 
-    connection_data = (
-        CoupleConnectionSerializer(connection, context={"request": request}).data
-        if connection
-        else None
+    connection_data = None
+    if connection is not None:
+        connection_data = CoupleConnectionSerializer(
+            connection,
+            context={"request": request},
+        ).data
+        connection_data.update(
+            {
+                "chat_room_id": str(room.pk) if room else None,
+                "couple_id": membership.couple_id if membership else None,
+                "replayed": False,
+            }
+        )
+
+    requested = bool(
+        connection
+        and connection.connection_status == CoupleConnectionStatus.PENDING
+        and connection.sender_number == phone_number
     )
 
     return Response(
         {
             "message": "Connection request check completed.",
             "data": {
-                "connection_requested": connection is not None,
-                "connection": connection_data
+                "connection_requested": requested,
+                "connection": connection_data,
             },
         },
         status=status.HTTP_200_OK,
@@ -384,9 +362,17 @@ class CoupleConnectionPagination(PageNumberPagination):
 
 class CoupleConnectionRequestView(ModelViewSet):
     serializer_class = CoupleConnectionSerializer
-    queryset = CoupleConnectionModel.objects.all().order_by("-id")
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = CoupleConnectionPagination
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        phone_number = getattr(self.request.user, "phone_number", None)
+        if not phone_number:
+            return CoupleConnectionModel.objects.none()
+        return CoupleConnectionModel.objects.filter(
+            Q(sender_number=phone_number) | Q(receiver_number=phone_number)
+        ).order_by("-id")
 
     def get_paginated_response_data(self, queryset, message):
         page = self.paginate_queryset(queryset)
@@ -449,246 +435,25 @@ class CoupleConnectionRequestView(ModelViewSet):
 from social.api.moment_views import CoupleMomentView, CoupleMomentPagination
 
 
-class SingleConnectionView(ModelViewSet):
-    serializer_class = SingleConnectionSerializer
-    queryset = SingleConnectionModel.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_connection(self, sender_number, receiver_number):
-        """
-        Retrieves a connection between two numbers, regardless of direction.
-        """
-        try:
-            return SingleConnectionModel.objects.get(
-                Q(sender_number=sender_number, receiver_number=receiver_number)
-                | Q(sender_number=receiver_number, receiver_number=sender_number)
-            )
-        except SingleConnectionModel.DoesNotExist:
-            return None
-
-    def create(self, request, *args, **kwargs):
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        sender_number = request.data["sender_number"]
-        receiver_number = request.data["receiver_number"]
-
-        if not is_user_valid(
-            user_number=request.user.phone_number, sender_number=sender_number
-        ):
-            return Response(
-                {"message": "You don't have permission to perform this operation."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        connection = self.get_connection(sender_number, receiver_number)
-
-        if not connection or connection.connection_status in [
-            SingleConnectionStatus.REJECTED,
-            SingleConnectionStatus.NOTHING,
-        ]:
-            connection, created = SingleConnectionModel.objects.update_or_create(
-                sender_number=sender_number,
-                receiver_number=receiver_number,
-                defaults={"connection_status": SingleConnectionStatus.PENDING},
-            )
-
-            return Response(
-                {
-                    "message": "Crush request sent.",
-                    "data": self.serializer_class(connection).data,
-                },
-                status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-            )
-
-        return Response(
-            {
-                "message": "Crush request already exists.",
-                "data": self.serializer_class(connection).data,
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    def perform_create(self, serializer):
-        return serializer.save()
-
-    def update(self, request, *args, **kwargs):
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        sender_number = request.data["sender_number"]
-        receiver_number = request.data["receiver_number"]
-        current_user_number = request.user.phone_number
-
-        if not has_permission(
-            request.user.phone_number, sender_number, receiver_number
-        ):
-            return Response(
-                {"message": "You don't have permission to perform this operation."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        connection_status = request.data.get("connection_status")
-        connection = self.get_connection(
-            sender_number=sender_number, receiver_number=receiver_number
-        )
-
-        if not connection:
-            return Response(
-                {"error": "Connection does not exist."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # sender user can make it accept or reject but can cancel (nothing) the connection
-        if current_user_number == connection.sender_number and connection_status in [
-            SingleConnectionStatus.ACCEPTED,
-            SingleConnectionStatus.REJECTED,
-        ]:
-            return Response(
-                {"message": "Unsupported operation."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if (
-            connection
-            and connection.connection_status == SingleConnectionStatus.ACCEPTED
-        ) and connection_status == SingleConnectionStatus.REJECTED:
-            return Response(
-                {"error": "Unsupported operation."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if connection_status in [
-            SingleConnectionStatus.ACCEPTED,
-            SingleConnectionStatus.REJECTED,
-            SingleConnectionStatus.NOTHING,  # NOTHING is used to cancel the request
-        ]:
-            with transaction.atomic():
-                connection.connection_status = connection_status
-                connection.save(update_fields=["connection_status", "updated_at"])
-
-                if connection.connection_status == SingleConnectionStatus.REJECTED:
-                    message = "Sorry! Crush request rejected."
-                    return Response(
-                        {
-                            "message": message,
-                            "single_connection": self.serializer_class(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-                elif connection.connection_status == SingleConnectionStatus.NOTHING:
-                    message = "Crush request cancelled."
-                    return Response(
-                        {
-                            "message": message,
-                            "single_connection": self.serializer_class(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-
-                elif connection.connection_status == SingleConnectionStatus.ACCEPTED:
-                    message = "Crush request accepted!"
-                    sync_chat_room(
-                        user_one=UserModel.objects.get(phone_number=sender_number),
-                        user_two=UserModel.objects.get(phone_number=receiver_number),
-                        chat_type=ChatTypeChoices.SINGLE,
-                        singles=connection,
-                    )
-                    return Response(
-                        {
-                            "message": message,
-                            "single_connection": self.serializer_class(connection).data,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-
-        return Response(
-            {"message": "Unsupported operation."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
 
 
-class SingleConnectionRequestView(ModelViewSet):
-
-    serializer_class = SingleConnectionSerializer
-    queryset = SingleConnectionModel.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = PageNumberPagination
-
-    @action(detail=False, methods=["GET"], url_path="sent-requests")
-    def retrieve_single_connection_sent_list(self, request, *args, **kwargs):
-
-        phone_number = request.user.phone_number
-        sent_requests = SingleConnectionModel.objects.filter(
-            sender_number=phone_number, connection_status=SingleConnectionStatus.PENDING
-        )
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
-
-        page = self.paginate_queryset(sent_requests)
-
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return Response(
-                {
-                    "data": {
-                        "count": self.paginator.page.paginator.count,
-                        "next": self.paginator.get_next_link(),
-                        "previous": self.paginator.get_previous_link(),
-                        "results": serializer.data,
-                    },
-                    "message": "Requests Sent fetched successfully.",
-                }
-            )
-
-        serializer = self.get_serializer(sent_requests, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=["GET"], url_path="received-requests")
-    def retrieve_single_connection_request_list(self, request, *args, **kwargs):
-
-        phone_number = request.user.phone_number
-        received_requests = SingleConnectionModel.objects.filter(
-            receiver_number=phone_number,
-            connection_status=SingleConnectionStatus.PENDING,
-        )
-
-        page_size = request.query_params.get("page_size", 10)
-        self.pagination_class.page_size = int(page_size)
-
-        page = self.paginate_queryset(received_requests)
-
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return Response(
-                {
-                    "data": {
-                        "count": self.paginator.page.paginator.count,
-                        "next": self.paginator.get_next_link(),
-                        "previous": self.paginator.get_previous_link(),
-                        "results": serializer.data,
-                    },
-                    "message": "Request received fetched successfully.",
-                }
-            )
-
-        serializer = self.get_serializer(received_requests, many=True)
-        return Response(serializer.data)
 
 
-class CoupleProfileAPIView(APIView):
+from social.api.moment_views import PrivateResponseMixin
+from social.services.couple_profile_sections import profile_for
+from social.services.moment_service import active_couples, blocked_user_ids
+
+
+class CoupleProfileAPIView(PrivateResponseMixin, APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @staticmethod
     def get_couple(user):
-        return (
-            CoupleModel.objects.select_related("couple_connection")
-            .prefetch_related("memberships__user")
-            .filter(memberships__user=user)
-            .first()
-        )
+        from django.http import Http404
+        try:
+            return profile_for(user, owner=True)[0]
+        except Http404:
+            return None
 
     def get(self, request, *args, **kwargs):
         couple = self.get_couple(request.user)
@@ -748,6 +513,7 @@ class CoupleProfileAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        couple, _, _ = profile_for(request.user, couple.pk, owner=True, lock=True)
         serializer = CoupleModelSerializer(
             couple,
             data=request.data,
@@ -766,7 +532,7 @@ class CoupleProfileAPIView(APIView):
         )
 
 
-class CoupleAPIView(ModelViewSet):
+class CoupleAPIView(PrivateResponseMixin, ModelViewSet):
     """Compatibility endpoint for clients using the former update-couple route."""
 
     serializer_class = CoupleModelSerializer
@@ -775,7 +541,7 @@ class CoupleAPIView(ModelViewSet):
 
     def get_queryset(self):
         return (
-            CoupleModel.objects.filter(memberships__user=self.request.user)
+            active_couples().filter(memberships__user=self.request.user).exclude(memberships__user_id__in=blocked_user_ids(self.request.user))
             .select_related("couple_connection")
             .prefetch_related("memberships__user", "couple_photo_album")
             .distinct()
@@ -783,7 +549,7 @@ class CoupleAPIView(ModelViewSet):
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
-        instance = self.get_object()
+        instance, _, _ = profile_for(request.user, self.get_object().pk, owner=True, lock=True)
         serializer = self.get_serializer(
             instance,
             data=request.data,
@@ -811,6 +577,10 @@ class UserPreferenceView(ModelViewSet):
     queryset = UserPreferenceModel.objects.all()
     serializer_class = UserPreferenceSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Personal preferences survive dating retirement, but are never directory data.
+        return self.queryset.filter(user=self.request.user)
 
     def validate_user_request(self, data, user):
         user_data = data.get("user")
@@ -877,61 +647,15 @@ class UserPreferenceView(ModelViewSet):
         serializer.save()
 
 
-class UserSuggestionPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = "page_size"
-    max_page_size = 100
 
 
-class UserSuggestionView(ListAPIView):
-    serializer_class = UserSuggestionSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = UserSuggestionPagination
 
-    def get_queryset(self):
-        return UserSuggestionService(user=self.request.user).get_ranked_user_list()
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        page = self.paginate_queryset(queryset)
-        serializer = self.get_serializer(page, many=True)
-
-        return Response(
-            {
-                "data": {
-                    "count": self.paginator.page.paginator.count,
-                    "next": self.paginator.get_next_link(),
-                    "previous": self.paginator.get_previous_link(),
-                    "results": serializer.data,
-                },
-                "message": "User suggestions fetched successfully.",
-            }
-        )
 
 
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
-def get_suggestion_profile_by_id(request):
-    try:
-        user_id = request.query_params.get("user_id")
-        user = UserModel.objects.get(id=user_id)
-        serializer = UserSuggestionSerializer(user, context={"request": request})
-        return Response(
-            {
-                "message": "Suggestion profile fetched successfully.",
-                "data": serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
-    except UserModel.DoesNotExist:
-        return Response(
-            {"message": "User not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([PartnerDiscoveryThrottle])
 def find_partner(request):
     phone_number = request.query_params.get("phone_number")
 
@@ -945,24 +669,17 @@ def find_partner(request):
         phone_number = f"+{phone_number}"
 
     try:
-        partner = UserModel.objects.get(phone_number=phone_number)
-
-        if not partner:
-            return Response(
-                {"message": "Partner not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        else:
-            serializer = UserModelSerializer(partner, context={"request": request})
-            return Response(
-                {
-                    "message": "Partner found successfully.",
-                    "data": serializer.data,
-                },
-                status=status.HTTP_200_OK,
-            )
-    except Exception as e:
+        partner = UserModel.objects.get(phone_number=phone_number, is_active=True)
+    except UserModel.DoesNotExist:
         return Response(
             {"message": "Partner not found."},
             status=status.HTTP_404_NOT_FOUND,
         )
+    serializer = PartnerDiscoverySerializer(partner, context={"request": request})
+    return Response(
+        {
+            "message": "Partner found successfully.",
+            "data": serializer.data,
+        },
+        status=status.HTTP_200_OK,
+    )

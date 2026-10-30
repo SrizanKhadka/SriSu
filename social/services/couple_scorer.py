@@ -17,7 +17,7 @@ def interest_set(values):
 
 
 def rank_score(source_interests, candidate_interests, source_location, locations, is_faved,
-               latest_at, as_of, weights=None):
+               latest_at, as_of, weights=None, normalize_missing=False):
     weights = DEFAULT_WEIGHTS if weights is None else weights
     union = source_interests | candidate_interests
     similarity = len(source_interests & candidate_interests) / len(union) if union else 0
@@ -28,8 +28,17 @@ def rank_score(source_interests, candidate_interests, source_location, locations
         if country and country == other_country:
             location = max(location, 1 if city and city == other_city else 0.4)
     age = max(0, (as_of - latest_at).total_seconds() / 3600)
-    return (weights["interests"] * similarity + weights["location"] * location
-            + weights["fave"] * int(is_faved) + weights["freshness"] * 2 ** (-age / 8))
+    signals = {"interests": similarity, "location": location, "fave": int(is_faved),
+               "freshness": 2 ** (-age / 8)}
+    available = set(weights)
+    if normalize_missing:
+        if not source_interests or not candidate_interests:
+            available.discard("interests")
+        if not country or not any(normalize(c) for _, c in locations):
+            available.discard("location")
+    score = sum(weights[k] * signals[k] for k in available)
+    total = sum(weights[k] for k in available)
+    return 100 * score / total if normalize_missing and total else score
 
 
 def compose(ranked_ids, faved_ids, seed, interval=10):

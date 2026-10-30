@@ -8,10 +8,36 @@ from social.services.couple_profile_service import (
 )
 from authentication.api.serializers import UserPhotoSerializer, UserInterestSerializer
 from authentication.models import UserModel
-from chat.utils.chatutils import is_number_valid, is_number_same, user_with_number_exists
-from authentication.api.serializers import UserModelSerializer
+from social.services.phone_identity import (
+    is_number_same,
+    is_number_valid,
+    user_with_number_exists,
+)
 from datetime import date
 from utils.choices import CoupleConnectionStatus, SingleConnectionStatus
+
+
+class CoupleConnectionPartnerSerializer(serializers.ModelSerializer):
+    profile_photo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserModel
+        fields = ["id", "full_name", "username", "profile_photo"]
+        read_only_fields = fields
+
+    def get_profile_photo(self, obj):
+        if not obj.profile_photo:
+            return None
+        request = self.context.get("request")
+        return request.build_absolute_uri(obj.profile_photo.url) if request else obj.profile_photo.url
+
+
+class PartnerDiscoverySerializer(CoupleConnectionPartnerSerializer):
+    """Minimal exact-phone lookup projection used before an invitation."""
+
+    class Meta(CoupleConnectionPartnerSerializer.Meta):
+        fields = ["id", "full_name", "username", "phone_number", "profile_photo"]
+        read_only_fields = fields
 
 
 class CoupleConnectionSerializer(serializers.ModelSerializer):
@@ -19,14 +45,34 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
     partner = serializers.SerializerMethodField()
     class Meta:
         model = CoupleConnectionModel
-        fields = "__all__"
+        # The stored acceptance idempotency key is an internal replay guard,
+        # not relationship/profile data, and must never cross the API boundary.
+        fields = [
+            "id",
+            "sender_number",
+            "receiver_number",
+            "connection_status",
+            "breakup_reason",
+            "accepted_at",
+            "ended_at",
+            "revision",
+            "created_at",
+            "updated_at",
+            "partner",
+        ]
+        read_only_fields = (
+            "accepted_at",
+            "ended_at",
+            "revision",
+            "created_at",
+            "updated_at",
+        )
 
     def validate(self, data):
         validated_data = super().validate(data)
         sender_number = validated_data["sender_number"]
         receiver_number = validated_data["receiver_number"]
-
-
+        
         if not is_number_valid(number=sender_number):
             raise serializers.ValidationError("Sender_number is Invalid!")
         elif not is_number_valid(number=receiver_number):
@@ -39,7 +85,7 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User doesn't exists")
         elif not user_with_number_exists(number=receiver_number):
             raise serializers.ValidationError("Your Partner doesn't have an account.")
-
+        
         return validated_data
     
     def get_partner(self, obj):
@@ -47,10 +93,7 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
         Returns the opposite user partner in the connection relative to the current request user.
         """
         request = self.context.get("request")
-        print("Request in get_partner:", request)
-        print("User in request:", getattr(request, "user", None))
         if not request or not hasattr(request, "user"):
-            print("No request or user in context")
             return None
 
         current_user = request.user
@@ -60,123 +103,15 @@ class CoupleConnectionSerializer(serializers.ModelSerializer):
             else:
                 partner_user = UserModel.objects.get(phone_number=obj.sender_number)
 
-            return UserModelSerializer(partner_user, context=self.context).data
+            return CoupleConnectionPartnerSerializer(
+                partner_user,
+                context=self.context,
+            ).data
         except UserModel.DoesNotExist:
-            print("Partner user not found")
             return None
         
-class SingleConnectionSerializer(serializers.ModelSerializer):
-    partner = serializers.SerializerMethodField()
-
-    class Meta:
-        model = SingleConnectionModel
-        fields = "__all__"
-
-    def validate(self, data):
-        print("inside serializer validate")
-        validated_data = super().validate(data)
-        sender_number = validated_data["sender_number"]
-        receiver_number = validated_data["receiver_number"]
-
-        if not is_number_valid(number=sender_number):
-            raise serializers.ValidationError("Sender_number is Invalid!")
-        elif not is_number_valid(number=receiver_number):
-            raise serializers.ValidationError("Receiver_number is Invalid!")
-
-        if is_number_same(sender_number, receiver_number):
-            raise serializers.ValidationError("Sender and Receiver number can't be the same.")
-
-        if not user_with_number_exists(number=sender_number):
-            raise serializers.ValidationError("User doesn't exist.")
-        elif not user_with_number_exists(number=receiver_number):
-            raise serializers.ValidationError("Your partner doesn't have an account.")
-
-        return validated_data
-
-    def get_partner(self, obj):
-        """
-        Returns the opposite user (partner) in the connection relative to the current request user.
-        """
-        request = self.context.get("request")
-        if not request or not hasattr(request, "user"):
-            return None
-
-        current_user = request.user
-        try:
-            if current_user.phone_number == obj.sender_number:
-                user = UserModel.objects.get(phone_number=obj.receiver_number)
-            else:
-                user = UserModel.objects.get(phone_number=obj.sender_number)
-
-            return UserModelSerializer(user, context=self.context).data
-        except UserModel.DoesNotExist:
-            return None
 
 
-class UserSuggestionSerializer(serializers.ModelSerializer):
-    user_interests = UserInterestSerializer(many=True, read_only=True)
-    user_photos = UserPhotoSerializer(many=True, read_only=True)
-    has_active_connection = serializers.SerializerMethodField()
-    age = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserModel
-        fields = [
-            "id",
-            "full_name",
-            "phone_number",
-            "username",
-            "user_interests",
-            "user_photos",
-            "profile_photo",
-            "city",
-            "country",
-            "age",
-            "gender",
-            "zodiac_sign",
-            "mood",
-            "bio",
-            "has_active_connection",
-        ]
-        read_only_fields = fields
-
-    def get_age(self, obj):
-        if not obj.dob:
-            return None
-
-        today = date.today()
-        return today.year - obj.dob.year - (
-            (today.month, today.day) < (obj.dob.month, obj.dob.day)
-        )
-
-    def get_has_active_connection(self, obj):
-        annotated_value = getattr(obj, "has_active_connection", None)
-        if annotated_value is not None:
-            return annotated_value
-
-        request = self.context.get("request")
-        if not request or not getattr(request, "user", None) or not request.user.is_authenticated:
-            return False
-
-        current_user_number = request.user.phone_number
-        if not current_user_number or not obj.phone_number:
-            return False
-
-        return SingleConnectionModel.objects.filter(
-            Q(
-                sender_number=current_user_number,
-                receiver_number=obj.phone_number,
-            )
-            | Q(
-                receiver_number=current_user_number,
-                sender_number=obj.phone_number,
-            )
-        ).exclude(
-            connection_status__in=[
-                SingleConnectionStatus.NOTHING,
-                SingleConnectionStatus.REJECTED,
-            ]
-        ).exists()
 
 class UserPreferenceSerializer(serializers.ModelSerializer):
     
@@ -286,7 +221,7 @@ class CoupleModelSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"partner_id": "The partner cannot be changed on an existing profile."}
                 )
-            if not self.instance.memberships.filter(user=request.user).exists():
+            if not self.instance.memberships.filter(user=request.user, ended_at__isnull=True).exists():
                 raise serializers.ValidationError(
                     "You cannot update a couple profile you do not belong to."
                 )
@@ -348,11 +283,39 @@ class CoupleModelSerializer(serializers.ModelSerializer):
         couple.save()
         return couple
 
+    def validate_cover_photo(self, value):
+        from authentication.api.serializers import SetUpProfileSerializer
+        return SetUpProfileSerializer().validate_profile_photo(value)
+
+    def update(self, instance, validated_data):
+        # Legacy writes must not save a stale full model over revisions/consent.
+        from social.services.moment_service import queue_file_deletion
+        fields = list(validated_data)
+        old = instance.cover_photo.name
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        if "cover_photo" in fields:
+            instance.cover_source_moment_photo = None
+            fields.append("cover_source_moment_photo")
+        instance.save(update_fields=fields + ["updated_at"])
+        if "cover_photo" in fields and old and old != instance.cover_photo.name:
+            queue_file_deletion(old)
+        return instance
+
+    def to_representation(self, instance):
+        result = super().to_representation(instance)
+        if instance.cover_photo or instance.cover_source_moment_photo_id:
+            request = self.context.get("request")
+            path = f"/api/social/profiles/{instance.pk}/cover/"
+            result["cover_photo"] = request.build_absolute_uri(path) if request else path
+            result["cover_photo_url"] = result["cover_photo"]
+        return result
+
     def get_partner(self, obj):
         request = self.context.get("request")
         if not request:
             return None
-        membership = obj.memberships.exclude(user=request.user).select_related("user").first()
+        membership = obj.memberships.filter(ended_at__isnull=True).exclude(user=request.user).select_related("user").first()
         if not membership:
             return None
         return CoupleProfileUserSerializer(membership.user, context=self.context).data

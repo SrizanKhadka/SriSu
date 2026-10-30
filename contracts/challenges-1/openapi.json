@@ -1,0 +1,681 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SriSu Challenges",
+    "version": "challenges-1"
+  },
+  "paths": {
+    "/api/social/challenges/home/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "401": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "404": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "409": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "429": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          }
+        }
+      }
+    },
+    "/api/social/challenges/history/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "401": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "404": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "409": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "429": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          }
+        },
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Last item ID from the previous page; current original audience only."
+          }
+        ]
+      }
+    },
+    "/api/social/challenges/": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "401": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "404": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "409": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "429": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/challenges/{id}/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "401": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "404": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "409": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "429": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/challenges/{id}/actions/": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "401": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "404": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "409": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "429": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/challenges/{id}/card/": {
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "401": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "404": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "409": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          },
+          "429": {
+            "description": "Validation, session, audience, revision conflict or rate limit error; existing API error envelope."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Activity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "collection": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "minutes": {
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "together",
+              "apart",
+              "either"
+            ]
+          },
+          "cost": {
+            "enum": [
+              "free",
+              "low",
+              "paid"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "alternative": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "collection",
+          "title",
+          "description",
+          "minutes",
+          "mode",
+          "cost",
+          "steps",
+          "alternative"
+        ],
+        "additionalProperties": false
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "photo"
+        ],
+        "additionalProperties": false
+      },
+      "Collection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "activities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "subtitle",
+          "activities"
+        ],
+        "additionalProperties": false
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "couple": {
+            "type": "integer"
+          },
+          "creator": {
+            "type": "integer"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/Activity"
+          },
+          "state": {
+            "enum": [
+              "invited",
+              "active",
+              "paused",
+              "completed",
+              "declined",
+              "cancelled"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "accepted_by": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "confirmed_by": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "paused_by": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matrix_room_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "membership_epoch": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "card_event_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "couple",
+          "creator",
+          "activity",
+          "state",
+          "revision",
+          "accepted_by",
+          "confirmed_by",
+          "paused_by",
+          "created_at",
+          "completed_at",
+          "room_id",
+          "matrix_room_id",
+          "membership_epoch",
+          "card_event_id"
+        ],
+        "additionalProperties": false
+      },
+      "Home": {
+        "type": "object",
+        "properties": {
+          "collections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Collection"
+            }
+          },
+          "couple": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            }
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Session"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "collections",
+          "couple",
+          "members",
+          "current"
+        ],
+        "additionalProperties": false
+      },
+      "History": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session"
+            }
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next"
+        ],
+        "additionalProperties": false
+      },
+      "StartInput": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "couple": {
+            "type": "integer"
+          },
+          "template_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "couple",
+          "template_id"
+        ],
+        "additionalProperties": false
+      },
+      "ActionInput": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "enum": [
+              "accept",
+              "decline",
+              "confirm",
+              "unconfirm",
+              "pause",
+              "resume",
+              "cancel"
+            ]
+          },
+          "expected_revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_id",
+          "action",
+          "expected_revision"
+        ],
+        "additionalProperties": false
+      },
+      "CardInput": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id"
+        ],
+        "additionalProperties": false
+      },
+      "HomeResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Home"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "SessionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Session"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "HistoryResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/History"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

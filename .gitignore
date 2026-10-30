@@ -134,3 +134,14 @@ dmypy.json
 cython_debug/
 
 /profiles
+
+# Retired Django chat upload namespaces. Keep all other media trackable.
+/media/chats/media/
+/media/chats_media/
+/media/messages/media/
+/media/chat_encrypted/
+
+/media/couples/couple_chat_private/
+.local/
+*service-account*.json
+*firebase-adc*.json
