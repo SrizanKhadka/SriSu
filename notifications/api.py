@@ -1,4 +1,5 @@
 from datetime import timedelta
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.urls import path
@@ -39,6 +40,8 @@ class Registration(StrictSerializer):
     target_kind = serializers.ChoiceField(choices=["fid", "token"])
     target = serializers.CharField(min_length=16, max_length=4096, trim_whitespace=False)
     permitted = serializers.BooleanField()
+    capabilities = serializers.ListField(child=serializers.ChoiceField(choices=["matrix-chat-push-1"]),
+        max_length=1, required=False, default=list)
 
 
 class PreferenceInput(StrictSerializer):
@@ -93,7 +96,8 @@ class InstallationView(NotificationView):
 def preferences_data(pref):
     return {"contract": "notifications-1", "push": pref.push, "chat": pref.chat, "activity": pref.activity,
         "mute_until": pref.mute_until, "mute_forever": pref.mute_forever, "revision": pref.revision,
-        "capabilities": ["activity-notifications-1", "spark-notifications-1"]}
+        "capabilities": ["activity-notifications-1", "spark-notifications-1"] +
+            (["matrix-chat-push-1"] if settings.MATRIX_CHAT_PUSH_ENABLED else [])}
 
 
 class PreferencesView(NotificationView):

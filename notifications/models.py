@@ -18,6 +18,7 @@ class Installation(models.Model):
     active = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_alert_at = models.DateTimeField(null=True)
+    capabilities = models.JSONField(default=list)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["session"], condition=models.Q(active=True), name="notification_active_session")]
@@ -48,9 +49,13 @@ class Event(models.Model):
     resource_version = models.PositiveBigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(db_index=True)
+    matrix_room_id = models.CharField(max_length=255, blank=True)
+    matrix_event_id = models.CharField(max_length=255, blank=True)
+    matrix_timestamp_ms = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["recipient", "kind", "source"], name="notification_source_once")]
+        indexes = [models.Index(fields=["matrix_room_id", "matrix_event_id"], name="notification_matrix_event")]
 
 
 class Delivery(models.Model):
@@ -74,3 +79,15 @@ class PlanCard(models.Model):
     """One explicit, authorized plan/card correlation; never inspect ciphertext."""
     plan = models.OneToOneField("social.CouplePlanModel", on_delete=models.CASCADE, primary_key=True)
     message = models.OneToOneField("couple_chat.Message", on_delete=models.CASCADE)
+
+
+class MatrixPushTransaction(models.Model):
+    """Committed AS transaction hashes only; event bodies are never retained."""
+    id = models.CharField(max_length=64, primary_key=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class MatrixPushSuppression(models.Model):
+    """Hashed room/event/read-user keys fence receipts/redactions arriving first."""
+    id = models.CharField(max_length=64, primary_key=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)

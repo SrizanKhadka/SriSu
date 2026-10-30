@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 from rest_framework.exceptions import NotFound
-from .models import Delivery, Event, Installation
+from .models import Delivery, Event, Installation, MatrixPushTransaction, MatrixPushSuppression
 from .provider import ProviderFailure, send
 from .services import destination, enabled_for, installation_cutoff
 
@@ -28,6 +28,11 @@ def claim():
 
 def eligible(delivery):
     install, event = delivery.installation, delivery.event
+    if event.kind == "matrix.message":
+        from .matrix_push import chat_enabled, suppressed
+        if (not chat_enabled() or install.platform != "android" or
+                "matrix-chat-push-1" not in install.capabilities or suppressed(event, read=True)):
+            return False
     if (install.version != delivery.binding_version or install.user_id != event.recipient_id
             or not install.active or not install.permitted or install.session.revoked_at
             or install.updated_at < installation_cutoff()
@@ -86,6 +91,8 @@ def cleanup():
     now = timezone.now()
     Delivery.objects.filter(state__in=["pending", "sending"], event__expires_at__lte=now).update(state="suppressed", outcome="expired")
     Event.objects.filter(created_at__lt=now - timedelta(days=30)).delete()
+    MatrixPushTransaction.objects.filter(created_at__lt=now - timedelta(days=30)).delete()
+    MatrixPushSuppression.objects.filter(created_at__lt=now - timedelta(days=1)).delete()
     # Erase target values promptly after session expiry; preserve binding proof/version to fence old callbacks.
     Installation.objects.filter(Q(session__revoked_at__isnull=False) | Q(session__expires_at__lte=now)
         | Q(updated_at__lt=installation_cutoff())).update(active=False, target="")

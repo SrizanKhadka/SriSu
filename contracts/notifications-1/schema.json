@@ -37,6 +37,16 @@
         },
         "permitted": {
           "type": "boolean"
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "matrix-chat-push-1"
+            ]
+          }
         }
       },
       "required": [
@@ -103,7 +113,8 @@
             "enum": [
               "notification-plan-1",
               "activity-notifications-1",
-              "spark-notifications-1"
+              "spark-notifications-1",
+              "matrix-chat-push-1"
             ]
           }
         }
@@ -247,6 +258,23 @@
           "required": [
             "kind",
             "spark_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "matrix_conversation"
+            },
+            "room_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "room_id"
           ]
         }
       ]

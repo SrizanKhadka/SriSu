@@ -36,12 +36,13 @@ def register(user, sid, data):
     old = Installation.objects.select_for_update().filter(pk=data["installation_id"]).first()
     proof = digest(data["proof"])
     target_hash = digest(data["target_kind"] + ":" + data["target"])
+    capabilities = data.get("capabilities", [])
     if old:
         if not constant_time_compare(old.proof_digest, proof) or data["version"] < old.version:
             raise BindingConflict()
         if data["version"] == old.version:
             if (old.user_id != user.pk or old.session_id != session.pk or old.target_digest != target_hash
-                    or old.permitted != data["permitted"] or not old.active):
+                    or old.permitted != data["permitted"] or old.capabilities != capabilities or not old.active):
                 raise BindingConflict()
             old.save(update_fields=["updated_at"])
             return old
@@ -53,7 +54,7 @@ def register(user, sid, data):
     Installation.objects.filter(session=session, active=True).exclude(pk=data["installation_id"]).update(active=False)
     values = dict(user=user, session=session, proof_digest=proof, version=data["version"],
         platform=data["platform"], target_kind=data["target_kind"], target=data["target"],
-        target_digest=target_hash, permitted=data["permitted"], active=True)
+        target_digest=target_hash, permitted=data["permitted"], capabilities=capabilities, active=True)
     if old:
         for key, value in values.items():
             setattr(old, key, value)
@@ -69,7 +70,7 @@ def enabled_for(event):
         return True
     if not pref.push:
         return False
-    if event.kind == "chat.message":
+    if event.kind in {"chat.message", "matrix.message"}:
         return pref.chat and not pref.mute_forever and (not pref.mute_until or pref.mute_until <= timezone.now())
     return pref.activity
 
@@ -104,6 +105,9 @@ def destination(event, user, sid):
     """Reauthorize current membership and resource state at every attempt and tap."""
     if event.recipient_id != user.pk or event.expires_at <= timezone.now() or not user.is_active:
         raise NotFound()
+    if event.kind == "matrix.message":
+        from .matrix_push import chat_destination
+        return chat_destination(event, user)
     if event.kind == "invite.received":
         from social.models import CoupleConnectionModel
         from social.services.moment_service import blocked_user_ids

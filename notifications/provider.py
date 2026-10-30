@@ -25,7 +25,7 @@ def message(delivery, *, audible):
     ttl = max(0, int((event.expires_at - timezone.now()).total_seconds()))
     group = salted_hmac("notification.group", str(event.couple_id or "activity")).hexdigest()[:32]
     # At most two FCM collapse groups per installation, while the OS groups each room.
-    collapse = "chat" if event.kind == "chat.message" else "activity"
+    collapse = "chat" if event.kind in {"chat.message", "matrix.message"} else "activity"
     return messaging.Message(**{install.target_kind: install.target},
         notification=messaging.Notification(title="SriSu", body="You have an update. Open SriSu to view it."),
         data={"schema": "1", "delivery_id": str(delivery.pk), "expires_at": str(int(event.expires_at.timestamp()))},

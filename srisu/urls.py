@@ -25,6 +25,7 @@ from django.views.static import serve
 import posixpath
 import os
 from django.utils._os import safe_join
+from notifications.matrix_api import application_service
 
 
 def deny_direct_moment_media(request, **kwargs):
@@ -53,6 +54,10 @@ def serve_public_media(request, path, **kwargs):
 
 
 urlpatterns = [
+    path("_matrix/app/v1/transactions/<str:transaction_id>", application_service),
+    path("_matrix/app/v1/ping", application_service, {"operation": "ping"}),
+    path("_matrix/app/v1/users/<path:unused>", application_service, {"operation": "query"}),
+    path("_matrix/app/v1/rooms/<path:unused>", application_service, {"operation": "query"}),
     # These retired private prefixes stay denied until the explicit storage
     # purge has completed on every deployment.
     re_path(

@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+import json
 import os
 from pathlib import Path
 import runpy
@@ -195,6 +196,40 @@ class SynapseRoomPolicyTests(SimpleTestCase):
 
 
 class SynapseConfigRendererTests(SimpleTestCase):
+    def test_notification_feed_uses_alias_only_interest_and_header_auth_with_stable_private_token(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "homeserver.yaml"
+            environment = {
+                "SYNAPSE_CONFIG_PATH": str(output), "MATRIX_SERVER_NAME": "matrix.test",
+                "MATRIX_HOMESERVER_URL": "http://127.0.0.1:8008", "MATRIX_JWT_SECRET": "j" * 40,
+                "MATRIX_JWT_ISSUER": "srisu-test", "MATRIX_JWT_AUDIENCE": "srisu-matrix-test",
+                "MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS": "300", "MATRIX_PROVISIONING_LOCALPART": "srisu_provisioner",
+                "MATRIX_POSTGRES_DB": "matrix_test", "MATRIX_POSTGRES_USER": "matrix_test",
+                "MATRIX_POSTGRES_PASSWORD": "p" * 20, "MATRIX_MACAROON_SECRET": "m" * 40,
+                "MATRIX_FORM_SECRET": "f" * 40, "MATRIX_CHAT_PUSH_ENABLED": "true",
+                "MATRIX_PUSH_AS_URL": "http://web:8000", "MATRIX_PUSH_HS_TOKEN": "h" * 48,
+            }
+            with patch.dict(os.environ, environment, clear=True):
+                runpy.run_path(str(RENDERER_PATH), run_name="__main__")
+                registration = json.loads((output.parent / "srisu-notifications-as.yaml").read_text())
+                runpy.run_path(str(RENDERER_PATH), run_name="__main__")
+                self.assertEqual(registration, json.loads((output.parent / "srisu-notifications-as.yaml").read_text()))
+            self.assertEqual(registration["namespaces"]["users"], [])
+            self.assertEqual(registration["namespaces"]["rooms"], [])
+            self.assertFalse(registration["namespaces"]["aliases"][0]["exclusive"])
+            self.assertIn("srisu_chat_", registration["namespaces"]["aliases"][0]["regex"])
+            self.assertTrue(registration["receive_ephemeral"])
+            self.assertNotEqual(registration["as_token"], registration["hs_token"])
+            self.assertEqual((output.parent / "srisu-notifications-as.yaml").stat().st_mode & 0o777, 0o600)
+            config = output.read_text()
+            self.assertIn("use_appservice_legacy_authorization: false", config)
+            self.assertNotIn("h" * 48, config)
+            with patch.dict(os.environ, {**environment, "MATRIX_PUSH_HS_TOKEN": "short"}, clear=True):
+                with self.assertRaises(SystemExit): runpy.run_path(str(RENDERER_PATH), run_name="__main__")
+            with patch.dict(os.environ, {**environment, "MATRIX_CHAT_PUSH_ENABLED": "false"}, clear=True):
+                runpy.run_path(str(RENDERER_PATH), run_name="__main__")
+            self.assertNotIn("app_service_config_files", output.read_text())
+
     def test_renderer_wires_policy_module_and_exact_alias_allowlist(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "homeserver.yaml"
