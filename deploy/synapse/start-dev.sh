@@ -10,6 +10,10 @@ python /srisu-config/render_config.py
 # we hand both paths to the runtime user.
 if [ "$(id -u)" -eq 0 ]; then
     chown "${UID:-991}:${GID:-991}" /data "$SYNAPSE_CONFIG_PATH"
+    registration="$(dirname "$SYNAPSE_CONFIG_PATH")/srisu-notifications-as.yaml"
+    if [ -f "$registration" ]; then
+        chown "${UID:-991}:${GID:-991}" "$registration"
+    fi
 fi
 
 exec /start.py
