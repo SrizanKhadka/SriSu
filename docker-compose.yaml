@@ -1,5 +1,8 @@
 x-app-environment: &app-environment
   NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
+  MATRIX_CHAT_PUSH_ENABLED: "${MATRIX_CHAT_PUSH_ENABLED:-false}"
+  MATRIX_PUSH_HS_TOKEN: "${MATRIX_PUSH_HS_TOKEN:-}"
+  MATRIX_CHAT_PUSH_NOT_BEFORE_MS: "${MATRIX_CHAT_PUSH_NOT_BEFORE_MS:-0}"
   FIREBASE_PROJECT_ID: "${FIREBASE_PROJECT_ID:-srisu-ef431}"
   DJANGO_SETTINGS_MODULE: srisu.settings
   DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
@@ -7,7 +10,7 @@ x-app-environment: &app-environment
   OTP_MOCK_DELIVERY: "${OTP_MOCK_DELIVERY:-true}"
   OTP_MOCK_CODE: "${OTP_MOCK_CODE:-123456}"
   # Append the backend laptop's LAN address for native mobile clients.
-  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73}"
+  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1},${SRISU_DEV_LAN_HOST-192.168.1.73},web"
   POSTGRES_DB: "${POSTGRES_DB}"
   POSTGRES_USER: "${POSTGRES_USER}"
   POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
@@ -144,6 +147,9 @@ services:
     entrypoint: ["/bin/sh", "/srisu-config/start-dev.sh"]
     environment:
       SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      MATRIX_CHAT_PUSH_ENABLED: "${MATRIX_CHAT_PUSH_ENABLED:-false}"
+      MATRIX_PUSH_AS_URL: "${MATRIX_PUSH_AS_URL:-http://web:8000}"
+      MATRIX_PUSH_HS_TOKEN: "${MATRIX_PUSH_HS_TOKEN:-}"
       MATRIX_SERVER_NAME: "${MATRIX_SERVER_NAME:-}"
       MATRIX_HOMESERVER_URL: "${MATRIX_HOMESERVER_URL:-}"
       MATRIX_JWT_SECRET: "${MATRIX_JWT_SECRET:-}"

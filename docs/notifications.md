@@ -441,3 +441,66 @@ Compose marks it unhealthy after stale heartbeats. An unhealthy label alone does
 not restart Docker; the restart policy handles process exit. Check aggregate queue
 age and outcomes with `python manage.py notification_status`; investigate repeated
 configuration failures without logging SDK exceptions or target values.
+
+## Matrix chat push (2026-10-30)
+
+The `matrix-chat-push-1` capability adds Android-only `matrix.message` events and
+`matrix_conversation` destinations without reviving the retired chat transport.
+Old installation requests can omit capabilities; only opted-in Android bindings
+receive this kind. Upgrade bumps the binding version and never backfills events.
+Deploy migration `notifications.0004_matrix_chat_push` before the new Android app.
+
+Synapse sends standard [application-service transactions](https://spec.matrix.org/latest/application-service-api/)
+to `/_matrix/app/v1/transactions/{id}` using a dedicated Bearer `hs_token`.
+Authentication precedes JSON parsing; user JWTs and query-string credentials are
+rejected. The namespace matches only SriSu's generated couple-room aliases,
+non-exclusively. User/room-ID namespaces are empty, so the AS has no human-user
+impersonation rights. Query endpoints return authenticated `M_UNRECOGNIZED`.
+Ephemeral receipts are enabled. The renderer disables legacy URL authentication.
+
+Only encrypted message metadata is examined. Neither plaintext nor ciphertext is
+stored, logged or sent to FCM. Events must be fresh (10-minute TTL from the original
+Matrix timestamp), after the rollout cutoff, and from a current authorized member
+of the active provisioned room/epoch. Pending replacement, remote revocation,
+blocked relationships, stale members and unrelated senders are excluded. The
+existing sender rechecks session, binding, preferences, relationship and mapping.
+Taps reauthorize the same Django conversation; deleted/replaced relationships and
+redactions become unavailable. FCM carries generic copy and an opaque delivery ID.
+
+Transactions and source events are deduplicated atomically; failures roll back the
+batch for Synapse retry. The receiver locks affected mappings in stable order.
+Edits/reactions with visible relation metadata are excluded. Read receipts suppress
+pending events through the known received event's timestamp; an early receipt also
+leaves an exact-event tombstone. Redactions suppress pending deliveries and taps.
+Already accepted notifications cannot be recalled, and cross-transaction receipt
+ordering is not a full Matrix read-cursor implementation. Transaction hashes expire
+after 30 days, suppression hashes after a day, beyond the 10-minute delivery TTL.
+
+### Docker deployment and rollback
+
+1. Back up the existing PostgreSQL databases and Synapse data. Keep existing Matrix
+   server identity, JWT secrets, media and volumes. Apply only the additive
+   notification migration; do not rerun the historical destructive chat cutover.
+2. Run `python tools/configure_matrix_push.py --env .env` in the selected checkout
+   with Matrix and notifications already enabled. It writes a random `hs_token`
+   only to the ignored environment and establishes a no-backfill cutoff. Re-running
+   preserves an enabled rollout's token/cutoff; enabling after a disable resets the
+   cutoff. Never print `.env` or resolved Compose configuration.
+3. Recreate web, notification_worker, matrix_reconciler and Synapse using the updated
+   Compose file. The AS callback origin defaults to internal `http://web:8000`;
+   Django allows that internal hostname. The Synapse renderer writes a mode-0600
+   registration in its private data volume and preserves its independent `as_token`
+   across restarts. Django never receives that AS client credential. Use a protected
+   network or TLS if these services are separated across hosts.
+4. Verify Synapse health, the worker heartbeat, Matrix status and one synthetic
+   encrypted-message delivery before updating Android. Ship the backend first;
+   the Android installation advertises support when it re-registers.
+5. To stop chat alerts set `MATRIX_CHAT_PUSH_ENABLED=false` and recreate the same
+   services. The AS receiver acknowledges disabled batches without later replay.
+   Leave the additive schema in place for a safe code rollback. Other notification
+   kinds remain controlled by their existing settings.
+
+Verification: `tools/workspace.py test` includes `notifications.test_matrix_push`;
+`tools/auth_postgres_tests.py` also runs its concurrent transaction test. The frontend
+opt-in `MatrixPushDeviceIntegrationTest` uses a separate synthetic backend and real
+Android FCM delivery. Apple/APNs enrollment and delivery remain explicitly skipped.

@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import secrets
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 OUTPUT = Path(os.environ.get("SYNAPSE_CONFIG_PATH", "/data/homeserver.yaml"))
@@ -41,6 +44,43 @@ postgres_password = required_secret("MATRIX_POSTGRES_PASSWORD", minimum=16)
 macaroon_secret = required_secret("MATRIX_MACAROON_SECRET")
 form_secret = required_secret("MATRIX_FORM_SECRET")
 provisioning_localpart = required("MATRIX_PROVISIONING_LOCALPART")
+appservice_config = ""
+if os.environ.get("MATRIX_CHAT_PUSH_ENABLED", "false").lower() == "true":
+    service_url = required("MATRIX_PUSH_AS_URL")
+    parsed = urlparse(service_url)
+    if (parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or
+            parsed.password or parsed.query or parsed.fragment or parsed.path not in {"", "/"}):
+        raise SystemExit("MATRIX_PUSH_AS_URL must be an explicit internal HTTP(S) origin")
+    if not re.fullmatch(r"[A-Za-z0-9.-]+(?::[0-9]{1,5})?", server_name):
+        raise SystemExit("Invalid Matrix server name")
+    as_path = OUTPUT.parent / "srisu-notifications-as.yaml"
+    # The AS-to-homeserver credential stays only in Synapse's private volume.
+    # The Django receiver never needs it and cannot impersonate Matrix users.
+    as_token = secrets.token_urlsafe(48)
+    if as_path.exists():
+        try:
+            as_token = json.loads(as_path.read_text(encoding="utf-8"))["as_token"]
+            if not isinstance(as_token, str) or len(as_token) < 32:
+                raise ValueError()
+        except (ValueError, KeyError):
+            raise SystemExit("Existing Matrix AS registration is invalid; refusing credential rotation") from None
+    # Alias-only interest grants no impersonation of human users. The existing
+    # topology policy still reserves room/alias creation for the provisioner.
+    registration = {
+        "id": "srisu-notifications-v1", "url": service_url.rstrip("/"),
+        "as_token": as_token,
+        "hs_token": required_secret("MATRIX_PUSH_HS_TOKEN"),
+        "sender_localpart": "srisu_notifications", "rate_limited": True,
+        "receive_ephemeral": True,
+        "namespaces": {"users": [], "rooms": [], "aliases": [{"exclusive": False,
+            "regex": rf"^#srisu_chat_[0-9a-f]{{32}}_e[1-9][0-9]*:{re.escape(server_name)}$"}]},
+    }
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    as_tmp = as_path.with_suffix(".yaml.tmp")
+    as_tmp.write_text(json.dumps(registration), encoding="utf-8")
+    as_tmp.chmod(0o600)
+    as_tmp.replace(as_path)
+    appservice_config = f"app_service_config_files:\n  - {quoted(str(as_path))}\n"
 try:
     access_token_lifetime = int(required("MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS"))
 except ValueError:
@@ -53,6 +93,8 @@ server_name: {quoted(server_name)}
 public_baseurl: {quoted(public_base_url)}
 pid_file: /data/homeserver.pid
 report_stats: false
+use_appservice_legacy_authorization: false
+{appservice_config}
 
 modules:
   - module: srisu_room_policy.SriSuRoomPolicy

@@ -264,4 +264,7 @@ OTP_IP_HOURLY_LIMIT = config("OTP_IP_HOURLY_LIMIT", default=10, cast=int)
 # Kill switch also stops new events, so re-enabling cannot replay disabled history.
 NOTIFICATIONS_ENABLED = config("NOTIFICATIONS_ENABLED", default=False, cast=bool)
 NOTIFICATION_INSTALLATION_MAX_AGE_DAYS = config("NOTIFICATION_INSTALLATION_MAX_AGE_DAYS", default=30, cast=int)
+MATRIX_CHAT_PUSH_ENABLED = config("MATRIX_CHAT_PUSH_ENABLED", default=False, cast=bool)
+MATRIX_PUSH_HS_TOKEN = config("MATRIX_PUSH_HS_TOKEN", default="")
+MATRIX_CHAT_PUSH_NOT_BEFORE_MS = config("MATRIX_CHAT_PUSH_NOT_BEFORE_MS", default=0, cast=int)
 FIREBASE_PROJECT_ID = config("FIREBASE_PROJECT_ID", default="srisu-ef431")
