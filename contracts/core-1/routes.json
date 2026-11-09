@@ -420,6 +420,60 @@
       "path": "/api/notifications/v1/deliveries/{uuid}/",
       "query": [],
       "public": false
+    },
+    "home-daily-question": {
+      "method": "POST",
+      "path": "/api/social/sparks/daily/",
+      "query": [],
+      "public": false
+    },
+    "home-statuses": {
+      "method": "GET",
+      "path": "/api/social/couple-status/",
+      "query": [
+        "couple"
+      ],
+      "public": false
+    },
+    "home-status-save": {
+      "method": "PUT",
+      "path": "/api/social/couple-status/mine/",
+      "query": [],
+      "public": false
+    },
+    "home-ideas": {
+      "method": "GET",
+      "path": "/api/social/date-ideas/",
+      "query": [
+        "couple"
+      ],
+      "public": false
+    },
+    "home-idea-create": {
+      "method": "POST",
+      "path": "/api/social/date-ideas/",
+      "query": [],
+      "public": false
+    },
+    "home-idea": {
+      "method": "GET",
+      "path": "/api/social/date-ideas/{uuid}/",
+      "query": [],
+      "public": false
+    },
+    "home-idea-action": {
+      "method": "POST",
+      "path": "/api/social/date-ideas/{uuid}/actions/",
+      "query": [],
+      "public": false
+    },
+    "plans-home": {
+      "method": "GET",
+      "path": "/api/social/plans/home/",
+      "query": [
+        "time_zone"
+      ],
+      "public": false
     }
   },
   "retired_endpoints": {

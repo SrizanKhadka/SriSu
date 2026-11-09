@@ -19,6 +19,7 @@ DECKS = [
         "What is something you would like us to understand better about each other?",
         "What small thing do I do that means more than I realise?",
         "What does feeling safe together mean to you?",
+        "What made you feel close to me this week?",
     ]),
     ("memories", "Memories", "Back to us", [
         "Which ordinary day together would you happily live again?",
@@ -124,7 +125,8 @@ def submit(user, spark_id, envelope):
     if spark.answers.count() == 2:
         spark.state = "revealed"
         spark.revealed_at = timezone.now()
-    spark.save(update_fields=["revision", "state", "revealed_at"])
+        spark.finished_at = spark.revealed_at
+    spark.save(update_fields=["revision", "state", "revealed_at", "finished_at"])
     if spark.state == "revealed":
         from notifications.services import partner_event
         partner_event("spark.revealed", user, spark.couple, spark.pk, spark.pk)
@@ -140,7 +142,8 @@ def skip(user, spark_id):
         spark.answers.all().delete()
         spark.state = "skipped"
         spark.revision += 1
-        spark.save(update_fields=["state", "revision"])
+        spark.finished_at = timezone.now()
+        spark.save(update_fields=["state", "revision", "finished_at"])
     return spark
 
 
@@ -152,6 +155,61 @@ def data(user, spark):
         "room_id": str(spark.room_id), "matrix_room_id": spark.matrix_room_id,
         "membership_epoch": spark.membership_epoch, "question_id": spark.question_id,
         "question": spark.question, "deck": spark.deck, "state": spark.state, "revision": spark.revision,
-        "created_at": spark.created_at, "revealed_at": spark.revealed_at, "card_event_id": spark.card_event_id,
+        "created_at": spark.created_at, "revealed_at": spark.revealed_at, "finished_at": spark.finished_at, "card_event_id": spark.card_event_id,
         "submitted_by": [a.author_id for a in answers],
         "answers": [{"author": a.author_id, "sender_matrix_id": a.sender_matrix_id, "envelope": a.envelope} for a in visible]}
+
+
+@transaction.atomic
+def daily(user, couple_id, time_zone):
+    """Idempotent assignment; no chat publication, push, answer fetch or GET writes."""
+    from uuid import uuid4
+    from zoneinfo import ZoneInfo
+    from social.models import CoupleQuestionDay
+    couple, members = current_couple(user, couple_id, lock=True)
+    _, mapping, _ = room_for(couple, members)
+    audience = [m.pk for m in members]
+    schedule, _ = CoupleQuestionDay.objects.get_or_create(couple=couple,
+        defaults={"audience_membership_ids": audience, "time_zone": time_zone})
+    if schedule.audience_membership_ids != audience:
+        schedule.audience_membership_ids = audience
+        schedule.time_zone = time_zone
+        schedule.spark = None
+        schedule.day = None
+    today = timezone.now().astimezone(ZoneInfo(schedule.time_zone)).date()
+    rows = SparkSession.objects.filter(couple=couple, audience_membership_ids=audience,
+        audience_user_ids=[m.user_id for m in members], matrix_room_id=mapping.matrix_room_id,
+        membership_epoch=mapping.membership_epoch)
+    selected = rows.filter(state="open").first()
+    if selected is None:
+        # A carried/manual question finished today consumes today's opportunity.
+        last = rows.exclude(state="open").order_by("-finished_at", "-created_at").first()
+        completed = (last.finished_at or last.revealed_at or last.created_at) if last else None
+        if completed and completed.astimezone(ZoneInfo(schedule.time_zone)).date() >= today:
+            selected = last
+        elif schedule.day and schedule.day >= today and schedule.spark_id:
+            selected = rows.filter(pk=schedule.spark_id).first()
+    if selected is None:
+        # Rotate by least recently used question, with catalogue order as a stable tie-break.
+        from django.db.models import Max
+        latest = dict(rows.filter(question_id__in=QUESTIONS).order_by().values("question_id")
+            .annotate(last=Max("created_at")).values_list("question_id", "last"))
+        qid = next((key for key in QUESTIONS if key not in latest), None)
+        if qid is None:
+            qid = min(QUESTIONS, key=lambda key: latest[key])
+        selected, _ = start(user, uuid4(), couple.pk, qid)
+        selected.assigned_automatically = True
+        selected.save(update_fields=["assigned_automatically"])
+    schedule.day = today
+    schedule.spark = selected
+    schedule.save()
+    value = data(user, selected)
+    value["answers"] = []
+    partner_answered = selected.answers.exclude(author=user).values_list("submitted_at", flat=True).first()
+    partner_sent = selected.created_at if selected.creator_id != user.pk and not selected.assigned_automatically else None
+    return {"session": value, "day": today, "time_zone": schedule.time_zone,
+        "carried": selected.created_at.astimezone(ZoneInfo(schedule.time_zone)).date() < today,
+        "revealed_count": rows.filter(state="revealed").count(),
+        "revisit": rows.filter(question_id=selected.question_id).exclude(pk=selected.pk).exists(),
+        "partner_activity_at": partner_answered or partner_sent,
+        "partner_activity_kind": "answered" if partner_answered else "sent" if partner_sent else None}

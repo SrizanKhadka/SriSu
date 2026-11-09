@@ -111,7 +111,7 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
                     "photo_url": request.build_absolute_uri(f"/api/social/profiles/{couple.pk}/members/{m.user_id}/photo/") if m.user.profile_photo else None,
                     "active_count": summary.get("active_count", 0), "unseen_count": 0 if m.user_id == user.pk else summary.get("unseen_count", 0),
                     "next_expiry": summary.get("next_expiry")})
-            result["couple"] = {"id": couple.pk, "anniversary_date": couple.anniversary_date, "members": members}
+            result["couple"] = {"id": couple.pk, "title": couple.title, "anniversary_date": couple.anniversary_date, "members": members}
         return Response({"data": result})
 
     @action(detail=True, methods=["post"])

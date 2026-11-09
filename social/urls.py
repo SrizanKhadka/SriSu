@@ -20,9 +20,13 @@ from social.api.moment_drafts import MomentDraftView
 from social.api.sparks import SparkView
 from social.api.challenges import ChallengeView
 from social.api.plans import PlanView
+from social.api.date_ideas import DateIdeaView
+from social.api.couple_status import CoupleStatusView
 from social.api.couple_views import CoupleFaveDetail, CoupleFaveList, CoupleFeedView, CoupleMomentSequence, CoupleFeedCheck
 
 social_routers = DefaultRouter()
+social_routers.register("date-ideas", DateIdeaView, basename="date-ideas")
+social_routers.register("couple-status", CoupleStatusView, basename="couple-status")
 social_routers.register("plans", PlanView, basename="plans")
 social_routers.register("challenges", ChallengeView, basename="challenges")
 social_routers.register("sparks", SparkView, basename="sparks")

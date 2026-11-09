@@ -321,6 +321,9 @@
           }
         ]
       }
+    },
+    "/api/social/sparks/daily/": {
+      "$ref": "../home-1/openapi.json#/paths/~1api~1social~1sparks~1daily~1"
     }
   },
   "components": {
@@ -536,8 +539,14 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Answer"
-            },
-            "maxItems": 2
+            }
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         },
         "required": [

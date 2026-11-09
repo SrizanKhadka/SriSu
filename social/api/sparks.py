@@ -33,6 +33,19 @@ class CardInput(StrictSerializer):
     event_id = serializers.RegexField(r"^\$[^\s]{1,254}$")
 
 
+class DailyInput(StrictSerializer):
+    couple = serializers.IntegerField(min_value=1)
+    time_zone = serializers.CharField(max_length=64)
+
+    def validate_time_zone(self, value):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise serializers.ValidationError("Choose a valid time zone.")
+        return value
+
+
 class SparkThrottle(UserRateThrottle):
     scope = "sparks"
     rate = "120/hour"
@@ -40,11 +53,22 @@ class SparkThrottle(UserRateThrottle):
         return request.method in ("GET", "HEAD", "OPTIONS") or super().allow_request(request, view)
 
 
+class DailyThrottle(UserRateThrottle):
+    scope = "daily_question"
+    rate = "360/hour"
+
+
 class SparkView(PrivateResponseMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [JSONParser]
     throttle_classes = [SparkThrottle]
     lookup_value_regex = "[0-9a-fA-F-]{36}"
+
+    @action(detail=False, methods=["post"], throttle_classes=[DailyThrottle])
+    def daily(self, request):
+        value = DailyInput(data=request.data)
+        value.is_valid(raise_exception=True)
+        return Response({"data": sparks.daily(request.user, value.validated_data["couple"], value.validated_data["time_zone"])})
 
     @action(detail=False, methods=["get"])
     def home(self, request):
