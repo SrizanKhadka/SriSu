@@ -243,7 +243,7 @@ class MomentAPITests(APITestCase):
                 with self.assertRaises(DatabaseError):
                     self.client.post(self.url, {"photos": [self.photo()]}, format="multipart")
         self.assertFalse(CoupleMomentModel.objects.exists())
-        self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+        self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
 
     def test_storage_failure_rolls_back_update_and_cleans_previous_upload(self):
         moment = self.create(photos=[self.photo()])
@@ -266,7 +266,7 @@ class MomentAPITests(APITestCase):
                         "photos": [self.photo(), self.photo()]}, format="multipart")
         self.assertEqual(CoupleMomentPhotoModel.objects.count(), 1)
         self.assertEqual(CoupleMomentModel.objects.get().caption, "Coffee together")
-        self.assertEqual(len(list(Path(self.media.name).rglob("*.png"))), 1)
+        self.assertEqual(len([p for p in Path(self.media.name).rglob("*") if p.is_file()]), 1)
 
     def test_delete_queue_cascade_and_cleanup_retention(self):
         moment = self.create(photos=[self.photo()])
@@ -280,7 +280,7 @@ class MomentAPITests(APITestCase):
         self.assertFalse(CoupleMomentNoteModel.objects.exists())
         call_command("cleanup_moments", stdout=StringIO())
         self.assertEqual(MomentFileDeletion.objects.count(), 0)
-        self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+        self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
         old = self.create()
         recent = self.create()
         CoupleMomentModel.objects.filter(pk=old["id"]).update(expires_at=timezone.now() - timedelta(days=31))
@@ -300,7 +300,7 @@ class MomentAPITests(APITestCase):
                     self.creator.delete()
             self.assertFalse(CoupleMomentModel.objects.exists())
             self.assertFalse(CoupleMomentNoteModel.objects.exists())
-            self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+            self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
             if not delete_couple:
                 # Restore a separate active pair for the second cascade scenario.
                 self.creator = UserModel.objects.create_user(phone_number="+9779809999999")
@@ -423,7 +423,7 @@ class MomentConcurrencyTests(APITransactionTestCase):
             statuses = [future.result(timeout=20) for future in futures]
         self.assertEqual(sorted(statuses), [200, 400])
         self.assertEqual(CoupleMomentPhotoModel.objects.count(), 5)
-        self.assertEqual(len(list(Path(self.media.name).rglob("*.png"))), 5)
+        self.assertEqual(len([p for p in Path(self.media.name).rglob("*") if p.is_file()]), 5)
 
     @skipUnlessDBFeature("has_select_for_update")
     def test_concurrent_delete_and_append_leave_no_uploads(self):
@@ -447,33 +447,69 @@ class MomentConcurrencyTests(APITransactionTestCase):
             self.assertEqual(deleting.result(timeout=20), 200)
             self.assertIn(updating.result(timeout=20), [200, 404])
         self.assertFalse(CoupleMomentModel.objects.exists())
-        self.assertFalse(list(Path(self.media.name).rglob("*.png")))
+        self.assertFalse([p for p in Path(self.media.name).rglob("*") if p.is_file()])
 
 
 class MomentMigrationTests(APITransactionTestCase):
     def test_existing_moments_backfill_expiry_and_audience(self):
-        from django.db.migrations.executor import MigrationExecutor
-        old_target = [("social", "0007_couple_profile_memberships")]
-        executor = MigrationExecutor(connection)
-        # Restore the current schema, including migrations added after the expiry work.
-        new_target = executor.loader.graph.leaf_nodes()
-        executor.migrate(old_target)
-        try:
-            apps = executor.loader.project_state(old_target).apps
-            User = apps.get_model("authentication", "UserModel")
-            Couple = apps.get_model("social", "CoupleModel")
-            Membership = apps.get_model("social", "CoupleMembershipModel")
-            Moment = apps.get_model("social", "CoupleMomentModel")
-            couple = Couple.objects.create()
-            users = [User.objects.create(phone_number=f"+12345{i}") for i in range(2)]
-            members = [Membership.objects.create(user=user, couple=couple, position=index + 1) for index, user in enumerate(users)]
-            moment = Moment.objects.create(couple=couple, created_by=users[0], caption="Legacy", moment_date="2026-01-01")
-            old_time = timezone.now() - timedelta(days=5)
-            Moment.objects.filter(pk=moment.pk).update(created_at=old_time)
-        finally:
-            MigrationExecutor(connection).migrate(new_target)
+        from django.apps import apps
+        from importlib import import_module
+        from types import SimpleNamespace
+        from authentication.models import UserModel
+        from social.models import CoupleConnectionModel, CoupleMembershipModel, CoupleModel
+
+        users = [UserModel.objects.create(phone_number=f"+12345{i}") for i in range(2)]
+        relationship = CoupleConnectionModel.objects.create(
+            sender_number=users[0].phone_number,
+            receiver_number=users[1].phone_number,
+            connection_status="ACCEPTED",
+        )
+        couple = CoupleModel.objects.create(couple_connection=relationship)
+        members = [CoupleMembershipModel.objects.create(user=user, couple=couple, position=index + 1) for index, user in enumerate(users)]
+        moment = CoupleMomentModel.objects.create(couple=couple, created_by=users[0], caption="Legacy", moment_date="2026-01-01")
+        old_time = timezone.now() - timedelta(days=5)
+        CoupleMomentModel.objects.filter(pk=moment.pk).update(
+            created_at=old_time,
+            expires_at=old_time,
+            audience_membership_ids=[],
+            audience_user_ids=[],
+        )
+        migration = import_module("social.migrations.0008_moment_expiry_and_notes")
+        migration.backfill_moments(apps, SimpleNamespace(connection=connection))
         migrated = CoupleMomentModel.objects.get(pk=moment.pk)
         self.assertEqual(migrated.created_at, old_time)
         self.assertEqual(migrated.expires_at, old_time + timedelta(hours=24))
         self.assertEqual(migrated.audience_membership_ids, [m.pk for m in members])
         self.assertEqual(migrated.audience_user_ids, [u.pk for u in users])
+
+    def test_relationship_lifecycle_migration_aborts_on_unlinked_memberships(self):
+        from django.apps import apps
+        from importlib import import_module
+        from types import SimpleNamespace
+        from authentication.models import UserModel
+        from social.models import CoupleConnectionModel, CoupleMembershipModel, CoupleModel
+
+        users = [UserModel.objects.create(phone_number=f"+12346{i}") for i in range(2)]
+        couple = CoupleModel.objects.create()
+        CoupleMembershipModel.objects.create(user=users[0], couple=couple, position=1)
+        CoupleMembershipModel.objects.create(user=users[1], couple=couple, position=2)
+        migration = import_module("social.migrations.0014_relationship_lifecycle")
+        editor = SimpleNamespace(connection=connection)
+
+        with self.assertRaisesRegex(RuntimeError, "no relationship identity"):
+            migration.require_linked_legacy_memberships(apps, editor)
+
+        # Recovery is deliberately operator-directed: link the known identity,
+        # then the exact same migration can complete without deleting history.
+        relationship = CoupleConnectionModel.objects.create(
+            sender_number=users[0].phone_number,
+            receiver_number=users[1].phone_number,
+            connection_status="ACCEPTED",
+        )
+        CoupleModel.objects.filter(pk=couple.pk).update(couple_connection=relationship)
+        migration.require_linked_legacy_memberships(apps, editor)
+        active = CoupleMembershipModel.objects.filter(
+            couple_id=couple.pk,
+            ended_at__isnull=True,
+        )
+        self.assertEqual(active.count(), 2)

@@ -1,0 +1,1226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://srisu.invalid/contracts/core-1",
+  "title": "SriSu core-1 additive contract (v1 resources)",
+  "x-status-codes": {
+    "400": "validation_failed",
+    "401": "unauthenticated",
+    "403": "forbidden",
+    "404": "not_found",
+    "405": "method_not_allowed",
+    "409": "conflict",
+    "410": "cursor_expired",
+    "413": "payload_too_large",
+    "415": "unsupported_media_type",
+    "429": "rate_limited",
+    "500": "server_error",
+    "503": "temporarily_unavailable"
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "retry_after_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "fields",
+        "retryable"
+      ],
+      "additionalProperties": true
+    },
+    "httpError": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/error"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "server_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "error",
+        "request_id",
+        "server_time"
+      ],
+      "additionalProperties": true
+    },
+    "interest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "label"
+              ],
+              "additionalProperties": true
+            }
+          ]
+        },
+        "created_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category",
+        "created_date",
+        "updated_date"
+      ],
+      "additionalProperties": true
+    },
+    "interests": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "interests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/interest"
+              }
+            }
+          },
+          "required": [
+            "interests"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "message",
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "profileProgress": {
+      "type": "object",
+      "properties": {
+        "phone_verified": {
+          "type": "boolean"
+        },
+        "profile_complete": {
+          "type": "boolean"
+        },
+        "next_step": {
+          "enum": [
+            "name",
+            "photo",
+            "complete"
+          ]
+        },
+        "photo_skipped": {
+          "type": "boolean"
+        },
+        "membership": {
+          "enum": [
+            "linked",
+            "unlinked"
+          ]
+        },
+        "couple_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "phone_verified",
+        "profile_complete",
+        "next_step",
+        "photo_skipped",
+        "membership",
+        "couple_id"
+      ],
+      "additionalProperties": true
+    },
+    "authChallenge": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "challenge_id": {
+              "type": "string"
+            },
+            "expires_at": {
+              "type": "string"
+            },
+            "resend_at": {
+              "type": "string"
+            },
+            "server_time": {
+              "type": "string"
+            },
+            "retry_after_seconds": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "challenge_id",
+            "expires_at",
+            "resend_at",
+            "server_time",
+            "retry_after_seconds"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "authProfile": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "full_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "username": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "profile_photo": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "is_phone_verified": {
+                  "type": "boolean"
+                },
+                "is_profile_complete": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "full_name",
+                "username",
+                "profile_photo",
+                "is_phone_verified",
+                "is_profile_complete"
+              ],
+              "additionalProperties": true
+            },
+            "progress": {
+              "$ref": "#/$defs/profileProgress"
+            }
+          },
+          "required": [
+            "user",
+            "progress"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "authTokens": {
+      "type": "object",
+      "properties": {
+        "access": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refresh": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "access",
+        "refresh"
+      ],
+      "additionalProperties": true
+    },
+    "authVerified": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "tokens": {
+              "$ref": "#/$defs/authTokens"
+            },
+            "user": {
+              "type": "object"
+            },
+            "progress": {
+              "$ref": "#/$defs/profileProgress"
+            }
+          },
+          "required": [
+            "tokens",
+            "user",
+            "progress"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "authRefresh": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "tokens": {
+              "$ref": "#/$defs/authTokens"
+            }
+          },
+          "required": [
+            "tokens"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": true
+    },
+    "coupleProfileData": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "viewer": {
+          "enum": [
+            "member",
+            "visitor"
+          ]
+        },
+        "can_edit": {
+          "type": "boolean"
+        },
+        "can_fave": {
+          "type": "boolean"
+        },
+        "can_view_moments": {
+          "type": "boolean"
+        },
+        "is_faved": {
+          "type": "boolean"
+        },
+        "published_sections": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "identity",
+              "story",
+              "song",
+              "interests",
+              "cover",
+              "date"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "visible_moment_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "photo_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "photo_url"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "story": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "author_id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "prompt": {
+                "enum": [
+                  "how_met",
+                  "first_move",
+                  "first_impression"
+                ]
+              },
+              "answer": {
+                "type": "string",
+                "maxLength": 240
+              }
+            },
+            "required": [
+              "author_id",
+              "prompt",
+              "answer"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 6
+        },
+        "song": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "artist": {
+              "type": "string"
+            },
+            "band": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "picked_by_id": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "artist",
+            "band",
+            "note",
+            "picked_by_id"
+          ],
+          "additionalProperties": false
+        },
+        "interests": {
+          "type": "object",
+          "properties": {
+            "shared": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mine": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "partner": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "shared"
+          ],
+          "additionalProperties": false
+        },
+        "cover": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "focal_y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "url",
+            "focal_y"
+          ],
+          "additionalProperties": false
+        },
+        "anniversary_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "days_together": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plan_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revisions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "sharing": {
+          "type": "object",
+          "properties": {
+            "proposal": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "proposal_version": {
+              "type": "integer"
+            },
+            "approved_by": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "valid_proposal": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "proposal",
+            "proposal_version",
+            "approved_by",
+            "valid_proposal"
+          ],
+          "additionalProperties": false
+        },
+        "days_to_anniversary": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plans_done": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plans_upcoming": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fave_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "viewer",
+        "can_edit",
+        "can_fave",
+        "can_view_moments",
+        "is_faved",
+        "published_sections",
+        "visible_moment_count"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "viewer": {
+                "const": "visitor"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "can_edit": {
+                "const": false
+              },
+              "interests": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "mine"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "partner"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "revisions"
+                  ]
+                },
+                {
+                  "required": [
+                    "sharing"
+                  ]
+                },
+                {
+                  "required": [
+                    "plan_count"
+                  ]
+                },
+                {
+                  "required": [
+                    "plans_done"
+                  ]
+                },
+                {
+                  "required": [
+                    "plans_upcoming"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "coupleProfile": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/$defs/coupleProfileData"
+        }
+      },
+      "required": [
+        "message",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "couplePlanData": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "created_by": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "starts_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "response": {
+          "enum": [
+            "pending",
+            "yes",
+            "no",
+            "another_time"
+          ]
+        },
+        "response_note": {
+          "type": "string"
+        },
+        "completed": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "id",
+        "created_by",
+        "title",
+        "starts_at",
+        "response",
+        "response_note",
+        "completed",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "couplePlan": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/$defs/couplePlanData"
+        }
+      },
+      "required": [
+        "message",
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "matrixSessionData": {
+      "type": "object",
+      "properties": {
+        "protocol_id": {
+          "const": "matrix-e2ee-v1"
+        },
+        "homeserver_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "room_id": {
+          "type": "string",
+          "pattern": "^!"
+        },
+        "room_alias": {
+          "type": "string",
+          "pattern": "^#"
+        },
+        "membership_epoch": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "relationship_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "self_user_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "self_matrix_user_id": {
+          "type": "string",
+          "pattern": "^@"
+        },
+        "partner_user_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "partner_matrix_user_id": {
+          "type": "string",
+          "pattern": "^@"
+        },
+        "initiator_user_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "login_type": {
+          "const": "org.matrix.login.jwt"
+        },
+        "login_token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "login_token_expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "login_token_one_time": {
+          "const": false
+        },
+        "refresh_token_enabled": {
+          "const": false
+        },
+        "access_token_expires_in_seconds": {
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 900
+        }
+      },
+      "required": [
+        "protocol_id",
+        "homeserver_url",
+        "room_id",
+        "room_alias",
+        "membership_epoch",
+        "relationship_id",
+        "self_user_id",
+        "self_matrix_user_id",
+        "partner_user_id",
+        "partner_matrix_user_id",
+        "initiator_user_id",
+        "login_type",
+        "login_token",
+        "login_token_expires_at",
+        "login_token_one_time",
+        "refresh_token_enabled",
+        "access_token_expires_in_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "matrixSession": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/matrixSessionData"
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "additionalProperties": false
+    },
+    "moment": {
+      "type": "object",
+      "required": [
+        "id",
+        "couple",
+        "created_by",
+        "creator",
+        "caption",
+        "visibility",
+        "photos",
+        "revision",
+        "published_at",
+        "expires_at",
+        "server_time",
+        "has_opened",
+        "can_edit",
+        "can_delete",
+        "can_reply",
+        "partner_seen_at",
+        "reacted",
+        "partner_reacted"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "couple": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "created_by": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "creator": {
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "photo_url"
+          ],
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "name": {
+              "type": "string"
+            },
+            "photo_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "caption": {
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "private",
+            "public"
+          ]
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "image",
+              "order",
+              "width",
+              "height"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "image": {
+                "type": "string"
+              },
+              "order": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "maxItems": 5
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "published_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "server_time": {
+          "type": "string"
+        },
+        "has_opened": {
+          "type": "boolean"
+        },
+        "can_edit": {
+          "type": "boolean"
+        },
+        "can_delete": {
+          "type": "boolean"
+        },
+        "can_reply": {
+          "type": "boolean"
+        },
+        "partner_seen_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reacted": {
+          "type": "boolean"
+        },
+        "partner_reacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "momentHome": {
+      "type": "object",
+      "required": [
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "type": "object",
+          "required": [
+            "user",
+            "couple",
+            "server_time"
+          ],
+          "properties": {
+            "user": {
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "name": {
+                  "type": "string"
+                },
+                "photo_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "couple": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "required": [
+                "id",
+                "anniversary_date",
+                "members"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "anniversary_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "members": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "name",
+                      "photo_url",
+                      "active_count",
+                      "unseen_count",
+                      "next_expiry"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "photo_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "active_count": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "unseen_count": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "next_expiry": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "server_time": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "momentDraft": {
+      "type": "object",
+      "required": [
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "type": "object",
+          "required": [
+            "id",
+            "couple",
+            "revision",
+            "created_at",
+            "published_at",
+            "moment_id",
+            "server_time",
+            "photos"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "couple": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "published_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "moment_id": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "server_time": {
+              "type": "string"
+            },
+            "photos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "image",
+                  "width",
+                  "height"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-named-errors": {
+    "feature_retired": {
+      "status": 410,
+      "retryable": false,
+      "meaning": "Discontinued dating operation; never retry as a cursor refresh."
+    }
+  }
+}

@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.timezone import now
@@ -52,6 +54,7 @@ class UserModel(AbstractUser):
     
     is_engaged = models.BooleanField(default=False,null=True, blank=True)
 
+    profile_photo_skipped = models.BooleanField(default=False, db_default=False)
     is_profile_complete = models.BooleanField(default=False)
     is_phone_verified = models.BooleanField(default=False)
 
@@ -64,6 +67,9 @@ class UserModel(AbstractUser):
     objects = CustomUserManager()
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["username"], condition=models.Q(username__isnull=False) & ~models.Q(username=""), name="auth_unique_nonempty_username"),
+        ]
         verbose_name = "User"
         verbose_name_plural = "Users"
         ordering = ["-created_date"]
@@ -144,7 +150,14 @@ class UserInterestModel(models.Model):
 
 class OtpModel(models.Model):
     phone_number = models.CharField(max_length=15, unique=True)
-    otp_code = models.CharField(max_length=6)
+    # HMAC only; old plaintext challenges are invalidated by the migration.
+    otp_code = models.CharField(max_length=128)
+    challenge_id = models.UUIDField(default=uuid.uuid4)
+    request_id = models.UUIDField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    resend_at = models.DateTimeField(null=True, blank=True)
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+    delivery_state = models.CharField(max_length=12, default="failed")
     otp_status = models.CharField(
         max_length=15,
         choices=OtpStatusChoices,
@@ -157,3 +170,24 @@ class OtpModel(models.Model):
 
     def __str__(self):
         return self.phone_number
+
+class OtpRequestBudget(models.Model):
+    """Database-backed spend guard shared across workers; contains no phone/IP.
+
+    Keys are keyed digests. Fixed rows reset their windows rather than grow per request.
+    """
+    key = models.CharField(max_length=80, unique=True)
+    window_start = models.DateTimeField(default=now)
+    count = models.PositiveIntegerField(default=0)
+
+
+class DeviceSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(UserModel, on_delete=models.CASCADE, related_name="device_sessions")
+    refresh_digest = models.CharField(max_length=64)
+    previous_refresh_digest = models.CharField(max_length=64, blank=True)
+    rotation_id = models.UUIDField(default=uuid.uuid4)
+    issued_at = models.DateTimeField(default=now)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)

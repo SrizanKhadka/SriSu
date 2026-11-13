@@ -8,7 +8,7 @@ Work stays on `dev-couple-moments`. Relevant history:
 - `41a0619` added page-number pagination, replacement and photo deletion. It saved changes before checking the combined photo count; returning HTTP 400 inside `atomic` could commit those changes. Object-level creator permissions, expiry and validated image uploads were missing.
 - `05daf44` replaced gender-specific partners with exclusive couple memberships. The new API uses that membership architecture and accepted connections, rather than trusting `is_engaged` or client ownership fields.
 
-The existing route names, moment metadata and list envelope remain. Views delegate validation to DRF serializers and transactional writes to `social/services/moment_service.py`. Existing chat rooms have two-user/couple participant semantics and websocket broadcasting, which do not match sender-plus-two-private-recipients appreciation. Notes therefore use a small separate model and API; there are no public comments, ratings or broadcasts. Existing `SingleConnectionModel.BLOCKED` records are honored in either direction. No reporting API was found.
+The existing route names, moment metadata and list envelope remain. Views delegate validation to DRF serializers and transactional writes to `social/services/moment_service.py`. Notes use a small separate model and API; there are no public comments, ratings or broadcasts. Existing `SingleConnectionModel.BLOCKED` records are honored in either direction. No reporting API was found. Chat is now a separate Matrix E2EE transport and is not reused for Moment notes.
 
 ## Product and authorization defaults
 
@@ -152,7 +152,9 @@ Database and storage cannot commit atomically. Process death or simultaneous sto
 
 Final verification on 2026-09-14: **48 social tests passed on PostgreSQL 17**, including partner replies, private embedded threads, concurrent unique views, concurrent photo writes and migration backfill. Django system checks, migration consistency (`makemigrations --check --dry-run`) and `git diff --check` passed. The earlier 32-test SQLite run passed as well; PostgreSQL was used for the final expanded suite.
 
-Full repository test discovery is blocked by the pre-existing `chat/tests.py`: it imports the undeclared `websockets` dependency and calls a live WebSocket deletion script at import time. That unrelated script was not changed or executed; chat integration behavior is unverified.
+Historical note: full discovery was previously blocked by an import-time legacy
+WebSocket script. That script and transport were removed by the Matrix-only chat
+cutover; current verification uses the maintained workspace suite allowlist.
 
 Commands:
 
@@ -204,3 +206,83 @@ Example additional fields for a partner viewing a moment (other moment fields om
 `total_view_count` is returned in every moment representation, including create/update and list/detail responses. It means **distinct authenticated users who successfully requested moment detail**, including the two partners. A successful detail GET records the viewer and returns the updated total. Repeated GETs by that user count once. Feed requests, photo downloads, HEAD, writes, anonymous, hidden and expired requests do not record a view. The database enforces one view per moment/user and concurrent requests are serialized against the moment row. Viewer identities are not exposed. Viewer-account deletion clears the viewer reference while preserving the total; moment deletion removes its view records. Existing moments start at zero because historical views were not tracked.
 
 Migration `0009_moment_replies_and_views` adds the reply and unique-view tables without changing existing moment or note records. Run `python manage.py migrate` before using this version. No new background job or configuration is needed.
+
+## Home + staged publication (moments-1, 2026-10-22)
+
+Implemented on `codex/couple-chat-rebuild` starting at
+`2a7d1f7d502bbaf3fb11b2330835a0d64bbe3ea5`, paired with frontend
+`dev-core-architecture` starting at `98f17e769bf4d0a43b444919f6f81aac91b76b3b`.
+The historical branch named above describes the original implementation, not the
+current checkout. Figma reference: file `LztysD1YvINX7RwZpnhhTt`, Home page `1:3`.
+
+Apply additive migration `social/0016_couplemomentmodel_revision_and_more` and
+release this backend before the Moments KMP client. No migration of existing
+Moment content or audience is required. No live migration/deployment was performed.
+The new draft tables stage owned uploads; publication still creates the original
+`CoupleMomentModel` and `CoupleMomentPhotoModel` records.
+
+| Method | Path under `/api/social/` | Body / behavior |
+| --- | --- | --- |
+| GET | `couple-moments/home/` | Minimal greeting identity, nullable active couple, two real member summaries and `server_time`; unlinked users get 200 |
+| POST | `moment-drafts/` | `{request_id: UUID, couple: ID}`; creator-owned, same-ID replay 200, new 201 |
+| GET / DELETE | `moment-drafts/{uuid}/` | Recover / discard unpublished owned draft; delete 204 |
+| PUT | `moment-drafts/{uuid}/photos/{uuid}/` | One multipart `photo`; retry same bytes/ID, conflict different content; five under row lock |
+| GET / DELETE | `moment-drafts/{uuid}/photos/{uuid}/` | Guarded staged bytes / idempotent removal and updated draft revision |
+| POST | `moment-drafts/{uuid}/publish/` | `{expected_revision, caption, visibility, photo_ids}`; exact ordered uploaded set, private default; 201 once / 200 replay |
+| GET | `couple-moments/{id}/?record_view=false` | Raw resource; no view side effect; eligible expired reference 410, concealed inaccessible/missing/deleted 404 |
+| POST | `couple-moments/{id}/viewed/` | Empty body, idempotent actual presentation event; never counted for creator |
+| PUT | `couple-moments/{id}/reaction/` | `{reacted: boolean}`, original current partner only; desired-state heart |
+| PATCH | `couple-moments/{id}/caption/` | `{expected_revision, caption}`, creator only; stale 409; publication/expiry unchanged |
+| GET | `couple-moments/{id}/creator-photo/` | Same audience/expiry authorization as Moment |
+
+Existing CRUD/notes endpoints and response shapes remain. Legacy GET without
+`record_view=false` still counts views. Sequence accepts optional `creator`, bound
+to its signed requester/couple cursor; order is ascending `(created_at,id)`.
+Global/Faves retain existing ranking/session cursors. Both return server time.
+Added projection fields: `creator`, photo `width/height` (nullable on legacy rows),
+`revision`, `published_at` (alias of publication `created_at`), `server_time`,
+`has_opened`, `can_reply`, `partner_seen_at`, `reacted`, `partner_reacted`.
+Receipt details are not exposed to visitors. Home never marks a creator's own
+Moment as unseen. Authorize using active original membership **and** user IDs;
+ended membership joins cannot grant replacement partners access.
+
+Uploads are authenticated and decoded outside application transactions. Accept
+non-animated JPEG/PNG/WebP <=10 MiB, <=40 MP and <=12000px per edge. Apply EXIF
+orientation, bound to 2560px, flatten transparency and re-encode JPEG without
+EXIF/GPS/comments. Transactions lock couple then draft/Moment and recheck current
+membership before ownership changes. Storage writes are compensated on failure;
+published files survive draft-row deletion because shared reference guards run
+before cleanup. Legacy writes also stage expensive storage work before locking.
+
+The 24-hour clock begins only after publication with ready media. Publication
+retries must reuse the same UUID and exact caption/audience/order, even after a
+lost response. Deleted/expired publications return 410 on replay and never
+resurrect. Unpublished staging expires after seven days. Published retry
+records retain only IDs, original audience and a one-way payload hash until
+account/couple deletion; they keep no caption or photos. Existing physical
+Moment cleanup remains 30 days after expiry. Guarded media is `private, no-store`;
+visibility expiry does not depend on cleanup. Downloaded copies cannot be recalled.
+
+View hydration is bounded to the requester and original partners; aggregate
+counts remain database counts. Embedded appreciation notes and their embedded
+replies are capped at 50 each; existing separately paginated note/reply endpoints
+remain available for older entries. KMP shows paginated notes for the active
+Moment, with private partner replies, using these existing APIs. There is no new
+inbox or notification service. Historical notes remain server-readable under the
+existing retention policy even though this phase has no separate history inbox.
+
+Matrix replies use the client encryption pipeline with an `external_url` containing
+only `srisu://moments/{id}/couples/{id}`. No server-authored plaintext event, photo,
+or caption is copied into Matrix. The client revalidates reference eligibility on
+open/resume/local changes and clears its label at known expiry. Deleting a Matrix
+reference does not delete the Moment; opening any stale label rechecks the server.
+
+Public sharing is explicit and authenticated, with existing bilateral blocking.
+No reporting API/workflow exists: moderation/reporting is an unresolved release
+requirement, not claimed as implemented. Private Moments are server-readable;
+only the separate Matrix messages are E2EE.
+
+Contracts live in `contracts/core-1/{schema,fixtures,manifest,routes}.json`; the KMP
+copy is pinned by `tools/core_contracts.py`. Tests use synthetic accounts and
+isolated SQLite/PostgreSQL/media. See frontend `docs/flows/moments.md` for the
+cross-repository validation and screenshot index.

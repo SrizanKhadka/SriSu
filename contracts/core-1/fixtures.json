@@ -1,0 +1,256 @@
+{
+  "interests": {
+    "message": "Interests fetched successfully",
+    "data": {
+      "interests": [
+        {
+          "id": 1,
+          "name": "Hiking",
+          "category": null,
+          "created_date": "2026-09-26T00:00:00Z",
+          "updated_date": "2026-09-26T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "empty_interests": {
+    "message": "Interests fetched successfully",
+    "data": {
+      "interests": []
+    }
+  },
+  "validation_error": {
+    "error": {
+      "code": "validation_failed",
+      "message": "Check the supplied fields.",
+      "fields": {
+        "limit": [
+          "max_value"
+        ]
+      },
+      "retryable": false
+    },
+    "request_id": "00000000-0000-4000-8000-000000000001",
+    "server_time": "2026-09-26T00:00:00Z"
+  },
+  "auth_challenge": {
+    "data": {
+      "challenge_id": "00000000-0000-4000-8000-000000000003",
+      "expires_at": "2030-01-01T00:05:00Z",
+      "resend_at": "2030-01-01T00:01:00Z",
+      "server_time": "2030-01-01T00:00:00Z",
+      "retry_after_seconds": 60
+    }
+  },
+  "auth_profile": {
+    "data": {
+      "user": {
+        "id": 1,
+        "full_name": "Synthetic User",
+        "username": "synthetic",
+        "profile_photo": null,
+        "is_phone_verified": true,
+        "is_profile_complete": false
+      },
+      "progress": {
+        "phone_verified": true,
+        "profile_complete": false,
+        "next_step": "photo",
+        "photo_skipped": false,
+        "membership": "unlinked",
+        "couple_id": null
+      }
+    }
+  },
+  "auth_refresh": {
+    "data": {
+      "tokens": {
+        "access": "non-credential-fixture",
+        "refresh": "non-credential-fixture"
+      }
+    }
+  },
+  "couple_profile_member": {
+    "message": "Profile fetched.",
+    "data": {
+      "id": 1,
+      "viewer": "member",
+      "can_edit": true,
+      "can_fave": false,
+      "can_view_moments": true,
+      "is_faved": false,
+      "published_sections": [],
+      "visible_moment_count": 0,
+      "members": [
+        {
+          "id": 1,
+          "name": "Synthetic One",
+          "photo_url": null
+        },
+        {
+          "id": 2,
+          "name": "Synthetic Two",
+          "photo_url": null
+        }
+      ],
+      "story": [],
+      "song": null,
+      "interests": {
+        "shared": [],
+        "mine": [],
+        "partner": []
+      },
+      "cover": {
+        "url": null,
+        "focal_y": 0.5
+      },
+      "anniversary_date": null,
+      "days_together": 0,
+      "plan_count": 0,
+      "revisions": {
+        "story": "0000000000000000000000000000000000000000000000000000000000000000",
+        "song": "0000000000000000000000000000000000000000000000000000000000000000",
+        "interests": "0000000000000000000000000000000000000000000000000000000000000000",
+        "cover": "0000000000000000000000000000000000000000000000000000000000000000",
+        "date": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sharing": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "sharing": {
+        "proposal": [],
+        "proposal_version": 0,
+        "approved_by": [],
+        "valid_proposal": false
+      }
+    }
+  },
+  "couple_profile_visitor": {
+    "message": "Profile fetched.",
+    "data": {
+      "id": 1,
+      "viewer": "visitor",
+      "can_edit": false,
+      "can_fave": true,
+      "can_view_moments": true,
+      "is_faved": false,
+      "published_sections": [],
+      "visible_moment_count": 0
+    }
+  },
+  "couple_plan": {
+    "message": "Plan saved.",
+    "data": {
+      "id": 1,
+      "created_by": 1,
+      "title": "A walk",
+      "starts_at": "2030-01-01T15:00:00Z",
+      "response": "pending",
+      "response_note": "",
+      "completed": false,
+      "revision": 1
+    }
+  },
+  "matrix_session": {
+    "data": {
+      "protocol_id": "matrix-e2ee-v1",
+      "homeserver_url": "https://matrix.example.test",
+      "room_id": "!synthetic-room:srisu.test",
+      "room_alias": "#srisu_chat_00000000000000000000000000000001_e1:srisu.test",
+      "membership_epoch": 1,
+      "relationship_id": 1,
+      "self_user_id": 1,
+      "self_matrix_user_id": "@srisu_user_1:srisu.test",
+      "partner_user_id": 2,
+      "partner_matrix_user_id": "@srisu_user_2:srisu.test",
+      "initiator_user_id": 1,
+      "login_type": "org.matrix.login.jwt",
+      "login_token": "synthetic.header.payload.signature",
+      "login_token_expires_at": "2030-01-01T00:02:00Z",
+      "login_token_one_time": false,
+      "refresh_token_enabled": false,
+      "access_token_expires_in_seconds": 300
+    }
+  },
+  "moment_private": {
+    "id": 7,
+    "couple": 3,
+    "created_by": 1,
+    "creator": {
+      "id": 1,
+      "name": "Alex",
+      "photo_url": null
+    },
+    "caption": "Our quiet morning",
+    "visibility": "private",
+    "photos": [
+      {
+        "id": 21,
+        "image": "https://api.example.invalid/api/social/couple-moments/7/photos/21/",
+        "order": 0,
+        "width": 960,
+        "height": 640
+      }
+    ],
+    "revision": 1,
+    "published_at": "2026-10-22T06:00:00Z",
+    "expires_at": "2026-10-23T06:00:00Z",
+    "server_time": "2026-10-22T06:00:00Z",
+    "has_opened": false,
+    "can_edit": true,
+    "can_delete": true,
+    "can_reply": false,
+    "partner_seen_at": null,
+    "reacted": false,
+    "partner_reacted": false
+  },
+  "moment_home": {
+    "data": {
+      "user": {
+        "id": 1,
+        "name": "Alex",
+        "photo_url": null
+      },
+      "couple": {
+        "id": 3,
+        "anniversary_date": null,
+        "members": [
+          {
+            "id": 1,
+            "name": "Alex",
+            "photo_url": null,
+            "active_count": 1,
+            "unseen_count": 0,
+            "next_expiry": "2026-10-23T06:00:00Z"
+          },
+          {
+            "id": 2,
+            "name": "Sam",
+            "photo_url": null,
+            "active_count": 0,
+            "unseen_count": 0,
+            "next_expiry": null
+          }
+        ]
+      },
+      "server_time": "2026-10-22T06:00:00Z"
+    }
+  },
+  "moment_draft": {
+    "data": {
+      "id": "12345678-1234-4234-a234-123456789abc",
+      "couple": 3,
+      "revision": 2,
+      "created_at": "2026-10-22T06:00:00Z",
+      "published_at": null,
+      "moment_id": null,
+      "server_time": "2026-10-22T06:00:00Z",
+      "photos": [
+        {
+          "id": "12345678-1234-4234-a234-123456789abc",
+          "image": "https://api.example.invalid/api/social/moment-drafts/12345678-1234-4234-a234-123456789abc/photos/12345678-1234-4234-a234-123456789abc/",
+          "width": 960,
+          "height": 640
+        }
+      ]
+    }
+  }
+}

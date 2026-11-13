@@ -22,18 +22,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-*k)0ig12u-)enjdf*333992j$6sy(9_fynofk&!($43%wfbt*_"
+SECRET_KEY = config("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [host.strip() for host in config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if host.strip()]
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -46,12 +45,14 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework.authtoken",
     "chat",
+    "couple_chat",  # Historical schema/migration compatibility only; no runtime transport.
+    "notifications",
     "rest_framework_simplejwt.token_blacklist",
-    "channels",
     "social"
 ]
 
 MIDDLEWARE = [
+    "srisu.api.middleware.RequestContextMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -99,7 +100,7 @@ DATABASES = {
         "USER": config("POSTGRES_USER"),
         "PASSWORD": config("POSTGRES_PASSWORD"),
         "HOST": config("POSTGRES_HOST"),
-        "PORT": "5432",
+        "PORT": config("POSTGRES_PORT", default=5432, cast=int),
     }
 }
 
@@ -149,18 +150,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 ASGI_APPLICATION = "srisu.asgi.application"
 
-CHANNEL_LAYERS = {
-    "default":{
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts":[(config("REDIS_HOST", default="redis"),config("REDIS_PORT", default=6379))],
-        },
-    },
-}
-
 AUTH_USER_MODEL = "authentication.UserModel"
 
-# Separate namespace from Channels. Only short-lived ordered IDs are cached.
+# Dedicated namespace for short-lived couple-feed ordering IDs.
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
     "couple_feed": {
@@ -175,12 +167,16 @@ COUPLE_FEED_ENABLED = config("COUPLE_FEED_ENABLED", default=True, cast=bool)
 COUPLE_FEED_SESSION_TTL = 15 * 60
 COUPLE_FEED_CANDIDATE_LIMIT = 500
 COUPLE_FEED_EXPLORATION_INTERVAL = 10
-COUPLE_FEED_RANKING_VERSION = "couple-v1"
+COUPLE_FEED_RANKING_VERSION = "couple-v2-local"
 COUPLE_FEED_WEIGHTS = {"interests": 40, "location": 25, "fave": 20, "freshness": 15}
 
 REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_RATES": {
+        "partner_discovery": "20/min",
+        "chat_matrix_session": "10/min",
+    },
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "authentication.sessions.SessionJWTAuthentication",
     ],
     "EXCEPTION_HANDLER": "utils.exception_handlers.custom_exception_handler",
     "DEFAULT_PARSER_CLASSES" :[
@@ -203,3 +199,72 @@ TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN")
 TWILIO_PHONE_NUMBER = config("TWILIO_PHONE_NUMBER")
 
+# Explicit development delivery switch. Normal deployments still use Twilio.
+OTP_MOCK_DELIVERY = config("OTP_MOCK_DELIVERY", default=False, cast=bool)
+# Empty outside development Compose; ignored entirely when real delivery is enabled.
+OTP_MOCK_CODE = config("OTP_MOCK_CODE", default="")
+
+
+# Private Matrix remains fail-closed until a deployment supplies a reviewed
+# service adapter and credentials. Django stays authoritative for account and
+# current-couple authorization; Matrix carries encrypted room traffic.
+MATRIX_ENABLED = config("MATRIX_ENABLED", default=False, cast=bool)
+MATRIX_SERVICE_CLASS = config(
+    "MATRIX_SERVICE_CLASS",
+    default="chat.services.matrix_provisioning.DisabledMatrixService",
+)
+MATRIX_HOMESERVER_URL = config("MATRIX_HOMESERVER_URL", default="")
+MATRIX_INTERNAL_HOMESERVER_URL = config("MATRIX_INTERNAL_HOMESERVER_URL", default="")
+MATRIX_SERVER_NAME = config("MATRIX_SERVER_NAME", default="")
+MATRIX_PROTOCOL_ID = config("MATRIX_PROTOCOL_ID", default="matrix-e2ee-v1")
+MATRIX_SESSION_TTL_SECONDS = config("MATRIX_SESSION_TTL_SECONDS", default=120, cast=int)
+MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS = config(
+    "MATRIX_ACCESS_TOKEN_LIFETIME_SECONDS",
+    default=5 * 60,
+    cast=int,
+)
+MATRIX_PROVISIONING_LOCALPART = config(
+    "MATRIX_PROVISIONING_LOCALPART",
+    default="srisu_provisioner",
+)
+MATRIX_ROOM_VERSION = config("MATRIX_ROOM_VERSION", default="11")
+MATRIX_JWT_SECRET = config("MATRIX_JWT_SECRET", default="")
+MATRIX_JWT_ALGORITHM = config("MATRIX_JWT_ALGORITHM", default="HS256")
+MATRIX_JWT_ISSUER = config("MATRIX_JWT_ISSUER", default="srisu-django")
+MATRIX_JWT_AUDIENCE = config("MATRIX_JWT_AUDIENCE", default="srisu-matrix")
+MATRIX_HTTP_TIMEOUT_SECONDS = config("MATRIX_HTTP_TIMEOUT_SECONDS", default=5, cast=float)
+MATRIX_PROVISION_LOCK_SECONDS = config("MATRIX_PROVISION_LOCK_SECONDS", default=60, cast=int)
+MATRIX_RETRY_BASE_SECONDS = config("MATRIX_RETRY_BASE_SECONDS", default=5, cast=int)
+MATRIX_RETRY_MAX_SECONDS = config("MATRIX_RETRY_MAX_SECONDS", default=300, cast=int)
+MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS = config(
+    "MATRIX_REMOTE_VERIFY_INTERVAL_SECONDS",
+    default=300,
+    cast=int,
+)
+MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS = config(
+    "MATRIX_CUTOVER_ATTESTATION_TTL_SECONDS",
+    default=300,
+    cast=int,
+)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"core": {"()": "srisu.api.logging.CoreJsonFormatter"}},
+    "handlers": {"core": {"class": "logging.StreamHandler", "formatter": "core"}},
+    "loggers": {"srisu": {"handlers": ["core"], "level": "INFO", "propagate": False}},
+}
+
+# Temporary compatibility during auth-1 rollout; disable after the announced cutoff.
+AUTH_ACCEPT_LEGACY_TOKENS = config("AUTH_ACCEPT_LEGACY_TOKENS", default=True, cast=bool)
+
+OTP_GLOBAL_HOURLY_LIMIT = config("OTP_GLOBAL_HOURLY_LIMIT", default=100, cast=int)
+OTP_IP_HOURLY_LIMIT = config("OTP_IP_HOURLY_LIMIT", default=10, cast=int)
+
+# Kill switch also stops new events, so re-enabling cannot replay disabled history.
+NOTIFICATIONS_ENABLED = config("NOTIFICATIONS_ENABLED", default=False, cast=bool)
+NOTIFICATION_INSTALLATION_MAX_AGE_DAYS = config("NOTIFICATION_INSTALLATION_MAX_AGE_DAYS", default=30, cast=int)
+MATRIX_CHAT_PUSH_ENABLED = config("MATRIX_CHAT_PUSH_ENABLED", default=False, cast=bool)
+MATRIX_PUSH_HS_TOKEN = config("MATRIX_PUSH_HS_TOKEN", default="")
+MATRIX_CHAT_PUSH_NOT_BEFORE_MS = config("MATRIX_CHAT_PUSH_NOT_BEFORE_MS", default=0, cast=int)
+FIREBASE_PROJECT_ID = config("FIREBASE_PROJECT_ID", default="srisu-ef431")

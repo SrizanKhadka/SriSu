@@ -1,0 +1,2 @@
+# Container entrypoints must remain executable by /bin/sh after Windows checkout.
+*.sh text eol=lf

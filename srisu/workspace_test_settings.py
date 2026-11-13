@@ -14,6 +14,7 @@ for key, value in {
     "POSTGRES_PASSWORD": "unused_workspace_tests",
     "POSTGRES_HOST": "127.0.0.1",
     "COUPLE_FEED_ENABLED": "true",
+    "SRISU_CONFIRM_DESTROY_LEGACY_CHAT": "DESTROY_LEGACY_CHAT_TRANSPORT_V1",
 }.items():
     os.environ[key] = value
 
@@ -25,3 +26,6 @@ ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 MEDIA_ROOT = tempfile.mkdtemp(prefix="srisu-workspace-tests-")
 atexit.register(shutil.rmtree, MEDIA_ROOT, ignore_errors=True)
+
+# Keep tests quiet while retaining sanitized failure diagnostics.
+LOGGING["loggers"]["srisu"]["level"] = "WARNING"

@@ -2,12 +2,16 @@ from django.urls import path
 
 from authentication.api.views import (
     InterestsAPIView,
+    RefreshSessionAPIView,
+    LogoutSessionAPIView,
     SendOTPAPIView,
     SetUpProfileAPIView,
     VerifyOTPAPIView,
 )
 
 urlpatterns = [
+    path("refresh/", RefreshSessionAPIView.as_view(), name="auth-refresh"),
+    path("logout/", LogoutSessionAPIView.as_view(), name="auth-logout"),
     path("send-otp/", SendOTPAPIView.as_view(), name="send-otp"),
     path("verify-otp/", VerifyOTPAPIView.as_view(), name="verify-otp"),
     path("setup-profile/", SetUpProfileAPIView.as_view(), name="setup-profile"),

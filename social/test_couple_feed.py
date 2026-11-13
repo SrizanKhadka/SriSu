@@ -342,9 +342,9 @@ class CoupleFeedTests(FeedFixtures, APITestCase):
         for target in (a, b):
             self.moment(target)
         b.members.all().update(city="Kathmandu", country="Nepal")
-        self.assertEqual([r["couple"]["id"] for r in self.get_data()["results"]], [a.pk, b.pk])
+        self.assertEqual([r["couple"]["id"] for r in self.get_data()["results"]], [b.pk, a.pk])
         UserInterestModel.objects.create(user=viewer, name="Music")
-        # Personal selections supersede the shared fallback; local b now ranks first.
+        # Local composition takes precedence; changing interests keeps local b first.
         self.assertEqual(self.get_data()["results"][0]["couple"]["id"], b.pk)
 
     def test_faves_block_and_membership_change_invalidate_content_on_next_page(self):
@@ -505,3 +505,175 @@ class CoupleFaveConcurrencyTests(FeedFixtures, APITransactionTestCase):
                 job.result(timeout=20)
         # Delete started after the add acquired the user lock and must run last.
         self.assertFalse(CoupleFaveModel.objects.exists())
+
+
+class ExploreIntegrationTests(FeedFixtures, APITestCase):
+    def test_global_cursor_rejects_changed_preferences_without_invalidating_faves(self):
+        for _ in range(2):
+            target = self.couple()
+            self.moment(target)
+            self.client.put(self.fave_url(target))
+        global_page = self.get_data(page_size=1)
+        faves_page = self.get_data(section='faves', page_size=1)
+        self.viewer.city, self.viewer.country = 'Kathmandu', 'Nepal'
+        self.viewer.save()
+        self.assertEqual(self.client.get(global_page['next']).status_code, 409)
+        self.assertEqual(self.client.get(faves_page['next']).status_code, 200)
+        global_page = self.get_data(page_size=1)
+        UserInterestModel.objects.create(user=self.viewer, name='Cooking')
+        self.assertEqual(self.client.get(global_page['next']).status_code, 409)
+        global_page = self.get_data(page_size=1)
+        self.viewer.full_name = 'Changed display name'
+        self.viewer.save()
+        self.assertEqual(self.client.get(global_page['next']).status_code, 200)
+
+    def test_conditional_noop_is_barrier_to_delayed_opposite_and_retry(self):
+        target = self.couple()
+        initial = self.get_data(self.fave_url(target))
+        self.assertFalse(initial['is_faved'])
+        self.assertEqual(initial['version'], 0)
+        # The user cancelled an in-flight Add before that old request reached Django.
+        self.assertEqual(self.client.delete(self.fave_url(target), HTTP_IF_MATCH='0').status_code, 204)
+        self.assertEqual(self.client.put(self.fave_url(target), HTTP_IF_MATCH='0').status_code, 409)
+        self.assertFalse(CoupleFaveModel.objects.exists())
+        fresh = self.get_data(self.fave_url(target))
+        added = self.client.put(self.fave_url(target), HTTP_IF_MATCH=str(fresh['version']))
+        self.assertEqual(added.status_code, 201)
+        # Lost acknowledgement: re-read and explicitly retry safely, never duplicate.
+        confirmed = self.get_data(self.fave_url(target))
+        self.assertTrue(confirmed['is_faved'])
+        retry = self.client.put(self.fave_url(target), HTTP_IF_MATCH=str(confirmed['version']))
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(CoupleFaveModel.objects.count(), 1)
+        self.assertGreater(retry.data['data']['version'], confirmed['version'])
+        for invalid in ('-1', 'abc', '1.2', '9'*19):
+            self.assertEqual(self.client.delete(self.fave_url(target), HTTP_IF_MATCH=invalid).status_code, 400)
+
+    def locate(self, couple, city, country):
+        for person in couple.members.all():
+            person.city, person.country = city, country
+            person.save(update_fields=['city', 'country'])
+
+    @override_settings(COUPLE_FEED_CANDIDATE_LIMIT=2)
+    def test_local_retrieval_precedes_worldwide_cap_and_broad_scope_is_explicit(self):
+        self.viewer.city, self.viewer.country = 'Kathmandu', 'Nepal'
+        self.viewer.save()
+        outside, country, city = [self.couple() for _ in range(3)]
+        for couple in (outside, country, city):
+            self.moment(couple)
+        self.locate(outside, 'Sydney', 'Australia')
+        self.locate(country, 'Pokhara', 'Nepal')
+        self.locate(city, 'Kathmandu', 'Nepal')
+        result = self.get_data(page_size=1)
+        self.assertEqual(result['results'][0]['couple']['id'], city.pk)
+        self.assertEqual(result['coverage'], 'local_with_fallback')
+        following = self.get_data(result['next'])
+        self.assertEqual(following['results'][0]['couple']['id'], country.pk)
+        self.assertEqual(self.client.get(result['next'] + '&scope=broad').status_code, 400)
+        self.assertEqual(self.get_data(scope='broad')['coverage'], 'broader')
+        self.client.put(self.fave_url(outside))
+        saved = self.get_data(section='faves')
+        self.assertEqual([row['couple']['id'] for row in saved['results']], [outside.pk])
+        self.locate(outside, 'Tokyo', 'Japan')
+        self.assertEqual(len(self.get_data(section='faves')['results']), 1)
+
+    def test_cold_starts_and_local_shortage_explain_fallback(self):
+        target = self.couple()
+        self.locate(target, 'Sydney', 'Australia')
+        self.moment(target)
+        for city, country, expected in ((None,None,'broader'), ('Kathmandu','Nepal','local_with_fallback')):
+            self.viewer.city, self.viewer.country = city, country
+            self.viewer.save()
+            response = self.get_data()
+            self.assertEqual(len(response['results']), 1)
+            self.assertEqual(response['coverage'], expected)
+        now = timezone.now()
+        self.assertAlmostEqual(rank_score(set(), set(), (None,None), [(None,None)], False, now, now,
+                                          normalize_missing=True), 100 * 15 / 35)
+        self.assertLess(rank_score({'cooking'}, {'cycling'}, (None,None), [(None,None)], False, now, now,
+                                  normalize_missing=True), 100 * 15 / 35)
+
+    def test_public_identity_requires_both_current_consents_and_withdraws_on_edit(self):
+        from social.models import CouplePrivacyConsentModel
+        from social.services.couple_profile_sections import audience, digest, raw_sections
+        target = self.couple()
+        self.moment(target)
+        members = list(target.memberships.select_related('user').order_by('position'))
+        for position, member in enumerate(members):
+            member.user.full_name = ['Alex', 'Sam'][position]
+            member.user.save(update_fields=['full_name'])
+        target.privacy_proposal_version = 1
+        target.privacy_proposal = {'sections':['identity'], 'audience':audience(members),
+            'fingerprints':{'identity':digest(raw_sections(target, members, self.viewer)['identity'])}}
+        target.save()
+        self.assertNotIn('display_name', self.get_data()['results'][0]['couple'])
+        for member in members:
+            CouplePrivacyConsentModel.objects.create(couple=target, user=member.user, proposal_version=1)
+        self.assertEqual(self.get_data()['results'][0]['couple']['display_name'], 'Alex & Sam')
+        members[0].user.full_name = 'Changed private identity'
+        members[0].user.save(update_fields=['full_name'])
+        visible = self.get_data(reverse('couple-feed-check'), couples=str(target.pk))
+        self.assertEqual(visible['results'][0]['couple'], {'id':target.pk})
+
+    def test_visible_revalidation_filters_faves_and_rechecks_expiry_and_permission(self):
+        a, b = self.couple(), self.couple()
+        self.moment(a)
+        self.moment(b)
+        self.client.put(self.fave_url(a))
+        url = reverse('couple-feed-check')
+        self.assertEqual([r['couple']['id'] for r in self.get_data(url, couples=f'{a.pk},{b.pk}', section='faves')['results']], [a.pk])
+        from social.services.couple_feed_service import cards
+        def withdrawn(*args, **kwargs):
+            result = cards(*args, **kwargs)
+            CoupleMomentModel.objects.filter(couple=a).update(visibility='private')
+            CoupleMomentModel.objects.filter(couple=b).update(expires_at=timezone.now())
+            return result
+        with patch('social.api.couple_views.cards', side_effect=withdrawn):
+            self.assertEqual(self.get_data(url, couples=f'{a.pk},{b.pk}')['results'], [])
+        for invalid in ('', 'a', ','.join(['1']*51)):
+            self.assertEqual(self.client.get(url, {'couples':invalid}).status_code, 400)
+
+    def test_mutation_during_visible_or_library_response_cannot_stamp_old_data_as_new(self):
+        target = self.couple()
+        self.moment(target)
+        self.client.put(self.fave_url(target))
+        from social.services.couple_feed_service import cards
+        def removed(*args, **kwargs):
+            result = cards(*args, **kwargs)
+            remove_fave(self.viewer, target.pk)
+            return result
+        with patch('social.api.couple_views.cards', side_effect=removed):
+            self.assertEqual(self.client.get(reverse('couple-feed-check'), {'couples':target.pk}).status_code, 409)
+        self.client.put(self.fave_url(target))
+        from social.services.discovery_identity import identities
+        def removed_identity(*args, **kwargs):
+            result = identities(*args, **kwargs)
+            remove_fave(self.viewer, target.pk)
+            return result
+        with patch('social.api.couple_views.identities', side_effect=removed_identity):
+            self.assertEqual(self.client.get(self.library_url).status_code, 409)
+
+
+class ConditionalFaveConcurrencyTests(FeedFixtures, APITransactionTestCase):
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_same_revision_concurrent_opposites_have_one_winner(self):
+        from social.services.fave_service import FaveConflict, fave_version
+        target = self.couple()
+        barrier = Barrier(2)
+        def write(desired):
+            try:
+                barrier.wait(timeout=10)
+                try:
+                    (add_fave if desired else remove_fave)(self.viewer, target.pk, 0)
+                    return desired
+                except FaveConflict:
+                    return 'conflict'
+            finally:
+                connections.close_all()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            jobs = [pool.submit(write, desired) for desired in (True, False)]
+            result = [job.result(timeout=20) for job in jobs]
+        self.assertEqual(result.count('conflict'), 1)
+        self.assertEqual(fave_version(self.viewer), 1)
+        winner = next(value for value in result if value != 'conflict')
+        self.assertEqual(CoupleFaveModel.objects.filter(user=self.viewer, couple=target).exists(), winner)

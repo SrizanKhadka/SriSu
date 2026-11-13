@@ -13,10 +13,12 @@ or chat changes. There is no public membership list or Fave count. Users cannot 
 own couple. Active authenticated users may Fave an active, unblocked couple by known ID
 even if it has no current public content.
 
-External cards intentionally expose only the couple ID and eligible moment content. The
-member-only couple serializer contains phone numbers and private relationship information;
-it is not used here. Public profile names/covers and a public couple directory are deferred
-until their disclosure policy is defined.
+Explore (26 October 2026) reuses Couple Profile's existing two-partner publication consent.
+Cards/library entries include `display_name` and authorized `avatars` only when both current
+members approved the current identity fingerprint and audience. Otherwise only the couple ID
+is returned, rendered as “A SriSu couple” with a fallback. Identity edits invalidate consent.
+The member-only serializer and private fields are never exposed by discovery. No public
+Fave count, Interested feature, new notification, or dating relationship is introduced.
 
 ## Endpoints
 
@@ -25,6 +27,8 @@ Personalized responses, including errors, use `Cache-Control: private, no-store`
 
 | Method | Path | Result |
 | --- | --- | --- |
+| GET | `couple-faves/{couple_id}/` | Authoritative personal state, availability and account Faves version |
+| GET | `couple-feed/visible/?couples=7,8&section=global` | Reauthorize up to 50 visible IDs in supplied order, without reranking |
 | PUT | `couple-faves/{couple_id}/` | Ensure the requester's Fave exists; no request body |
 | DELETE | `couple-faves/{couple_id}/` | Remove the requester's Fave |
 | GET | `couple-faves/` | Personal saved-couple library, including no-content/unavailable entries |
@@ -33,7 +37,8 @@ Personalized responses, including errors, use `Cache-Control: private, no-store`
 | GET | `couple-moments/sequence/?couple=7&mode=unopened` | Eligible moments oldest first, excluding this user's recorded opens |
 | GET | `couple-moments/sequence/?couple=7&mode=all` | Eligible moments oldest first, including recorded opens |
 
-`section` defaults to `global`, `content` to `moments`, and `mode` to `unopened`.
+`section` defaults to `global`, `content` to `moments`, `scope` to `local`, and `mode` to `unopened`.
+Global accepts `scope=broad` for explicit worldwide sampling. Scope is bound to its feed session.
 Unsupported content types are rejected; no challenge endpoint or media model is implemented.
 All new lists accept `page_size` (default 10, maximum 50). Follow `data.next` verbatim;
 it contains a signed cursor with the original parameters. Do not change them mid-session.
@@ -52,8 +57,16 @@ First PUT returns 201; repeated PUT returns 200 with the original timestamp:
 DELETE returns 204 even if the Fave/target is absent or inaccessible. Removing and adding
 again creates a new Fave timestamp. Ownership comes exclusively from authentication;
 PUT bodies are rejected. Concurrent writes are serialized on the requester row, and the
-database enforces `UNIQUE(user, couple)`. Last serialized add/remove wins. Clients should
-serialize their own toggles instead of issuing contradictory requests simultaneously.
+database enforces `UNIQUE(user, couple)`. Legacy requests without `If-Match` retain last
+serialized write behavior. New KMP writes first GET the account revision and send its numeric
+value in `If-Match`. A changed version returns 409 without writing. Successful conditional
+writes advance the revision even for a no-op: a newer Remove of an absent Fave prevents an
+older delayed Add from committing with its stale revision. PUT also returns `version`.
+DELETE remains 204; KMP GETs again to confirm the actual state. A lost acknowledgement
+shows Retry rather than claiming success. The application-lifetime FaveStore orders writes,
+coalesces opposite desires, re-reads after conflicts, and rejects old-account responses.
+Version rows are private metadata, not a second Faves table. No-op legacy writes stay
+idempotent without invalidating a feed.
 
 An inactive/blocked couple remains a removable library placeholder. Deleted couples/users
 cascade their Faves. Faves are not transferred to new couples or partners. Repeated PUT to
@@ -75,7 +88,8 @@ a now-unavailable target returns 404 without removing the existing saved relatio
 }
 ```
 
-Library entries contain no profile fields. `available=false` covers blocked, inactive,
+Available library entries include the same consent-bound `couple` identity projection.
+`available=false` contains no identity fields and covers blocked, inactive,
 invalid, or now-own couples, and also forces `has_active_content=false`.
 The library uses `(created_at DESC, id DESC)` keyset pagination with a creation cutoff;
 new Faves enter on refresh, deletions do not shift offsets. It has no 500-row truncation.
@@ -86,7 +100,7 @@ new Faves enter on refresh, deletions do not shift offsets. It has no 500-row tr
 {
   "message": "Results fetched successfully.",
   "data": {
-    "section": "global", "content_type": "moments", "ranking_version": "couple-v1",
+    "section": "global", "content_type": "moments", "ranking_version": "couple-v2-local",
     "as_of": "2026-09-15T06:00:00Z", "pagination_available": true, "empty_reason": null,
     "next": null, "previous": null,
     "results": [{
@@ -151,9 +165,14 @@ additional access. Existing creator-only writes and private appreciation-note ru
 - F: 1 for this user's Fave, 0 otherwise. Global includes Faves without reserved Fave slots.
 - T: `2 ** (-age_hours / 8)` from latest eligible moment creation time at session start.
 
-Strings use NFKC normalization, trimming, case-folding, and deduplication. Missing evidence
-earns no bonus and never excludes a candidate. No per-candidate weight renormalization.
-Location is a worldwide relevance boost, not a geographic filter. Tags, `moment_date`,
+The production scorer normalizes available weights to sum to one: unknown interest sets
+or missing country metadata omit their signal weight; a known non-match remains an observed
+zero. Fave membership is always known, and freshness is always available. The defaults remain
+40/25/20/15, versioned as `couple-v2-local`, rather than inventing the proposal's unavailable
+engagement/context signals. Pure legacy scorer callers retain the old optional behavior.
+Interest/scoring strings use NFKC, trimming, case folding and deduplication. Retrieval uses
+existing user-selected city/country strings with case-insensitive equality; no precise GPS
+or new location permission. Tags, `moment_date`,
 free-text moment location, zodiac, age, gender, view totals, Fave totals, and private notes
 are not ranking signals. No engagement minimum is required for new couples.
 
@@ -161,12 +180,21 @@ For example: I=.5, L=1, F=0, latest age=8h scores 52.5; I=.25, L=0, F=1,
 age=2h scores approximately 42.6. These coefficients and the eight-hour half-life are
 tunable launch assumptions, not measured effectiveness claims.
 
-Global uses at most 500 distinct eligible couples. When the pool is larger, a deterministic
-user/day MD5 ordering samples couples before metadata loading/scoring. Sampling rotates
-daily and does not depend on upload count; it does not guarantee the globally highest scores.
-Within the pool, score descending, latest time descending, and ID ascending break ties.
-Every tenth position uses a deterministic SHA256 exploration order, preferring remaining
-non-Faves. A couple appears only once per session regardless of upload volume.
+Global loads and scores at most 500 distinct eligible couples. Local retrieval fills that cap
+from the selected city first, then the country excluding that city, then broader supply.
+The same tier order is enforced during composition, so a high global score cannot displace
+suitable local supply. Within a tier, deterministic user/day MD5 sampling bounds metadata
+loading; score descending, latest time descending and ID ascending order the sample.
+Every tenth position within each tier uses the existing deterministic SHA256 exploration,
+preferring remaining non-Faves without crossing geographic tiers. Scope=broad removes the
+tier priority and samples the wider eligible pool. Sampling rotates daily and makes no
+claim to find the globally optimal ranking or enforce a strict database scan bound.
+
+`coverage=local|local_with_fallback|broader` explains the actual selected pool. Country or
+wider fallback triggers the visible “further afield” copy; no country uses broader discovery.
+City/interests, city only, interests only and neither are supported without blocking setup.
+A couple appears once regardless of upload volume. Card reasons use only actual locality,
+interest overlap or freshness, never another user's private Faves.
 
 Faves has no Global candidate cap, no scoring, and no exploration: sort by unopened content,
 latest eligible publication descending, then couple ID ascending. Both feeds allow revisits
@@ -176,8 +204,16 @@ after unopened content. New users with no metadata get freshness and Global expl
 
 Only ordered IDs and session context are stored in the dedicated Redis cache for 15 minutes.
 Sessions bind to the user, section, content type, page size, Fave fingerprint, ranking version,
-and creation cutoff. Fave fingerprints include relationship row IDs, so remove/re-add also
-invalidates old sessions. Repeated identical PUT does not invalidate sessions.
+scope and creation cutoff. Fave fingerprints combine the private revision with a database
+count/max-row aggregate (without materializing the whole library). Remove/re-add invalidates
+old sessions. Repeated legacy PUT does not invalidate; conditional no-op writes do. Page
+state and revision are bound together so a concurrent write cannot stamp stale booleans with
+a new revision. Library/visible revalidation rejects a concurrent version change with 409.
+Global also binds a hash of the requester's normalized country, city and effective
+interest set. Editing these preferences invalidates its continuation with 409; a fresh
+request uses the new preferences. Unrelated profile edits and geographical changes do
+not invalidate Faves ordering. Saved-library pages expose their revision so the client
+can restart assembly instead of merging pages from different memberships.
 
 Every page checks current PostgreSQL eligibility, skips unavailable couples and replenishes
 from later saved IDs. Cursors advance past all scanned positions, including skipped ones.
@@ -206,7 +242,10 @@ it is never silently reranked. Database authorization failures propagate as erro
 
 1. Apply `python manage.py migrate` before enabling client use. Migration
    `social.0010_couplefavemodel` creates the Faves table, unique `(user,couple)` constraint,
-   and `(user,-created_at,-id)` index. There is no historical data backfill.
+   and `(user,-created_at,-id)` index. Migration `social.0021_couplefaveversion` adds one private
+   revision row per user, created lazily at first mutation; existing Faves are preserved.
+   Apply 0021 and deploy the additive backend endpoints/fields **before** the new client.
+   Older PUT/DELETE callers remain compatible. No production migration/deployment was run.
 2. The installed Channels Redis dependency also supports Django's Redis cache backend;
    no new package or Redis service is required. Set `COUPLE_FEED_REDIS_URL` when needed
    (supports deployment credentials/TLS through the URL). Default is
@@ -218,7 +257,7 @@ it is never silently reranked. Database authorization failures propagate as erro
 4. Python settings `COUPLE_FEED_SESSION_TTL`, `COUPLE_FEED_CANDIDATE_LIMIT`,
    `COUPLE_FEED_EXPLORATION_INTERVAL` (0 disables exploration), `COUPLE_FEED_WEIGHTS`,
    and `COUPLE_FEED_RANKING_VERSION` control ranking. Bump the version when tuning weights.
-   Existing sessions retain their saved order until expiry.
+   A ranking-version change expires old sessions; unchanged sessions retain order until expiry.
 
 Fave writes allow 120 requests/min/user. Feed requests allow 120/min/user, with at most
 30 new sessions/min/user. These follow the existing DRF throttle/default-cache convention;
@@ -237,15 +276,20 @@ profile metadata. These are delivery diagnostics, not measured impressions.
 ## Verification and extension boundary
 
 ```sh
-python manage.py test social.test_couple_feed social.test_moments social.test_moment_replies social.tests --settings=srisu.test_settings --noinput
-python manage.py test social.test_couple_feed social.test_moments social.test_moment_replies social.tests --settings=srisu.test_postgres_settings --noinput
-python manage.py check
-python manage.py makemigrations --check --dry-run
+.venv/bin/python tools/workspace.py test
+.venv/bin/python tools/workspace.py check
+.venv/bin/python tools/workspace.py migrations
+.venv/bin/python tools/auth_postgres_tests.py --postgres-bin /opt/homebrew/opt/postgresql@17/bin
 ```
 
-PostgreSQL tests use the existing disposable loopback cluster on port 55439, never the
-application database. SQLite skips row-locking concurrency tests. The historical moment
-migration test now restores current migration leaves so later tests see the Faves table.
+Use the allowlisted isolated runners; do not use unrestricted discovery or the application
+DB for unit/concurrency tests. October 26: 293 selected tests pass on PostgreSQL (no skips);
+SQLite executes 270 and skips 23 row-lock-specific cases. New tests cover conditional no-op
+barriers, concurrent opposite writes, lost-ack replay, consent withdrawal, bounded tier
+retrieval, scope-bound cursors, cold starts and in-flight revalidation. Existing suites cover
+partner independence, blocks/audience/expiry, pagination and constant per-card query counts.
+The frontend's `docs/validation/explore/README.md` records render, transport and device checks.
+No new analytics SDK or impression tracking was added; existing aggregate latency logs remain.
 
 Implementation verification (15 September 2026): all 77 social regression/new tests passed
 on PostgreSQL, including five row-locking/concurrency tests. Migration drift and Django
