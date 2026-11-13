@@ -642,6 +642,24 @@
           },
           "invitations": {
             "type": "integer"
+          },
+          "featured_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Plan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requests": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "completed_count": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "required": [

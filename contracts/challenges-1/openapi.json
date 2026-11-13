@@ -540,6 +540,16 @@
                 "type": "null"
               }
             ]
+          },
+          "last_completed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Session"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

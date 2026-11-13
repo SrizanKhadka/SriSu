@@ -59,6 +59,8 @@ class ChallengeView(PrivateResponseMixin, viewsets.GenericViewSet):
             "photo": request.build_absolute_uri(m.user.profile_photo.url) if m.user.profile_photo else None} for m in members]
         current = challenges.eligible(couple, members).filter(state__in=challenges.LIVE).first()
         result["current"] = challenges.data(current) if current else None
+        completed = challenges.eligible(couple, members).filter(state="completed").order_by("-completed_at", "-id").first()
+        result["last_completed"] = challenges.data(completed) if completed else None
         return Response({"data": result})
 
     @action(detail=False, methods=["get"])

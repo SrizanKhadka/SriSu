@@ -561,6 +561,8 @@ class SparkSession(models.Model):
     revision = models.PositiveBigIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     revealed_at = models.DateTimeField(null=True)
+    finished_at = models.DateTimeField(null=True)
+    assigned_automatically = models.BooleanField(default=False)
     card_event_id = models.CharField(max_length=255, blank=True)
 
     class Meta:
@@ -577,6 +579,55 @@ class SparkAnswer(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["spark", "author"], name="one_answer_per_spark_author")]
+
+
+class CoupleQuestionDay(models.Model):
+    """One shared clock and daily opportunity, bound to the original membership."""
+    couple = models.OneToOneField(CoupleModel, on_delete=models.CASCADE)
+    audience_membership_ids = models.JSONField()
+    time_zone = models.CharField(max_length=64)
+    day = models.DateField(null=True)
+    spark = models.ForeignKey(SparkSession, null=True, on_delete=models.SET_NULL)
+
+
+class CoupleStatus(models.Model):
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE)
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    audience_membership_ids = models.JSONField()
+    text = models.CharField(max_length=40, blank=True)
+    expires_at = models.DateTimeField(null=True)
+    revision = models.PositiveBigIntegerField(default=0)
+    request_id = models.UUIDField(null=True)
+    request_payload = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["couple", "author"], name="one_couple_status_per_author")]
+
+
+class DateIdea(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    couple = models.ForeignKey(CoupleModel, on_delete=models.CASCADE)
+    creator = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    audience_membership_ids = models.JSONField()
+    preset = models.CharField(max_length=16)
+    interested_by = models.JSONField(default=list)
+    state = models.CharField(max_length=16, default="open")
+    revision = models.PositiveBigIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    plan = models.OneToOneField(CouplePlanModel, null=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["couple", "creator"], condition=models.Q(state="open"), name="one_open_idea_per_author")]
+
+
+class DateIdeaOperation(models.Model):
+    idea = models.ForeignKey(DateIdea, on_delete=models.CASCADE, related_name="operations")
+    author = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    request_id = models.UUIDField()
+    payload = models.JSONField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["idea", "author", "request_id"], name="unique_date_idea_operation")]
 
 
 class ChallengeTemplate(models.Model):

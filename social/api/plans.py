@@ -1,7 +1,10 @@
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import datetime, time, timedelta
 from django.core import signing
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, F, DateTimeField
+from django.db.models.functions import Cast, Coalesce
+from django.db.models.fields.json import KeyTextTransform
 from django.http import Http404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -76,8 +79,26 @@ class PlanView(PrivateResponseMixin, viewsets.GenericViewSet):
         except Http404: return Response({'data': {'couple': None, 'members': [], 'next_plan': None, 'invitations': 0}})
         rows = plans.eligible(couple, members).filter(cancelled_at__isnull=True, completed=False)
         nearest = rows.filter(response='yes', starts_at__gt=timezone.now()).order_by('starts_at','id').first()
+        zone = PlanFields().validate_time_zone(request.query_params.get('time_zone', 'UTC'))
+        now = timezone.now()
+        date = now.astimezone(ZoneInfo(zone)).date()
+        start = datetime.combine(date, time.min, tzinfo=ZoneInfo(zone))
+        end = datetime.combine(date + timedelta(days=1), time.min, tzinfo=ZoneInfo(zone))
+        today = rows.filter(response='yes', starts_at__gte=start, starts_at__lt=end)
+        today_plan = today.filter(starts_at__gte=now).order_by('starts_at', 'id').first() or today.order_by('-starts_at', '-id').first()
+        proposed = rows.exclude(response='no').annotate(proposal_start=Coalesce(
+            Cast(KeyTextTransform('starts_at', 'pending_change'), DateTimeField()), F('starts_at'))).filter(proposal_start__gt=now)
+        incoming = proposed.filter((~Q(pending_change={}) & ~Q(pending_change__author=request.user.pk)) |
+            (Q(pending_change={}) & Q(response__in=['pending', 'another_time']) & ~Q(created_by=request.user)))
+        outgoing = proposed.filter((~Q(pending_change={}) & Q(pending_change__author=request.user.pk)) |
+            (Q(pending_change={}) & Q(response__in=['pending', 'another_time']) & Q(created_by=request.user)))
+        featured = today_plan or incoming.order_by('proposal_start','id').first() or nearest or outgoing.order_by('proposal_start','id').first()
         return Response({'data': {'couple': couple.pk, 'members': [{'id': m.user_id, 'name': m.user.full_name or 'Your partner', 'photo': request.build_absolute_uri(m.user.profile_photo.url) if m.user.profile_photo else None} for m in members],
             'next_plan': plans.data(nearest, room=False) if nearest else None,
+            'featured_plan': plans.data(featured, room=False) if featured else None,
+            'requests': rows.exclude(response='no').filter((~Q(pending_change={}) & ~Q(pending_change__author=request.user.pk)) |
+                (Q(pending_change={}) & Q(response__in=['pending', 'another_time']) & ~Q(created_by=request.user))).count(),
+            'completed_count': plans.eligible(couple, members).filter(completed=True, cancelled_at__isnull=True).count(),
             'invitations': rows.exclude(response='no').filter(~Q(pending_change={}) | Q(response__in=['pending','another_time'], starts_at__gt=timezone.now())).count()}})
 
     def list(self, request):
@@ -86,7 +107,7 @@ class PlanView(PrivateResponseMixin, viewsets.GenericViewSet):
         mode = request.query_params.get('mode','upcoming'); now = timezone.now()
         live = Q(cancelled_at__isnull=True, completed=False) & ~Q(response='no')
         if mode == 'upcoming': rows = rows.filter(live, response='yes', starts_at__gt=now)
-        elif mode == 'invitations': rows = rows.filter(live).filter(~Q(pending_change={}) | Q(response__in=['pending','another_time'], starts_at__gt=now))
+        elif mode == 'invitations': rows = rows.filter(live).filter(~Q(pending_change={}) | Q(response__in=['pending','another_time']))
         elif mode == 'past': rows = rows.filter(~live | Q(starts_at__lte=now, pending_change={}))
         else: raise serializers.ValidationError({'mode': 'Choose upcoming, invitations or past.'})
         cursor = request.query_params.get('cursor'); reverse = mode == 'past'
