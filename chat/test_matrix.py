@@ -33,6 +33,7 @@ from chat.services.matrix_provisioning import (
     ensure_matrix_mapping_records,
     mark_matrix_mapping_revoke_pending,
     matrix_room_alias_localpart,
+    matrix_bootstrap_result_is_current,
     provision_matrix_room,
     revoke_matrix_room,
     verify_active_matrix_room,
@@ -208,6 +209,7 @@ class MatrixProvisioningTests(TestCase):
         self.assertEqual(data["room_id"], "!synthetic-room:matrix.test")
         self.assertEqual(data["membership_epoch"], 1)
         self.assertEqual(data["relationship_id"], self.relationship.connection.pk)
+        self.assertEqual(data["couple_id"], self.relationship.couple.pk)
         self.assertEqual(data["self_user_id"], self.first.pk)
         self.assertEqual(data["partner_user_id"], self.second.pk)
         self.assertEqual(data["initiator_user_id"], min(self.first.pk, self.second.pk))
@@ -220,6 +222,39 @@ class MatrixProvisioningTests(TestCase):
         self.assertNotIn(self.second.phone_number, str(data))
         self.assertEqual(MatrixRoomMapping.objects.get(chat_room=self.room).state, "active")
         self.assertTrue(any(call[0] == "session" for call in matrix.calls))
+
+    def test_session_distinguishes_couple_from_connection_and_rechecks_both(self):
+        first, second = make_user(20), make_user(21)
+        connection_row = CoupleConnectionModel.objects.create(
+            pk=self.relationship.connection.pk + 1000,
+            sender_number=first.phone_number,
+            receiver_number=second.phone_number,
+            connection_status="PENDING",
+        )
+        relationship = accept_connection(connection_id=connection_row.pk, actor=second)
+        self.assertNotEqual(relationship.couple.pk, relationship.connection.pk)
+        session = DeviceSession.objects.create(
+            user=first, expires_at=timezone.now() + timedelta(hours=1),
+        )
+        self.client.force_authenticate(first, token={"sid": str(session.pk)})
+        url = f"/api/chat/v2/rooms/{relationship.chat_room.pk}/matrix/session/"
+        with patch("chat.services.matrix_provisioning.get_matrix_service", return_value=FakeMatrixService()):
+            response = self.client.post(url, {}, format="json")
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        validate_contract("matrixSession", response.data)
+        self.assertEqual(data["couple_id"], relationship.couple.pk)
+        self.assertEqual(data["relationship_id"], relationship.connection.pk)
+        self.assertTrue(matrix_bootstrap_result_is_current(relationship.chat_room.pk, first, data))
+        for key, wrong_id in (
+            ("couple_id", self.relationship.couple.pk),
+            ("relationship_id", self.relationship.connection.pk),
+        ):
+            self.assertFalse(matrix_bootstrap_result_is_current(
+                relationship.chat_room.pk, first, {**data, key: wrong_id},
+            ))
+        self.client.force_authenticate(self.first, token={"sid": str(self.session.pk)})
+        self.assertEqual(self.client.post(url, {}, format="json").status_code, 404)
 
     def test_session_requires_current_django_device_session_and_current_membership(self):
         self.client.force_authenticate(self.first)

@@ -1675,6 +1675,8 @@ def matrix_bootstrap_result_is_current(room_id, user: UserModel, data: dict) -> 
         and mapping.matrix_room_id == data.get("room_id")
         and mapping.matrix_room_alias == data.get("room_alias")
         and mapping.membership_epoch == data.get("membership_epoch")
+        and room.couple_id == data.get("couple_id")
+        and room.couple.couple_connection_id == data.get("relationship_id")
     )
 
 
@@ -1722,6 +1724,7 @@ def matrix_bootstrap(room: ChatRoom, user: UserModel, *, django_session_id: str,
         "room_alias": mapping.matrix_room_alias,
         "membership_epoch": mapping.membership_epoch,
         "relationship_id": room.couple.couple_connection_id,
+        "couple_id": room.couple_id,
         "self_user_id": user.pk,
         "self_matrix_user_id": identity.matrix_user_id,
         "partner_user_id": partner_id,

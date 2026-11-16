@@ -35,6 +35,7 @@
     "route_inventory": "routes.json"
   },
   "matrix": {
+    "identity": "relationship_id is the connection ID and remains the Matrix storage identity; couple_id is the distinct CoupleModel ID used by Sparks, Plans, Challenges and Moment references. Deploy the additive couple_id response before the updated client. No migration or key rotation is required.",
     "version": "matrix-e2ee-v1",
     "authorization": "Current accepted couple membership, no either-direction SingleConnection BLOCKED edge, and a current Django device-session sid; former, blocked, and unrelated users receive concealed 404. Both relationship and session are rechecked after remote work immediately before the response.",
     "login": "Short-lived replayable org.matrix.login.jwt credential; client supplies and verifies its stable device_id, requests no refresh token, and validates the returned MXID/device.",

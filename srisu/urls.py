@@ -16,6 +16,7 @@ Including another URLconf
 """
 
 from django.contrib import admin
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import path, include
 from authentication.api.views import *
 from django.conf.urls.static import static
@@ -76,3 +77,7 @@ urlpatterns = [
     path("api/chat/", include('chat.urls')),
     path("api/social/", include('social.urls')),
 ] + static(settings.MEDIA_URL, view=serve_public_media, document_root=settings.MEDIA_ROOT)
+
+# Daphne doesn't serve app static assets automatically. This helper adds the
+# development-only routes when DEBUG=True and leaves production serving external.
+urlpatterns += staticfiles_urlpatterns()

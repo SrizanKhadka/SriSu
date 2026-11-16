@@ -157,6 +157,7 @@
       "room_alias": "#srisu_chat_00000000000000000000000000000001_e1:srisu.test",
       "membership_epoch": 1,
       "relationship_id": 1,
+      "couple_id": 3,
       "self_user_id": 1,
       "self_matrix_user_id": "@srisu_user_1:srisu.test",
       "partner_user_id": 2,

@@ -808,6 +808,10 @@
           "type": "integer",
           "minimum": 1
         },
+        "couple_id": {
+          "type": "integer",
+          "minimum": 1
+        },
         "self_user_id": {
           "type": "integer",
           "minimum": 1
@@ -858,6 +862,7 @@
         "room_alias",
         "membership_epoch",
         "relationship_id",
+        "couple_id",
         "self_user_id",
         "self_matrix_user_id",
         "partner_user_id",

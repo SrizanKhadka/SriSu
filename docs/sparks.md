@@ -32,6 +32,35 @@ answer. It must never pretend to validate plaintext it cannot read.
 
 ## Encryption and mutual reveal
 
+### Couple identity correction (2026-11-16)
+
+Matrix bootstrap now returns `couple_id` separately from `relationship_id`.
+The latter is the connection record ID, not the CoupleModel ID used by Spark
+sessions. Comparing those two independent sequences rejected valid Sparks when
+the IDs differed, before any answer request reached Django. The paired client
+uses `couple_id` plus the existing Django room, Matrix room and membership epoch
+checks for Spark encryption and cards. Plans, Challenges and Moment replies use
+the same corrected couple binding.
+
+Deploy this additive backend response before installing the updated client.
+Older clients ignore the extra field but still need the client update to fix
+their comparison. Updated clients can use ordinary chat with older servers;
+they do not guess a missing couple ID for feature sends. The existing connection
+ID remains the Matrix storage identity, so no key/device reset or database
+migration is needed. Keep the saved answer draft and retry after the app update.
+The paired correction targets `dev-core-architecture` in both repositories.
+Publishing the code does not itself deploy it or update an installed phone app.
+
+Validation: the rebuilt image ran `tools/workspace.py test` in a disposable
+`docker run --rm --network none` container: 359 tests, 30 skips, no failures.
+The initial Windows `.venv` run failed on missing Firebase dependencies and
+platform-specific socket/permission tests. The locked Linux image passed those
+checks. `tools/check_core_contracts.py`, `tools/workspace.py migrations`, live
+Django checks and `matrix_status --require-ready` passed. The local `web` and
+`matrix_reconciler` services now use the rebuilt image. No new migration was
+applied. The paired frontend passed 297 selected Android tests and built its APK;
+see its `docs/flows/sparks.md` for commands and the unverified iOS/device coverage.
+
 The client uses the already pinned Trixnity 5.9.2 room-encryption service and
 vodozemac driver, including normal Olm delivery of Megolm room keys. There is no
 new cipher or server-held decryption key. See the primary
