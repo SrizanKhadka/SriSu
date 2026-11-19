@@ -1,3 +1,6 @@
+import math
+import uuid
+
 from django.db import transaction
 from django.http import Http404
 from django.utils import timezone
@@ -19,11 +22,38 @@ class DraftInput(StrictSerializer):
     couple = serializers.IntegerField(min_value=1)
 
 
+class CropInput(StrictSerializer):
+    x = serializers.FloatField(min_value=0, max_value=1)
+    y = serializers.FloatField(min_value=0, max_value=1)
+    width = serializers.FloatField(min_value=0, max_value=1)
+    height = serializers.FloatField(min_value=0, max_value=1)
+
+    def validate(self, attrs):
+        if (not all(math.isfinite(value) for value in attrs.values()) or
+                attrs['width'] <= 0 or attrs['height'] <= 0 or
+                attrs['x'] + attrs['width'] > 1.000001 or
+                attrs['y'] + attrs['height'] > 1.000001):
+            raise serializers.ValidationError('Choose a crop inside the photo.')
+        return attrs
+
+
 class PublishInput(StrictSerializer):
     expected_revision = serializers.IntegerField(min_value=1)
     caption = serializers.CharField(max_length=1000, allow_blank=True, default="")
     visibility = serializers.ChoiceField(choices=["private", "public"], default="private")
     photo_ids = serializers.ListField(child=serializers.UUIDField(), min_length=1, max_length=5)
+    crops = serializers.DictField(child=CropInput(), default=dict)
+
+    def validate(self, attrs):
+        try:
+            crops = {str(uuid.UUID(key)): value for key, value in attrs['crops'].items()}
+        except (ValueError, TypeError, AttributeError):
+            raise serializers.ValidationError({'crops': 'Use uploaded photo IDs.'})
+        if (len(crops) != len(attrs['crops']) or
+                not set(crops).issubset({str(key) for key in attrs['photo_ids']})):
+            raise serializers.ValidationError({'crops': 'Use uploaded photo IDs.'})
+        attrs['crops'] = crops
+        return attrs
 
 
 class DraftThrottle(UserRateThrottle):

@@ -242,6 +242,114 @@ class PublicationTests(APITestCase):
 
 
 
+    def test_crop_publishes_selected_pixels_and_retry_keeps_same_photo(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        image = Image.new("RGB", (120, 80), "red")
+        image.paste("blue", (60, 0, 120, 80))
+        encoded = BytesIO()
+        image.save(encoded, format="PNG")
+        draft = self.draft()
+        key = str(uuid4())
+        uploaded = self.client.put(f"/api/social/moment-drafts/{draft['id']}/photos/{key}/",
+            {"photo": SimpleUploadedFile("synthetic.png", encoded.getvalue(), content_type="image/png")}, format="multipart")
+        self.assertEqual(uploaded.status_code, 200)
+        draft = uploaded.data["data"]
+        original = MomentDraftPhoto.objects.get(pk=key).image.name
+        crop = {key: {"x": .5, "y": .25, "width": .5, "height": .5}}
+        from tools.check_core_contracts import validate_contract
+        validate_contract("momentPublication", {"expected_revision": draft["revision"], "photo_ids": [key], "crops": crop})
+        with self.captureOnCommitCallbacks(execute=True):
+            moment, payload = self.publish(draft, crops=crop)
+        stored = CoupleMomentPhotoModel.objects.get(moment_id=moment['id'])
+        self.assertEqual((stored.width, stored.height), (60, 40))
+        self.assertNotEqual(stored.image.name, original)
+        self.assertFalse(stored.image.storage.exists(original))
+        with stored.image.open('rb') as source, Image.open(source) as cropped:
+            self.assertEqual(cropped.size, (60, 40))
+            red, green, blue = cropped.getpixel((30, 20))
+            self.assertLess(red, 10)
+            self.assertGreater(blue, 240)
+        with patch('social.services.moment_publication.crop_photo', side_effect=AssertionError('Must replay without recropping')):
+            response = self.client.post(f"/api/social/moment-drafts/{draft['id']}/publish/", payload, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['data']['id'], moment['id'])
+        payload['crops'][key]['x'] = .25
+        self.assertEqual(self.client.post(f"/api/social/moment-drafts/{draft['id']}/publish/", payload, format="json").status_code, 409)
+        self.client.force_authenticate(self.partner)
+        self.assertEqual(self.client.get(moment['photos'][0]['image']).status_code, 200)
+        self.client.force_authenticate(self.sender)
+        self.assertEqual(self.client.get(moment['photos'][0]['image']).status_code, 404)
+
+    def test_invalid_or_foreign_crop_never_publishes(self):
+        draft = self.upload(self.draft())
+        key = draft['photos'][0]['id']
+        base = {'x': 0, 'y': 0, 'width': .5, 'height': .5}
+        bad = [{key: {**base, 'x': -.1}}, {key: {**base, 'width': 0}},
+            {key: {**base, 'x': .8}}, {key: {**base, 'y': 'NaN'}},
+            {key: {**base, 'height': 'Infinity'}},
+            {str(uuid4()): base}, {'bad': base}, {key: {**base, 'extra': True}}]
+        for crops in bad:
+            response = self.client.post(f"/api/social/moment-drafts/{draft['id']}/publish/",
+                {'expected_revision': draft['revision'], 'photo_ids': [key], 'crops': crops}, format='json')
+            self.assertEqual(response.status_code, 400, response.data)
+        self.assertFalse(CoupleMomentModel.objects.exists())
+        self.assertEqual(MomentDraftPhoto.objects.count(), 1)
+        self.client.force_authenticate(self.partner)
+        self.assertEqual(self.client.post(f"/api/social/moment-drafts/{draft['id']}/publish/",
+            {'expected_revision': draft['revision'], 'photo_ids': [key], 'crops': {key: base}}, format='json').status_code, 404)
+
+    def test_subpixel_crop_quantizes_to_a_real_pixel_without_upscaling(self):
+        draft = self.upload(self.draft())
+        key = draft['photos'][0]['id']
+        moment, _ = self.publish(draft, crops={key: {'x': .5, 'y': .5, 'width': .00001, 'height': .00001}})
+        self.assertEqual((moment['photos'][0]['width'], moment['photos'][0]['height']), (1, 1))
+
+    def test_failed_crop_commit_cleans_derivative_and_preserves_source(self):
+        from pathlib import Path
+        from django.conf import settings
+        draft = self.upload(self.draft())
+        key = draft['photos'][0]['id']
+        before = set(Path(settings.MEDIA_ROOT).rglob('*.jpg'))
+        with patch('social.services.moment_publication.CoupleMomentPhotoModel.objects.bulk_create', side_effect=RuntimeError('synthetic')):
+            self.client.raise_request_exception = False
+            response = self.client.post(f"/api/social/moment-drafts/{draft['id']}/publish/",
+                {'expected_revision': draft['revision'], 'photo_ids': [key],
+                 'crops': {key: {'x': 0, 'y': 0, 'width': .5, 'height': .5}}}, format='json')
+            self.assertEqual(response.status_code, 500)
+        self.assertEqual(set(Path(settings.MEDIA_ROOT).rglob('*.jpg')), before)
+        self.assertEqual(MomentDraftPhoto.objects.count(), 1)
+        self.assertFalse(CoupleMomentModel.objects.exists())
+        self.publish(draft)
+
+    def test_revision_change_during_crop_preparation_cleans_output(self):
+        from social.services.moment_publication import crop_photo
+        from pathlib import Path
+        from django.conf import settings
+        draft = self.upload(self.draft())
+        key = draft['photos'][0]['id']
+        before = set(Path(settings.MEDIA_ROOT).rglob('*.jpg'))
+        def prepare(photo, crop):
+            result = crop_photo(photo, crop)
+            MomentDraft.objects.filter(pk=draft['id']).update(revision=draft['revision'] + 1)
+            return result
+        with patch('social.services.moment_publication.crop_photo', side_effect=prepare):
+            response = self.client.post(f"/api/social/moment-drafts/{draft['id']}/publish/",
+                {'expected_revision': draft['revision'], 'photo_ids': [key],
+                 'crops': {key: {'x': 0, 'y': 0, 'width': .5, 'height': .5}}}, format='json')
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(set(Path(settings.MEDIA_ROOT).rglob('*.jpg')), before)
+        self.assertFalse(CoupleMomentModel.objects.exists())
+
+    def test_legacy_publication_hash_is_unchanged_without_crops(self):
+        import hashlib
+        import json
+        from social.services.moment_publication import publication_hash
+        body = {'caption': 'Together', 'visibility': 'private', 'photo_ids': [str(uuid4())]}
+        expected = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+        self.assertEqual(publication_hash(body), expected)
+        self.assertEqual(publication_hash({**body, 'crops': {}}), expected)
+
+
 @skipUnless(connection.vendor == "postgresql", "Requires isolated PostgreSQL row locks")
 class PublicationConcurrencyTests(APITransactionTestCase):
     setUp = MomentAPITests.setUp
@@ -283,3 +391,52 @@ class PublicationConcurrencyTests(APITransactionTestCase):
             ids = list(pool.map(send, range(2)))
         self.assertEqual(ids[0], ids[1])
         self.assertEqual(CoupleMomentModel.objects.count(), 1)
+
+    def test_concurrent_cropped_publication_commits_once_without_orphan_files(self):
+        from pathlib import Path
+        from django.conf import settings
+        from social.services.moment_publication import create_draft, crop_photo
+        from authentication.models import UserModel
+        draft, _ = create_draft(self.creator, uuid4(), self.couple.pk)
+        key = uuid4()
+        upload_photo(self.creator, draft.id, key, self.photo())
+        draft.refresh_from_db()
+        data = {'expected_revision': draft.revision, 'caption': 'Together', 'visibility': 'private',
+            'photo_ids': [key], 'crops': {str(key): {'x': .25, 'y': .25, 'width': .5, 'height': .5}}}
+        barrier = Barrier(2)
+        def prepare(photo, crop):
+            self.assertFalse(connection.in_atomic_block)
+            output = crop_photo(photo, crop)
+            barrier.wait(timeout=10)
+            return output
+        def send(_):
+            close_old_connections()
+            try:
+                return publish(UserModel.objects.get(pk=self.creator.pk), draft.id, data)[0].pk
+            finally:
+                close_old_connections()
+        with patch('social.services.moment_publication.crop_photo', side_effect=prepare):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                ids = list(pool.map(send, range(2)))
+        self.assertEqual(ids[0], ids[1])
+        self.assertEqual(CoupleMomentModel.objects.count(), 1)
+        stored = CoupleMomentPhotoModel.objects.get(moment_id=ids[0])
+        self.assertEqual((stored.width, stored.height), (4, 4))
+        self.assertEqual(set(Path(settings.MEDIA_ROOT).rglob('*.jpg')), {Path(stored.image.path)})
+
+    def test_post_commit_cleanup_failure_never_deletes_published_crop(self):
+        from social.services.moment_publication import create_draft
+        draft, _ = create_draft(self.creator, uuid4(), self.couple.pk)
+        key = uuid4()
+        upload_photo(self.creator, draft.id, key, self.photo())
+        draft.refresh_from_db()
+        data = {'expected_revision': draft.revision, 'caption': 'Together', 'visibility': 'private',
+            'photo_ids': [key], 'crops': {str(key): {'x': .25, 'y': .25, 'width': .5, 'height': .5}}}
+        with patch('social.services.moment_service.delete_file', side_effect=RuntimeError('synthetic cleanup failure')):
+            with self.assertRaises(RuntimeError):
+                publish(self.creator, draft.id, data)
+        stored = CoupleMomentPhotoModel.objects.get()
+        self.assertTrue(stored.image.storage.exists(stored.image.name))
+        moment, created = publish(self.creator, draft.id, data)
+        self.assertFalse(created)
+        self.assertEqual(moment.pk, stored.moment_id)
