@@ -12,7 +12,7 @@ from io import BytesIO
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from django.core.files.base import ContentFile
-from django.db import transaction, IntegrityError
+from django.db import transaction, IntegrityError, DatabaseError
 from django.http import Http404
 from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
@@ -91,7 +91,9 @@ def draft_for(user, draft_id, *, lock=False, editable=False):
     if not initial:
         raise Http404
     _, members = current_couple(user, initial.couple_id, lock=lock)
-    draft = MomentDraft.objects.select_for_update().get(pk=draft_id) if lock else initial
+    draft = MomentDraft.objects.select_for_update().filter(pk=draft_id).first() if lock else initial
+    if draft is None:
+        raise Http404
     if (draft.audience_membership_ids != [m.pk for m in members] or
             draft.audience_user_ids != [m.user_id for m in members]):
         raise Http404
@@ -161,37 +163,130 @@ def upload_photo(user, draft_id, photo_id, upload):
 
 
 def publication_hash(data):
-    return hashlib.sha256(json.dumps({"caption": data["caption"], "visibility": data["visibility"],
-        "photo_ids": [str(p) for p in data["photo_ids"]]}, sort_keys=True).encode()).hexdigest()
+    payload = {"caption": data["caption"], "visibility": data["visibility"],
+        "photo_ids": [str(p) for p in data["photo_ids"]]}
+    # Keep hashes for every released no-crop client and already published draft unchanged.
+    if data.get("crops"):
+        payload["crops"] = data["crops"]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
-@transaction.atomic
-def publish(user, draft_id, data):
-    draft = draft_for(user, draft_id, lock=True)
-    fingerprint = publication_hash(data)
+def replay(user, draft, fingerprint):
     if draft.published_at:
         if fingerprint != draft.publication_hash:
             raise MomentConflict()
         moment = eligible_moments(user).filter(pk=draft.moment_id).first()
         if moment is None:
             raise MomentExpired()
-        return moment, False
+        return moment
+
+
+def publication_photos(draft, data):
     if data["expected_revision"] != draft.revision:
         raise MomentConflict()
     photos = {p.id: p for p in draft.photos.all()}
     order = data["photo_ids"]
     if not 1 <= len(order) <= 5 or len(set(order)) != len(order) or set(order) != set(photos):
         raise ValidationError({"photo_ids": "Choose the one to five photos uploaded to this draft."})
+    if not set(data.get("crops", {})).issubset({str(pk) for pk in photos}):
+        raise ValidationError({"crops": "Choose photos uploaded to this draft."})
+    return photos
+
+
+def crop_photo(photo, crop):
+    """Crop normalized, orientation-corrected staging pixels; never enlarge them."""
+    with photo.image.storage.open(photo.image.name, "rb") as source, Image.open(source) as image:
+        # Match the preview's positive rounding and one-pixel minimum for tiny inputs.
+        left = min(image.width - 1, int(crop["x"] * image.width + .5))
+        top = min(image.height - 1, int(crop["y"] * image.height + .5))
+        right = max(left + 1, min(image.width, int((crop["x"] + crop["width"]) * image.width + .5)))
+        bottom = max(top + 1, min(image.height, int((crop["y"] + crop["height"]) * image.height + .5)))
+        with image.crop((left, top, right, bottom)) as cropped:
+            output = BytesIO()
+            cropped.save(output, format="JPEG", quality=95, subsampling=0)
+            result = ContentFile(output.getvalue(), name="moment.jpg")
+            result.moment_dimensions = cropped.size
+            return result
+
+
+def publish(user, draft_id, data):
+    fingerprint = publication_hash(data)
+    if not data.get("crops"):
+        # Preserve the original single-transaction path for all full-photo/legacy clients.
+        with transaction.atomic():
+            draft = draft_for(user, draft_id, lock=True)
+            existing = replay(user, draft, fingerprint)
+            if existing:
+                return existing, False
+            photos = publication_photos(draft, data)
+            return commit_publication(user, draft, data, fingerprint, photos, {}), True
+    draft = draft_for(user, draft_id)
+    existing = replay(user, draft, fingerprint)
+    if existing:
+        return existing, False
+    try:
+        photos = publication_photos(draft, data)
+    except ValidationError:
+        # An identical publication can remove staging between the two preflight reads.
+        existing = replay(user, draft_for(user, draft_id), fingerprint)
+        if existing:
+            return existing, False
+        raise
+    storage = MomentDraftPhoto._meta.get_field("image").storage
+    prepared, saved_names = {}, set()
+    retained = False
+    try:
+        # Decode/storage outside locks. The commit rechecks membership, revision and IDs.
+        for key, crop in data.get("crops", {}).items():
+            pk = uuid.UUID(key)
+            clean = crop_photo(photos[pk], crop)
+            name = f"couples/moments/{uuid.uuid4().hex}.jpg"
+            saved_names.add(name)  # Also compensate storage that writes then raises.
+            saved = storage.save(name, clean)
+            saved_names.add(saved)
+            prepared[pk] = (saved, *clean.moment_dimensions)
+        with transaction.atomic():
+            draft = draft_for(user, draft_id, lock=True)
+            existing = replay(user, draft, fingerprint)
+            if existing:
+                return existing, False
+            photos = publication_photos(draft, data)
+            moment = commit_publication(user, draft, data, fingerprint, photos, prepared)
+        retained = True
+        return moment, True
+    except OSError:
+        # Another identical request may have committed and removed the staging source.
+        existing = replay(user, draft_for(user, draft_id), fingerprint)
+        if existing:
+            return existing, False
+        raise ValidationError({"photos": "The photo could not be prepared. Your draft is kept; try again."})
+    finally:
+        kept_names = {photo[0] for photo in prepared.values()} if retained else set()
+        for name in saved_names - kept_names:
+            # An on_commit cleanup callback can fail after publication committed. Never
+            # compensate a file now owned by the published Moment. On DB uncertainty,
+            # leave the file for the existing orphan sweeper instead of risking data loss.
+            try:
+                if CoupleMomentPhotoModel.objects.filter(image=name).exists():
+                    continue
+            except DatabaseError:
+                continue
+            compensate_upload(name)
+
+
+def commit_publication(user, draft, data, fingerprint, photos, prepared):
     moment = CoupleMomentModel.objects.create(couple_id=draft.couple_id, created_by=user,
         audience_membership_ids=draft.audience_membership_ids, audience_user_ids=draft.audience_user_ids,
         caption=data["caption"], visibility=data["visibility"], moment_date=timezone.localdate())
-    CoupleMomentPhotoModel.objects.bulk_create([CoupleMomentPhotoModel(moment=moment,
-        image=photos[pk].image.name, order=i, width=photos[pk].width, height=photos[pk].height)
-        for i, pk in enumerate(order)])
+    rows = []
+    for i, pk in enumerate(data["photo_ids"]):
+        name, width, height = prepared.get(pk, (photos[pk].image.name, photos[pk].width, photos[pk].height))
+        rows.append(CoupleMomentPhotoModel(moment=moment, image=name, order=i, width=width, height=height))
+    CoupleMomentPhotoModel.objects.bulk_create(rows)
     draft.published_at = moment.created_at
     draft.moment = moment
     draft.publication_hash = fingerprint
     draft.save(update_fields=["published_at", "moment", "publication_hash"])
     # Existing published photo rows now own the files. The deletion guard sees them.
     draft.photos.all().delete()
-    return moment, True
+    return moment

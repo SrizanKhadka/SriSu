@@ -286,3 +286,44 @@ Contracts live in `contracts/core-1/{schema,fixtures,manifest,routes}.json`; the
 copy is pinned by `tools/core_contracts.py`. Tests use synthetic accounts and
 isolated SQLite/PostgreSQL/media. See frontend `docs/flows/moments.md` for the
 cross-repository validation and screenshot index.
+
+## Optional photo framing at publication — 19 November 2026
+
+`POST /api/social/moment-drafts/{uuid}/publish/` additionally accepts `crops`,
+a map from submitted staged-photo UUID to `{x, y, width, height}`. Coordinates
+are finite normalized values in the orientation-corrected staging image, bounded
+inside that image with positive dimensions. Missing entries share the full photo.
+Unknown/foreign IDs and invalid rectangles return 400; staging ownership and
+current couple membership are still checked before reading images.
+
+Crops are included in the publication fingerprint. A successful retry returns
+the same Moment without recropping; changing the crop on a published UUID is a
+409 conflict. Legacy fingerprints with no crop map are unchanged. Pillow creates
+JPEG derivatives at quality 95 with no chroma subsampling, no upscaling and no new
+metadata, outside database locks. Positive pixel rounding matches the client
+preview, with a one-pixel minimum for tiny sources. Final publication rechecks
+revision, ownership and photo IDs under existing couple/draft locks and assigns
+the resulting files/dimensions to ordered Moment photos. Staged originals use
+existing guarded cleanup; failed/duplicate derivatives are compensated. A cleanup
+callback failing after commit cannot delete a now-published derivative. On an
+ambiguous database outage, the existing orphan sweep handles leftover files.
+
+This supports the frontend's Full/Fill/Crop, pan/zoom and per-photo secure draft
+metadata. Crops are only editable before publication. New requests use the same
+API, privacy rules, retention and response shape; no schema migration is needed.
+Deploy this server support before the crop-enabled client. An older strict server
+will reject `crops` rather than silently publish an uncropped image.
+
+PR bases: backend `codex/moment-upload-crop` / `1594c3b`; frontend
+`codex/moment-upload-polish` / `bcb1163`. See frontend `docs/flows/moments.md` for
+UI evidence and verification limitations. Both PRs target `dev-core-architecture`
+per the user's explicit branch decision. Deploy backend support before the client.
+
+Verified locally with the disposable PostgreSQL runner on the integration base: 367 passing tests,
+including concurrent cropped publication, rollback/storage compensation,
+post-commit cleanup failure, exact synthetic crop pixels and partner-only reads.
+Core-1 schema/fixtures validate. This is server integration coverage with synthetic
+accounts. The paired KMP HTTP test also verifies cropped pixels/dimensions,
+photo ordering, duplicate replay, changed-intent conflict, partner receipts and
+unrelated-user denial against a disposable loopback server. No deployed service
+or real couple account is used; migration and core-1 cross-repository checks pass.
