@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
-from social.models import CoupleMomentModel, CoupleMomentPhotoModel, MomentFileDeletion
+from social.models import CoupleModel, CoupleMomentModel, CoupleMomentPhotoModel, MomentFileDeletion, MomentDraft, MomentDraftPhoto
 from social.services.moment_service import delete_file
 
 
@@ -15,6 +15,17 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         cutoff = timezone.now() - timedelta(days=30)
+        # Unpublished staging expires after seven days. Published replay tombstones
+        # retain only IDs, audience and a one-way publication hash for retry safety.
+        # They contain no media/caption and are removed with the account/couple.
+        while True:
+            with transaction.atomic():
+                draft_ids = list(MomentDraft.objects.select_for_update().filter(
+                    published_at__isnull=True, created_at__lte=timezone.now() - timedelta(days=7))
+                    .values_list("pk", flat=True)[:100])
+                if not draft_ids:
+                    break
+                MomentDraft.objects.filter(pk__in=draft_ids).delete()
         # Bounded transactions avoid locking the entire retained history.
         count = 0
         while True:
@@ -38,11 +49,12 @@ class Command(BaseCommand):
                     return
                 for filename in files:
                     name = f"{prefix}/{filename}"
-                    if storage.get_modified_time(name) < grace and not CoupleMomentPhotoModel.objects.filter(image=name).exists():
+                    if storage.get_modified_time(name) < grace and not CoupleMomentPhotoModel.objects.filter(image=name).exists() and not MomentDraftPhoto.objects.filter(image=name).exists() and not CoupleModel.objects.filter(cover_photo=name).exists():
                         from social.services.moment_service import queue_file_deletion
                         queue_file_deletion(name)
                 for directory in directories:
                     sweep(f"{prefix}/{directory}")
 
             sweep("couples/moments")
+            sweep("couples/profile_private")
         self.stdout.write(f"Purged {count} moments; {MomentFileDeletion.objects.count()} file deletions pending.")

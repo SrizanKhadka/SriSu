@@ -1,0 +1,270 @@
+[
+  {
+    "id": "gestures",
+    "name": "Little gestures",
+    "subtitle": "Small things, thoughtfully done",
+    "activities": [
+      {
+        "id": "gestures-1-v1",
+        "collection": "gestures",
+        "title": "Make their day a little easier",
+        "description": "Choose one small kindness that would help your partner today.",
+        "minutes": 10,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Ask what would make today easier.",
+          "Choose something you can comfortably do.",
+          "Let them know when it is done."
+        ],
+        "alternative": "A thoughtful message or a little listening counts too."
+      },
+      {
+        "id": "gestures-2-v1",
+        "collection": "gestures",
+        "title": "A song, just for you",
+        "description": "Find a song that makes you think of your partner.",
+        "minutes": 10,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Each choose a song.",
+          "Share it in your chat or listen together.",
+          "Tell each other why you picked it."
+        ],
+        "alternative": "You can share lyrics in your own words or describe a sound you love."
+      },
+      {
+        "id": "gestures-3-v1",
+        "collection": "gestures",
+        "title": "Notice the little things",
+        "description": "Make appreciation specific, and give it a little time.",
+        "minutes": 10,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Notice something your partner did recently.",
+          "Tell them what it meant to you.",
+          "Take turns listening without rushing."
+        ],
+        "alternative": "Speak, type, or record a voice message in your private chat."
+      },
+      {
+        "id": "gestures-4-v1",
+        "collection": "gestures",
+        "title": "A small welcome",
+        "description": "Make your next hello a little more thoughtful.",
+        "minutes": 15,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Think about what helps your partner feel welcome.",
+          "Prepare a small gesture or message.",
+          "Give each other a moment to enjoy it."
+        ],
+        "alternative": "A warm text works just as well as an in-person gesture."
+      }
+    ]
+  },
+  {
+    "id": "time",
+    "name": "Quality time",
+    "subtitle": "Make a little room for each other",
+    "activities": [
+      {
+        "id": "time-1-v1",
+        "collection": "time",
+        "title": "Fifteen minutes for us",
+        "description": "Give each other a little undivided attention.",
+        "minutes": 15,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Choose a comfortable moment together.",
+          "Put other distractions aside.",
+          "Spend fifteen minutes talking, listening, or simply being together."
+        ],
+        "alternative": "Use a call, text exchange, or a shorter session if that suits you."
+      },
+      {
+        "id": "time-2-v1",
+        "collection": "time",
+        "title": "Take the slow way",
+        "description": "Share a gentle walk and notice your surroundings.",
+        "minutes": 20,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Choose somewhere comfortable and accessible.",
+          "Walk together or call from your own places.",
+          "Each point out something you might usually miss."
+        ],
+        "alternative": "Stay seated by a window and share what you notice instead."
+      },
+      {
+        "id": "time-3-v1",
+        "collection": "time",
+        "title": "A quiet cup together",
+        "description": "Turn a familiar drink into a little shared pause.",
+        "minutes": 15,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Make a drink you already have.",
+          "Sit together or connect on a call.",
+          "Enjoy it without trying to solve anything."
+        ],
+        "alternative": "Water and a brief text exchange are equally welcome."
+      },
+      {
+        "id": "time-4-v1",
+        "collection": "time",
+        "title": "Revisit a good day",
+        "description": "Spend a little time with a memory you both enjoy.",
+        "minutes": 15,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Choose a shared day or experience.",
+          "Each recall one detail.",
+          "Listen for something you had forgotten."
+        ],
+        "alternative": "No photos are needed; a spoken or typed memory is enough."
+      }
+    ]
+  },
+  {
+    "id": "play",
+    "name": "Play together",
+    "subtitle": "Leave space for laughter",
+    "activities": [
+      {
+        "id": "play-1-v1",
+        "collection": "play",
+        "title": "Two-minute portraits",
+        "description": "Draw each other with curiosity and a little humour.",
+        "minutes": 10,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Find paper or a drawing app.",
+          "Take two minutes to draw each other.",
+          "Share your pictures privately and name your favourite detail."
+        ],
+        "alternative": "Describe an imaginary portrait aloud if drawing is not comfortable."
+      },
+      {
+        "id": "play-2-v1",
+        "collection": "play",
+        "title": "Our tiny treasure hunt",
+        "description": "Find ordinary objects that tell a little story.",
+        "minutes": 15,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Each find something soft, something colourful, and something meaningful.",
+          "Take turns showing or describing your finds.",
+          "Tell the story behind the meaningful one."
+        ],
+        "alternative": "Choose things within reach or imagine your three objects."
+      },
+      {
+        "id": "play-3-v1",
+        "collection": "play",
+        "title": "Build a silly story",
+        "description": "Create a story neither of you could have written alone.",
+        "minutes": 10,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "One of you starts with a sentence.",
+          "Take turns adding one sentence each.",
+          "Give your story a title together."
+        ],
+        "alternative": "Type or speak; there is no timer and no wrong answer."
+      },
+      {
+        "id": "play-4-v1",
+        "collection": "play",
+        "title": "A living-room dance",
+        "description": "Find a little movement that feels like you.",
+        "minutes": 10,
+        "mode": "together",
+        "cost": "free",
+        "steps": [
+          "Choose a song you both enjoy.",
+          "Make room to move comfortably.",
+          "Dance, sway, or tap along together."
+        ],
+        "alternative": "Seated movement or simply listening together counts."
+      }
+    ]
+  },
+  {
+    "id": "new",
+    "name": "Try something new",
+    "subtitle": "A first, shared with you",
+    "activities": [
+      {
+        "id": "new-1-v1",
+        "collection": "new",
+        "title": "Cook something new together",
+        "description": "Try a simple dish neither of you has made before.",
+        "minutes": 45,
+        "mode": "together",
+        "cost": "low",
+        "steps": [
+          "Choose an easy recipe that suits both of you.",
+          "Share the preparation in a way that feels fair.",
+          "Sit down and enjoy what you made."
+        ],
+        "alternative": "Assemble a simple snack if cooking or equipment is not accessible."
+      },
+      {
+        "id": "new-2-v1",
+        "collection": "new",
+        "title": "Learn one little thing",
+        "description": "Follow your curiosity together for a few minutes.",
+        "minutes": 20,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Choose a small skill or topic you both like.",
+          "Find a short free guide or demonstration.",
+          "Try it together and share what surprised you."
+        ],
+        "alternative": "Choose something that fits your energy, access, and available materials."
+      },
+      {
+        "id": "new-3-v1",
+        "collection": "new",
+        "title": "Explore a nearby corner",
+        "description": "Look at a familiar place with fresh eyes.",
+        "minutes": 30,
+        "mode": "together",
+        "cost": "free",
+        "steps": [
+          "Choose a nearby, accessible place.",
+          "Notice one detail that is new to each of you.",
+          "Share what you liked about your little discovery."
+        ],
+        "alternative": "Explore a place virtually or share a view from home."
+      },
+      {
+        "id": "new-4-v1",
+        "collection": "new",
+        "title": "Taste something differently",
+        "description": "Try a small new combination using what you have.",
+        "minutes": 15,
+        "mode": "either",
+        "cost": "free",
+        "steps": [
+          "Pick familiar ingredients that suit your dietary needs.",
+          "Try a new, simple combination.",
+          "Compare what you each enjoyed."
+        ],
+        "alternative": "Describe a combination you would like to try; buying anything is optional."
+      }
+    ]
+  }
+]

@@ -28,7 +28,8 @@ class MomentImageField(serializers.ImageField):
         image = super().to_internal_value(data)
         if image.image.format not in {"JPEG", "PNG", "WEBP"}:
             raise serializers.ValidationError("Only JPEG, PNG and WebP images are supported.")
-        return image
+        from social.services.moment_publication import clean_photo
+        return clean_photo(image)
 
 
 class CoupleMomentPhotoSerializer(serializers.ModelSerializer):
@@ -36,7 +37,7 @@ class CoupleMomentPhotoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CoupleMomentPhotoModel
-        fields = ["id", "image", "order", "uploaded_at"]
+        fields = ["id", "image", "order", "uploaded_at", "width", "height"]
 
     def get_image(self, obj):
         path = reverse("couple_moments-photo", args=[obj.moment_id, obj.id])
@@ -58,14 +59,52 @@ class CoupleMomentSerializer(serializers.ModelSerializer):
     can_edit = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
     total_view_count = serializers.SerializerMethodField()
+    creator = serializers.SerializerMethodField()
+    has_opened = serializers.SerializerMethodField()
+    can_reply = serializers.SerializerMethodField()
+    partner_seen_at = serializers.SerializerMethodField()
+    reacted = serializers.SerializerMethodField()
+    partner_reacted = serializers.SerializerMethodField()
+    published_at = serializers.DateTimeField(source="created_at", read_only=True)
+    server_time = serializers.SerializerMethodField()
 
     class Meta:
         model = CoupleMomentModel
         fields = ["id", "couple", "created_by", "title", "caption", "moment_date", "mood",
                   "location_name", "visibility", "tags", "partner_memory", "photos",
                   "created_at", "updated_at", "expires_at", "can_edit", "can_delete",
-                  "replace_photos", "deleted_photo_ids", "total_view_count"]
-        read_only_fields = ["id", "created_by", "created_at", "updated_at", "expires_at"]
+                  "replace_photos", "deleted_photo_ids", "total_view_count", "revision",
+                  "creator", "has_opened", "can_reply", "partner_seen_at", "reacted",
+                  "partner_reacted", "published_at", "server_time"]
+        read_only_fields = ["id", "created_by", "created_at", "updated_at", "expires_at", "revision"]
+
+    def get_server_time(self, obj):
+        return timezone.now().isoformat()
+
+    def get_creator(self, obj):
+        return {"id": obj.created_by_id, "name": obj.created_by.full_name or obj.created_by.username or "",
+            "photo_url": self.context["request"].build_absolute_uri(
+                f"/api/social/couple-moments/{obj.pk}/creator-photo/") if obj.created_by.profile_photo else None}
+
+    def get_has_opened(self, obj):
+        return any(v.viewer_id == self.context["request"].user.pk for v in obj.views.all())
+
+    def get_can_reply(self, obj):
+        user = self.context["request"].user.pk
+        return user in obj.audience_user_ids and user != obj.created_by_id
+
+    def get_partner_seen_at(self, obj):
+        if self.context["request"].user.pk != obj.created_by_id:
+            return None
+        return next((v.created_at.isoformat() for v in obj.views.all()
+            if v.viewer_id in obj.audience_user_ids and v.viewer_id != obj.created_by_id), None)
+
+    def get_reacted(self, obj):
+        return any(r.user_id == self.context["request"].user.pk for r in obj.reactions.all())
+
+    def get_partner_reacted(self, obj):
+        return self.context["request"].user.pk == obj.created_by_id and any(
+            r.user_id in obj.audience_user_ids and r.user_id != obj.created_by_id for r in obj.reactions.all())
 
     def validate(self, attrs):
         if self.instance and "couple" in attrs and attrs["couple"] != self.instance.couple_id:
@@ -117,7 +156,13 @@ class MomentNoteReplySerializer(serializers.ModelSerializer):
 
 class MomentNoteSerializer(serializers.ModelSerializer):
     message = serializers.CharField(max_length=1000, allow_blank=False, trim_whitespace=True)
-    replies = MomentNoteReplySerializer(many=True, read_only=True)
+    replies = serializers.SerializerMethodField()
+
+    def get_replies(self, obj):
+        rows = getattr(obj, "recent_replies", None)
+        if rows is None:
+            rows = obj.replies.order_by("-created_at", "-id")[:50]
+        return MomentNoteReplySerializer(rows, many=True).data
 
     class Meta:
         model = CoupleMomentNoteModel
