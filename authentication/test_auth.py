@@ -20,6 +20,85 @@ from authentication.sessions import create_session, rotate_refresh
 PHONE = "+15005550101"
 
 
+class InterestRepairTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        from authentication.models import InterestCategory, InterestModel
+        cache.clear()
+        self.owner = UserModel.objects.create_user(PHONE, is_phone_verified=True, full_name="Alex", username="alex")
+        self.other = UserModel.objects.create_user("+15005550102", is_phone_verified=True)
+        category = InterestCategory.objects.create(name="FOOD_AND_DRINK", label="  Food & drink  ")
+        self.coffee = InterestModel.objects.create(name=" Coffee  tasting ", category=category)
+        self.client = APIClient()
+        self.client.force_authenticate(self.owner)
+        self.client.credentials(HTTP_X_SRISU_AUTH="auth-1", HTTP_X_SRISU_CONTRACT="core-1")
+
+    def save(self, entries, **extra):
+        return self.client.patch("/api/auth/setup-profile/", {"user_interests": entries, **extra}, format="json")
+
+    def test_catalogue_readable_labels_order_and_original_identifiers(self):
+        from authentication.models import InterestModel
+        from authentication.interests import catalogue_rows
+        missing = InterestModel.objects.create(name="  Astronomy  ")
+        alias = InterestModel.objects.create(name="coffee tasting", category=self.coffee.category)
+        InterestModel.objects.create(name="  ")
+        rows = catalogue_rows()
+        self.assertEqual([row["id"] for row in rows], [self.coffee.pk, alias.pk, missing.pk])
+        self.assertEqual(rows[0]["name"], "Coffee tasting")
+        self.assertEqual(rows[0]["category"]["label"], "Food & drink")
+        self.coffee.refresh_from_db()
+        self.assertEqual(self.coffee.name, " Coffee  tasting ")
+
+    def test_save_uses_stable_id_and_canonical_name_and_replays_without_duplicates(self):
+        from authentication.models import UserInterestModel
+        entry = {"interest": self.coffee.pk, "name": "untrusted old label", "removed": False}
+        for _ in range(2): self.assertEqual(self.save([entry]).status_code, 200)
+        saved = UserInterestModel.objects.get(user=self.owner)
+        self.assertEqual(saved.name, "Coffee tasting")
+        self.coffee.name = "Coffee tasting together"
+        self.coffee.save()
+        self.assertEqual(self.save([entry]).status_code, 200)
+        saved.refresh_from_db()
+        self.assertEqual(saved.name, "Coffee tasting together")
+        self.assertEqual(self.save([{**entry, "removed": True}]).status_code, 200)
+        saved.refresh_from_db(); self.assertTrue(saved.removed)
+        self.assertEqual(self.save([entry]).status_code, 200)
+        saved.refresh_from_db(); self.assertFalse(saved.removed)
+
+    def test_invalid_and_foreign_selections_fail_before_any_mutation(self):
+        from authentication.models import UserInterestModel
+        foreign = UserInterestModel.objects.create(user=self.other, interest=self.coffee, name="Coffee")
+        for bad in ([{"interest": 999999}], [{"id": foreign.pk, "removed": True}], [{"interest": "wrong"}], "wrong", [{}], [{"interest": self.coffee.pk}] * 257):
+            response = self.save(bad, full_name="Should not save")
+            self.assertEqual(response.status_code, 400, response.data)
+            self.assertIn("user_interests", str(response.data))
+            self.owner.refresh_from_db(); self.assertEqual(self.owner.full_name, "Alex")
+        foreign.refresh_from_db(); self.assertFalse(foreign.removed)
+        self.assertFalse(UserInterestModel.objects.filter(user=self.owner).exists())
+
+    def test_existing_duplicates_and_name_only_legacy_selections_are_preserved_safely(self):
+        from authentication.models import UserInterestModel
+        first = UserInterestModel.objects.create(user=self.owner, interest=self.coffee, name="Coffee")
+        second = UserInterestModel.objects.create(user=self.owner, interest=self.coffee, name="Coffee old")
+        custom = UserInterestModel.objects.create(user=self.owner, name="Stargazing")
+        self.assertEqual(self.save([{"interest": self.coffee.pk}]).status_code, 200)
+        self.assertEqual(UserInterestModel.objects.filter(user=self.owner, interest=self.coffee, removed=False).count(), 1)
+        self.assertEqual(UserInterestModel.objects.filter(pk__in=[first.pk, second.pk]).count(), 2)
+        custom.refresh_from_db(); self.assertFalse(custom.removed)
+        self.assertEqual(self.save([{"id": custom.pk, "removed": True}]).status_code, 200)
+        custom.refresh_from_db(); self.assertTrue(custom.removed)
+
+    def test_prepared_photo_completes_onboarding_and_survives_next_read(self):
+        image = BytesIO(); Image.new("RGB", (1600, 900), "#8d76a4").save(image, format="JPEG")
+        result = self.client.patch("/api/auth/setup-profile/", {"profile_photo": SimpleUploadedFile("profile.jpg", image.getvalue(), content_type="image/jpeg")}, format="multipart")
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(result.data["data"]["progress"]["next_step"], "complete")
+        self.owner.refresh_from_db()  # force_authenticate reuses this instance across requests.
+        saved = self.client.get("/api/auth/setup-profile/").data["data"]
+        self.assertEqual(saved["user"]["profile_photo"], result.data["data"]["user"]["profile_photo"])
+        self.assertFalse(saved["progress"]["photo_skipped"])
+
+
 class MockSmsDeliveryTests(TestCase):
     def setUp(self):
         self.client = APIClient()

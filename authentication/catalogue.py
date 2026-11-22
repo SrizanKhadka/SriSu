@@ -11,12 +11,10 @@ def catalogue_cache():
 
 
 def interest_catalogue():
-    from authentication.api.serializers import InterestSerializer
+    from authentication.interests import catalogue_rows
     return catalogue_cache().read(
         scope="public-catalogue", resource="all",
-        loader=lambda: list(InterestSerializer(
-            InterestModel.objects.select_related("category").order_by("name", "id"), many=True,
-        ).data),
+        loader=catalogue_rows,
     )
 
 

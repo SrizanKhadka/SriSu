@@ -178,29 +178,8 @@ class SetUpProfileAPIView(APIView):
 
     @staticmethod
     def manage_user_interests(user, user_interests_data):
-        for interest_data in user_interests_data:
-            name = interest_data.get("name")
-            interest_id = interest_data.get("interest")
-            removed = interest_data.get("removed", False)
-
-            if not name:
-                continue
-
-            interest_qs = UserInterestModel.objects.filter(user=user, name=name)
-
-            if not interest_qs.exists():
-                UserInterestModel.objects.create(
-                    user=user,
-                    name=name,
-                    interest_id=interest_id,
-                    removed=removed,
-                )
-                continue
-
-            if removed:
-                interest_qs.update(removed=True)
-            elif interest_qs.filter(removed=True).exists():
-                interest_qs.update(removed=False, interest_id=interest_id)
+        from authentication.interests import update_user_interests
+        update_user_interests(user, user_interests_data)
 
 
 class InterestsAPIView(APIView):
