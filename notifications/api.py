@@ -14,6 +14,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.exceptions import ParseError
 from .models import Delivery, Installation, Preferences
 from .services import BindingConflict, destination, register
+from .catalogue import CAPABILITY, CATEGORY_DEFAULTS, categories
 
 
 class BoundedJSONParser(JSONParser):
@@ -40,8 +41,13 @@ class Registration(StrictSerializer):
     target_kind = serializers.ChoiceField(choices=["fid", "token"])
     target = serializers.CharField(min_length=16, max_length=4096, trim_whitespace=False)
     permitted = serializers.BooleanField()
-    capabilities = serializers.ListField(child=serializers.ChoiceField(choices=["matrix-chat-push-1"]),
-        max_length=1, required=False, default=list)
+    capabilities = serializers.ListField(child=serializers.ChoiceField(choices=["matrix-chat-push-1", CAPABILITY]),
+        max_length=2, required=False, default=list)
+
+    def validate_capabilities(self, value):
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError("Capabilities must be unique.")
+        return value
 
 
 class PreferenceInput(StrictSerializer):
@@ -50,6 +56,24 @@ class PreferenceInput(StrictSerializer):
     chat = serializers.BooleanField()
     activity = serializers.BooleanField()
     mute = serializers.ChoiceField(choices=["unchanged", "off", "1h", "8h", "forever"])
+    categories = serializers.DictField(child=serializers.BooleanField(), required=False)
+
+    def validate_categories(self, value):
+        if set(value) - set(CATEGORY_DEFAULTS):
+            raise serializers.ValidationError("Choose a supported notification category.")
+        return value
+
+
+class CardInput(StrictSerializer):
+    kind = serializers.ChoiceField(choices=["plan", "challenge", "spark"])
+    resource = serializers.CharField(max_length=36)
+
+    def validate(self, data):
+        if data["kind"] == "plan":
+            data["resource"] = str(serializers.IntegerField(min_value=1, max_value=10**18-1).run_validation(data["resource"]))
+        else:
+            data["resource"] = str(serializers.UUIDField().run_validation(data["resource"]))
+        return data
 
 
 class Rate(UserRateThrottle):
@@ -96,7 +120,8 @@ class InstallationView(NotificationView):
 def preferences_data(pref):
     return {"contract": "notifications-1", "push": pref.push, "chat": pref.chat, "activity": pref.activity,
         "mute_until": pref.mute_until, "mute_forever": pref.mute_forever, "revision": pref.revision,
-        "capabilities": ["activity-notifications-1", "spark-notifications-1"] +
+        "categories": categories(pref),
+        "capabilities": ["activity-notifications-1", "spark-notifications-1", CAPABILITY] +
             (["matrix-chat-push-1"] if settings.MATRIX_CHAT_PUSH_ENABLED else [])}
 
 
@@ -117,6 +142,8 @@ class PreferencesView(NotificationView):
             raise BindingConflict()
         for key in ("push", "chat", "activity"):
             setattr(pref, key, data[key])
+        if "categories" in data:
+            pref.categories = pref.categories | data["categories"]
         if data["mute"] != "unchanged":
             pref.mute_forever = data["mute"] == "forever"
             pref.mute_until = timezone.now() + timedelta(hours={"1h": 1, "8h": 8}[data["mute"]]) if data["mute"] in ("1h", "8h") else None
@@ -135,6 +162,16 @@ class ResolveView(NotificationView):
         return Response({"data": destination(delivery.event, request.user, request.auth["sid"])})
 
 
+class CardView(NotificationView):
+    def post(self, request):
+        value = CardInput(data=request.data)
+        value.is_valid(raise_exception=True)
+        from .cards import reserve
+        binding = reserve(request.user, **value.validated_data)
+        return Response({"data": {"key": str(binding.pk)}})
+
+
 urlpatterns = [path("v1/installations/", InstallationView.as_view()),
+    path("v1/cards/", CardView.as_view()),
     path("v1/preferences/", PreferencesView.as_view()),
     path("v1/deliveries/<uuid:delivery_id>/", ResolveView.as_view())]

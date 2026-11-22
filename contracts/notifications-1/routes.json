@@ -18,5 +18,9 @@
   {
     "method": "GET",
     "path": "api/notifications/v1/deliveries/{delivery_id}/"
+  },
+  {
+    "method": "POST",
+    "path": "api/notifications/v1/cards/"
   }
 ]

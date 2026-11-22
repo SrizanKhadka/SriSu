@@ -59,10 +59,15 @@ class CoupleStatusView(PrivateResponseMixin, viewsets.GenericViewSet):
             else:
                 if status.revision != fields["expected_revision"]:
                     raise PlanConflict("Your status changed. Refresh before saving.")
+                changed = status.text != fields["text"]
                 status.text = fields["text"]
                 status.expires_at = timezone.now() + timedelta(hours=24) if status.text else None
                 status.revision += 1
                 status.request_id = fields["request_id"]
                 status.request_payload = payload
                 status.save()
+                if changed and status.text:
+                    from notifications.services import partner_event
+                    partner_event("status.changed", request.user, couple, status.pk,
+                        f"{status.pk}:{status.revision}", expires_at=status.expires_at)
         return Response({"data": data(status)})

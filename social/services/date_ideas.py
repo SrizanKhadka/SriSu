@@ -47,8 +47,11 @@ def create(user, request_id, couple_id, preset):
         return same, False  # Open their idea; no implicit interest mutation.
     if eligible(couple, members).filter(state="open", creator=user).exists():
         raise plans.PlanConflict("Withdraw your current idea before suggesting another.")
-    return DateIdea.objects.create(id=request_id, couple=couple, creator=user,
-        audience_membership_ids=audience, preset=preset, interested_by=[user.pk]), True
+    idea = DateIdea.objects.create(id=request_id, couple=couple, creator=user,
+        audience_membership_ids=audience, preset=preset, interested_by=[user.pk])
+    from notifications.services import partner_event
+    partner_event("idea.created", user, couple, idea.pk, idea.pk)
+    return idea, True
 
 
 @transaction.atomic
@@ -62,6 +65,7 @@ def act(user, pk, request_id, expected_revision, action, values):
         return idea
     if idea.revision != expected_revision or idea.state != "open":
         raise plans.PlanConflict("This idea changed. Refresh and review it.")
+    was_mutual = len(idea.interested_by) == 2
     if action == "interest":
         if idea.creator_id == user.pk:
             raise ValidationError("You already suggested this idea.")
@@ -86,4 +90,7 @@ def act(user, pk, request_id, expected_revision, action, values):
     idea.revision += 1
     idea.save()
     DateIdeaOperation.objects.create(idea=idea, author=user, request_id=request_id, payload=intent)
+    if action == "interest" and not was_mutual and len(idea.interested_by) == 2:
+        from notifications.services import partner_event
+        partner_event("idea.interested", user, idea.couple, idea.pk, f"{idea.pk}:{idea.revision}")
     return idea

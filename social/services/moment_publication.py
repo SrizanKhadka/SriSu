@@ -289,4 +289,6 @@ def commit_publication(user, draft, data, fingerprint, photos, prepared):
     draft.save(update_fields=["published_at", "moment", "publication_hash"])
     # Existing published photo rows now own the files. The deletion guard sees them.
     draft.photos.all().delete()
+    from notifications.services import partner_event
+    partner_event("moment.published", user, moment.couple, moment.pk, moment.pk, expires_at=moment.expires_at)
     return moment

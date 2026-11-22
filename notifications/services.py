@@ -10,6 +10,7 @@ from authentication.models import DeviceSession, UserModel
 from django.http import Http404
 from social.services.moment_publication import current_couple
 from .models import Delivery, Event, Installation, Preferences
+from .catalogue import CAPABILITY, POLICIES, categories, policy_expiry
 
 
 class BindingConflict(APIException):
@@ -66,36 +67,42 @@ def register(user, sid, data):
 
 def enabled_for(event):
     pref = Preferences.objects.filter(user_id=event.recipient_id).first()
-    if pref is None:
-        return True
-    if not pref.push:
+    if pref is not None and not pref.push:
         return False
     if event.kind in {"chat.message", "matrix.message"}:
-        return pref.chat and not pref.mute_forever and (not pref.mute_until or pref.mute_until <= timezone.now())
-    return pref.activity
+        return pref is None or (pref.chat and not pref.mute_forever and (not pref.mute_until or pref.mute_until <= timezone.now()))
+    policy = POLICIES.get(event.kind)
+    return bool(policy and (pref is None or pref.activity) and categories(pref)[policy.category])
 
 
-ACTIVITY_KINDS = {"invite.received", "invite.accepted", "plan.created", "plan.responded", "sharing.proposed", "spark.revealed"}
+ACTIVITY_KINDS = set(POLICIES)
 
 
-def emit(kind, recipient, source, resource, *, couple=None, audience=(), version=0, expires_at=None):
+def emit(kind, recipient, source, resource, *, couple=None, audience=(), version=0, expires_at=None, context=None, quiet=None):
     """Capture current bindings in the domain transaction; never backfill or inspect Matrix."""
     if not settings.NOTIFICATIONS_ENABLED or kind not in ACTIVITY_KINDS:
         return None
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError("Notification events require a domain transaction")
-    expiry = timezone.now() + timedelta(hours=24 if kind in {"invite.received", "sharing.proposed"} else 6)
+    policy = POLICIES[kind]
+    expiry = policy_expiry(kind, timezone.now())
     if expires_at:
         expiry = min(expiry, expires_at)
     event, created = Event.objects.get_or_create(recipient=recipient, kind=kind, source=str(source), defaults={
         "resource": str(resource), "couple": couple, "audience_membership_ids": list(audience),
-        "resource_version": version, "expires_at": expiry})
+        "resource_version": version, "expires_at": expiry, "context": context or {},
+        "quiet": not policy.audible if quiet is None else quiet})
     if not created or not enabled_for(event) or expiry <= timezone.now():
         return event
     installs = Installation.objects.filter(user=recipient, active=True, permitted=True,
         updated_at__gte=installation_cutoff(),
         session__revoked_at__isnull=True, session__expires_at__gt=timezone.now())
     for install in installs:
+        if policy.modern and (install.platform != "android" or CAPABILITY not in install.capabilities):
+            continue
+        if kind == "status.changed" and Delivery.objects.filter(installation=install,
+                event__kind=kind, event__resource=str(resource), event__created_at__gt=timezone.now()-timedelta(hours=1)).exists():
+            continue
         Delivery.objects.create(event=event, installation=install, binding_version=install.version,
             next_attempt_at=timezone.now() + timedelta(seconds=2))
     return event
@@ -108,6 +115,9 @@ def destination(event, user, sid):
     if event.kind == "matrix.message":
         from .matrix_push import chat_destination
         return chat_destination(event, user)
+    if event.kind in ("moment.appreciated", "moment.replied"):
+        from .domain import note_destination
+        return note_destination(event, user)
     if event.kind == "invite.received":
         from social.models import CoupleConnectionModel
         from social.services.moment_service import blocked_user_ids
@@ -127,28 +137,26 @@ def destination(event, user, sid):
     audience = [m.pk for m in members]
     if audience != event.audience_membership_ids:
         raise NotFound()
-    if event.kind in ("plan.created", "plan.responded"):
-        from social.models import CouplePlanModel
-        plan = CouplePlanModel.objects.filter(pk=event.resource, couple=couple,
-            audience_membership_ids=audience, cancelled_at__isnull=True,
-            completed=False, starts_at__gt=timezone.now()).first()
-        if not plan or (event.kind == "plan.responded" and plan.revision != event.resource_version):
-            raise NotFound()
-        return {"kind": "plan", "couple_id": couple.pk, "plan_id": plan.pk}
-    if event.kind == "spark.revealed":
+    if event.kind.startswith("plan."):
+        from .domain import plan_destination
+        return plan_destination(event, couple, audience)
+    if event.kind.startswith("spark."):
         from social.services.sparks import session_for, SparkConflict
         try:
             spark, _ = session_for(user, event.resource)
         except (Http404, SparkConflict):
             raise NotFound() from None
-        if spark.state != "revealed" or spark.couple_id != couple.pk:
+        if spark.couple_id != couple.pk or (spark.state != "revealed" if event.kind == "spark.revealed" else spark.state != "open"):
+            raise NotFound()
+        if event.kind in ("spark.started", "spark.submitted") and spark.answers.filter(author=user).exists():
             raise NotFound()
         return {"kind": "spark", "spark_id": str(spark.pk)}
-    if event.kind == "sharing.proposed":
+    if event.kind in ("sharing.proposed", "sharing.approved"):
         from social.services.couple_profile_sections import raw_sections, digest as section_digest
         if (couple.privacy_proposal_version != event.resource_version or not couple.privacy_proposal.get("sections")
                 or couple.privacy_proposal.get("audience") != audience
-                or couple.privacy_consents.filter(user=user, proposal_version=event.resource_version).exists()):
+                or (event.kind == "sharing.proposed" and couple.privacy_consents.filter(user=user, proposal_version=event.resource_version).exists())
+                or (event.kind == "sharing.approved" and couple.privacy_consents.filter(proposal_version=event.resource_version).count() != 2)):
             raise NotFound()
         people = list(couple.memberships.filter(ended_at__isnull=True).select_related("user").order_by("position"))
         raw = raw_sections(couple, people, user)
@@ -159,7 +167,11 @@ def destination(event, user, sid):
         return {"kind": "sharing", "couple_id": couple.pk}
     if event.kind == "invite.accepted":
         return {"kind": "couple", "couple_id": couple.pk}
-    raise NotFound()
+    from .domain import extended_destination
+    try:
+        return extended_destination(event, user, couple, audience)
+    except Http404:
+        raise NotFound() from None
 
 
 def partner_event(kind, actor, couple, resource, source, **kwargs):

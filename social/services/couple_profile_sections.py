@@ -209,10 +209,12 @@ def update_section(couple, members, user, section, data):
     elif section == "sharing":
         raw = raw_sections(couple, members, user)
         action = data["action"]
+        newly_approved = False
         if action == "approve":
             proposal = couple.privacy_proposal or {}
             if proposal.get("audience") != audience(members) or any(proposal.get("fingerprints", {}).get(s) != digest(raw[s]) for s in proposal.get("sections", [])):
                 raise ProfileConflict()
+            newly_approved = not couple.privacy_consents.filter(user=user, proposal_version=couple.privacy_proposal_version).exists()
             CouplePrivacyConsentModel.objects.update_or_create(couple=couple, user=user, defaults={"proposal_version": couple.privacy_proposal_version})
         else:
             # Revocation cancels the entire proposal immediately. A fresh proposal
@@ -232,3 +234,9 @@ def update_section(couple, members, user, section, data):
     if section == "sharing" and data["action"] == "propose" and data["sections"]:
         from notifications.services import partner_event
         partner_event("sharing.proposed", user, couple, couple.pk, f"{couple.pk}:{couple.privacy_proposal_version}", version=couple.privacy_proposal_version)
+    elif (section == "sharing" and data["action"] == "approve" and newly_approved
+            and couple.privacy_proposal.get("sections")
+            and couple.privacy_consents.filter(proposal_version=couple.privacy_proposal_version).count() == 2):
+        from notifications.services import partner_event
+        partner_event("sharing.approved", user, couple, couple.pk,
+            f"{couple.pk}:{couple.privacy_proposal_version}", version=couple.privacy_proposal_version)

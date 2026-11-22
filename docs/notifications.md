@@ -1,5 +1,15 @@
 # Notifications V1
 
+## Catalogue rollout — 22 November 2026
+
+The current implementation adds category controls, quiet activity alerts and
+authorized destinations for Challenges, Moments, appreciation threads, statuses,
+shared ideas and sharing approval. It also fixes encrypted feature-card duplication,
+chat/activity tray replacement and Plan response validity. See the
+[current catalogue, compatibility and deployment order](notification-rollout.md).
+Apple/APNs remains skipped. The deployment and device records below describe their
+historical revisions, not verification of this rollout.
+
 ## Consolidated core integration — 29 October 2026
 
 `codex/consolidate-core-20261029` combines backend Matrix/shared activities

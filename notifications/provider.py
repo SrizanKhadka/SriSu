@@ -23,13 +23,18 @@ def message(delivery, *, audible):
     from firebase_admin import messaging
     event, install = delivery.event, delivery.installation
     ttl = max(0, int((event.expires_at - timezone.now()).total_seconds()))
-    group = salted_hmac("notification.group", str(event.couple_id or "activity")).hexdigest()[:32]
+    # OS identity is distinct from the bounded FCM transport collapse key.
+    # A Plan must never replace a chat alert, nor another Plan's actionable entry.
+    family = "moment-note" if event.kind in {"moment.appreciated", "moment.replied"} else event.kind.split('.')[0]
+    group_source = (f"chat:{event.resource}" if event.kind in {"chat.message", "matrix.message"}
+        else f"activity:{family}:{event.resource}")
+    group = salted_hmac("notification.group", group_source).hexdigest()[:32]
     # At most two FCM collapse groups per installation, while the OS groups each room.
     collapse = "chat" if event.kind in {"chat.message", "matrix.message"} else "activity"
     return messaging.Message(**{install.target_kind: install.target},
         notification=messaging.Notification(title="SriSu", body="You have an update. Open SriSu to view it."),
         data={"schema": "1", "delivery_id": str(delivery.pk), "expires_at": str(int(event.expires_at.timestamp()))},
-        android=messaging.AndroidConfig(priority="high", ttl=timedelta(seconds=ttl), collapse_key=collapse,
+        android=messaging.AndroidConfig(priority="normal" if event.quiet else "high", ttl=timedelta(seconds=ttl), collapse_key=collapse,
             notification=messaging.AndroidNotification(channel_id="srisu_updates" if audible else "srisu_updates_quiet",
                 tag=group, sound="default" if audible else None, visibility="private")),
         apns=messaging.APNSConfig(headers={"apns-push-type": "alert", "apns-priority": "10",

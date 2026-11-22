@@ -32,6 +32,23 @@ class Preferences(models.Model):
     mute_until = models.DateTimeField(null=True)
     mute_forever = models.BooleanField(default=False)
     revision = models.PositiveBigIntegerField(default=1)
+    categories = models.JSONField(default=dict)
+
+
+class CardBinding(models.Model):
+    """Opaque, sender/room-bound correlation; not a capability to read content."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    room = models.ForeignKey("chat.ChatRoom", on_delete=models.CASCADE)
+    epoch = models.PositiveBigIntegerField()
+    kind = models.CharField(max_length=12)
+    resource = models.CharField(max_length=64)
+    event_id = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["actor", "room", "epoch", "kind", "resource"],
+            name="notification_card_binding_once")]
 
 
 class Event(models.Model):
@@ -47,6 +64,9 @@ class Event(models.Model):
     change = models.ForeignKey("couple_chat.Change", null=True, on_delete=models.SET_NULL)
     resource = models.CharField(max_length=64)
     resource_version = models.PositiveBigIntegerField(default=0)
+    # Only bounded state signatures/IDs, never feature text or encrypted payloads.
+    context = models.JSONField(default=dict)
+    quiet = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(db_index=True)
     matrix_room_id = models.CharField(max_length=255, blank=True)

@@ -60,10 +60,18 @@ def start(user, request_id, couple_id, template_id):
         raise ChallengeConflict("You already have a Challenge together. Open it to continue or end it first.")
     # A replaced audience cannot continue an earlier relationship's activity.
     CoupleChallenge.objects.filter(couple=couple, state__in=LIVE).exclude(pk__in=current.values("pk")).update(state="cancelled")
-    return CoupleChallenge.objects.create(id=request_id, couple=couple, creator=user,
+    challenge = CoupleChallenge.objects.create(id=request_id, couple=couple, creator=user,
         template=template, snapshot=template.content,
         audience_membership_ids=[m.pk for m in members], audience_user_ids=[m.user_id for m in members],
-        accepted_by=[user.pk]), True
+        accepted_by=[user.pk])
+    notify("challenge.invited", user, challenge)
+    return challenge, True
+
+
+def notify(kind, user, challenge):
+    from notifications.services import partner_event
+    partner_event(kind, user, challenge.couple, challenge.pk, f"{challenge.pk}:{challenge.revision}",
+        version=challenge.revision, context={"state": challenge.state})
 
 
 @transaction.atomic
@@ -78,6 +86,7 @@ def act(user, pk, request_id, action, expected_revision):
         raise ChallengeConflict()
     if action not in ACTIONS:
         raise ChallengeConflict()
+    previous = (challenge.state, list(challenge.confirmed_by), list(challenge.paused_by))
     if action in ("accept", "decline"):
         if challenge.state != "invited" or user.pk == challenge.creator_id:
             raise ChallengeConflict("Only the invited partner can respond to this invitation.")
@@ -113,6 +122,14 @@ def act(user, pk, request_id, action, expected_revision):
     challenge.save(update_fields=["state", "accepted_by", "confirmed_by", "paused_by", "completed_at", "revision"])
     ChallengeOperation.objects.create(challenge=challenge, author=user, request_id=request_id,
         action=action, expected_revision=expected_revision)
+    if action in ("accept", "decline"):
+        notify("challenge.responded", user, challenge)
+    elif challenge.state == "completed":
+        notify("challenge.completed", user, challenge)
+    elif action == "cancel" and previous[0] != "invited":
+        notify("challenge.cancelled", user, challenge)
+    elif action in ("confirm", "pause", "resume") and previous != (challenge.state, challenge.confirmed_by, challenge.paused_by):
+        notify("challenge.progress", user, challenge)
     return challenge
 
 
