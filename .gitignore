@@ -145,3 +145,9 @@ cython_debug/
 .local/
 *service-account*.json
 *firebase-adc*.json
+
+# Generated demo uploads; the licensed source photo pack lives in authentication/demo_assets.
+/media/profiles/demo_v1/
+/media/user_album/demo_v1/
+/media/couples/profile_private/demo_v1/
+/media/couples/moments/demo_v1/

@@ -1,0 +1,955 @@
+{
+  "version": 1,
+  "people": [
+    {
+      "file": "person_001.webp",
+      "sha256": "30d3a9879eaae36127d5bb8030d5d522267bde127cba97cd46a61b3109b2ef6c",
+      "source": "https://openpravatar.com/thumbs/ast_atlanta_sales_portrait.webp?w=800",
+      "asset": "ast_atlanta_sales_portrait",
+      "title": "Sales professional portrait in Atlanta",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_002.webp",
+      "sha256": "7a82c7356f4fdfd45178c51cb5c66a95146856d87894d10fecbfe93e82b1dcb9",
+      "source": "https://openpravatar.com/thumbs/ast_amsterdam_legal_portrait.webp?w=800",
+      "asset": "ast_amsterdam_legal_portrait",
+      "title": "Legal professional portrait in Amsterdam",
+      "age_band": "middle-aged",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_003.webp",
+      "sha256": "907f71e138f9a2d6c78069d353e93f443f8951f8f5f625f65640f9028a7f28d5",
+      "source": "https://openpravatar.com/thumbs/ast_bangalore_engineer_portrait.webp?w=800",
+      "asset": "ast_bangalore_engineer_portrait",
+      "title": "Software engineer portrait in Bangalore",
+      "age_band": "young-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_004.webp",
+      "sha256": "52a11b610ebb75cf0f1409315b1d940625b5d77e7fd53039f3e1777d57f17327",
+      "source": "https://openpravatar.com/thumbs/ast_austin_engineer_portrait.webp?w=800",
+      "asset": "ast_austin_engineer_portrait",
+      "title": "Software engineer portrait in Austin",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_005.webp",
+      "sha256": "b5ce6cbc52ac7d4e97659dcbfb432ca742b9a9a00874c146701be8b1fed5bd98",
+      "source": "https://openpravatar.com/thumbs/ast_barcelona_creative_portrait.webp?w=800",
+      "asset": "ast_barcelona_creative_portrait",
+      "title": "Creative professional portrait in Barcelona",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_006.webp",
+      "sha256": "e3624c6581cf92feb7d26f838a25187aad3cc2ecf7274eada7367a18bb796e2b",
+      "source": "https://openpravatar.com/thumbs/ast_bangkok_startup_portrait.webp?w=800",
+      "asset": "ast_bangkok_startup_portrait",
+      "title": "Startup professional portrait in Bangkok",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_007.webp",
+      "sha256": "2b8c07ca9717e6e31fb3f36399664974db8b7bb51712332c5a6b11438721e084",
+      "source": "https://openpravatar.com/thumbs/ast_berlin_professor_portrait.webp?w=800",
+      "asset": "ast_berlin_professor_portrait",
+      "title": "Academic professional portrait in Berlin",
+      "age_band": "older-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_008.webp",
+      "sha256": "f6495539ba2e57f7201546143b441da9aaa51f2b55dfb780bb854f721f156586",
+      "source": "https://openpravatar.com/thumbs/ast_berlin_support_glasses.webp?w=800",
+      "asset": "ast_berlin_support_glasses",
+      "title": "Support specialist wearing glasses in Berlin",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_009.webp",
+      "sha256": "07a694ad7e3564c35bd838b1e35bb28191e81dbd20e898c9a33cb3f3c93048b1",
+      "source": "https://openpravatar.com/thumbs/ast_buenos_aires_designer_portrait.webp?w=800",
+      "asset": "ast_buenos_aires_designer_portrait",
+      "title": "Creative designer portrait in Buenos Aires",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_010.webp",
+      "sha256": "5fa96d94cca7b30f871eaf1452b451686b86878d6bf2a919d4e1d779022e2581",
+      "source": "https://openpravatar.com/thumbs/ast_boston_healthcare_portrait.webp?w=800",
+      "asset": "ast_boston_healthcare_portrait",
+      "title": "Healthcare professional portrait in Boston",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_011.webp",
+      "sha256": "869d830302d0ca9f5b644c5931906382c70135bcdbff7366e2226b5c8d1e3ff2",
+      "source": "https://openpravatar.com/thumbs/ast_capetown_creative_portrait.webp?w=800",
+      "asset": "ast_capetown_creative_portrait",
+      "title": "Creative professional portrait in Cape Town",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_012.webp",
+      "sha256": "d51fe9cf8fcef2ae50c0180066362915adcd6c437860be29bfb48ee68dfdb6cc",
+      "source": "https://openpravatar.com/thumbs/ast_chicago_sales_lead.webp?w=800",
+      "asset": "ast_chicago_sales_lead",
+      "title": "Sales lead portrait in Chicago",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_013.webp",
+      "sha256": "f3177cd0f82320512969830084fa2f1731f3e85707ca2f9c7cf7973ecd58e412",
+      "source": "https://openpravatar.com/thumbs/ast_chennai_support_portrait.webp?w=800",
+      "asset": "ast_chennai_support_portrait",
+      "title": "Customer support portrait in Chennai",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_014.webp",
+      "sha256": "38bdd86d156d07e629b2f48bb222f1c029f32f28e7374703bfd1c37c7c44b326",
+      "source": "https://openpravatar.com/thumbs/ast_copenhagen_designer_portrait.webp?w=800",
+      "asset": "ast_copenhagen_designer_portrait",
+      "title": "Product designer portrait in Copenhagen",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_015.webp",
+      "sha256": "3ef7b35cb947c4b2c5bcb786fb274c3940c296a1805bb3d348531de9c3b1ec83",
+      "source": "https://openpravatar.com/thumbs/ast_chicago_consulting_portrait.webp?w=800",
+      "asset": "ast_chicago_consulting_portrait",
+      "title": "Consulting professional portrait in Chicago",
+      "age_band": "middle-aged",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_016.webp",
+      "sha256": "24a2175ff427a1a03d71bd32126af2b1d781284fe7bb9521564e9f6f2b5a372b",
+      "source": "https://openpravatar.com/thumbs/ast_delhi_executive_portrait.webp?w=800",
+      "asset": "ast_delhi_executive_portrait",
+      "title": "Executive portrait in Delhi",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_017.webp",
+      "sha256": "53d2f59463b60b6193346cc04dea675de34ade78f2e9390d399cfff1abca9332",
+      "source": "https://openpravatar.com/thumbs/ast_dublin_healthcare_profile.webp?w=800",
+      "asset": "ast_dublin_healthcare_profile",
+      "title": "Healthcare professional portrait in Dublin",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_018.webp",
+      "sha256": "c4e5ef4f6b68e7b02ead504becd7ff3f25a60666292d3d5e8ebca5790205e1c1",
+      "source": "https://openpravatar.com/thumbs/ast_dubai_ops_analyst.webp?w=800",
+      "asset": "ast_dubai_ops_analyst",
+      "title": "Operations analyst portrait in Dubai",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_019.webp",
+      "sha256": "cd540d788fb189ed79cf8406c327f9756c7730dc893679faf91a16a60f83a6fd",
+      "source": "https://openpravatar.com/thumbs/ast_hyderabad_engineer_portrait.webp?w=800",
+      "asset": "ast_hyderabad_engineer_portrait",
+      "title": "Software engineer portrait in Hyderabad",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_020.webp",
+      "sha256": "5dc46086ec45e944cbd57e899b0ecd78063e272f1d3ff7ebc85f643780129329",
+      "source": "https://openpravatar.com/thumbs/ast_lagos_tech_portrait.webp?w=800",
+      "asset": "ast_lagos_tech_portrait",
+      "title": "Tech founder portrait in Lagos",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_021.webp",
+      "sha256": "75d6bb50f6b1f881ca62d0a665e8f00d47b2dede9ab2bb15afa16fab8827e70d",
+      "source": "https://openpravatar.com/thumbs/ast_istanbul_designer_portrait.webp?w=800",
+      "asset": "ast_istanbul_designer_portrait",
+      "title": "Designer portrait in Istanbul",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_022.webp",
+      "sha256": "c95b8edbfa85c6f0f023dd3aa3e0e91f3f0aa679df2c4547681a9b3226a29554",
+      "source": "https://openpravatar.com/thumbs/ast_london_executive_portrait.webp?w=800",
+      "asset": "ast_london_executive_portrait",
+      "title": "Senior executive portrait in London",
+      "age_band": "older-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_023.webp",
+      "sha256": "3349e87374eab16cf427ed620f2aeddcb06954a205629c7a7fda575c1a93db09",
+      "source": "https://openpravatar.com/thumbs/ast_jakarta_analytics_portrait.webp?w=800",
+      "asset": "ast_jakarta_analytics_portrait",
+      "title": "Analytics professional portrait in Jakarta",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_024.webp",
+      "sha256": "64ba33dd72ca3581f90f27298c81fd3615e0a1a9dddee6fbc43249d23ea5d0b2",
+      "source": "https://openpravatar.com/thumbs/ast_london_founder_coat.webp?w=800",
+      "asset": "ast_london_founder_coat",
+      "title": "Founder portrait with coat in London",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_025.webp",
+      "sha256": "fa50034bec21b5a1713017dea4de998e894b86e26b84feefb4f84665d3081cbe",
+      "source": "https://openpravatar.com/thumbs/ast_kyoto_editorial_glasses.webp?w=800",
+      "asset": "ast_kyoto_editorial_glasses",
+      "title": "Reflective woman with glasses in Kyoto",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_026.webp",
+      "sha256": "a38ecf88569cb1da898c84ff8249387a360ecffc8830b1d83ef82dfb51cdc071",
+      "source": "https://openpravatar.com/thumbs/ast_mumbai_founder_portrait.webp?w=800",
+      "asset": "ast_mumbai_founder_portrait",
+      "title": "Founder portrait in Mumbai",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_027.webp",
+      "sha256": "f4ee6f9ecd664fee40ea654a6ecadae2e27d675a81e86ec971bcdcf502c94c21",
+      "source": "https://openpravatar.com/thumbs/ast_london_grad_portrait.webp?w=800",
+      "asset": "ast_london_grad_portrait",
+      "title": "Early-career professional portrait in London",
+      "age_band": "young-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_028.webp",
+      "sha256": "56bbcd8cff6b02bf9ad9d0a46ad407f3ffe215ad8a83ea46a0e73a9b312da51c",
+      "source": "https://openpravatar.com/thumbs/ast_mumbai_support_profile.webp?w=800",
+      "asset": "ast_mumbai_support_profile",
+      "title": "Customer success portrait in Mumbai",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_029.webp",
+      "sha256": "0dbb09ecfcbeb651edb73e75c8253352144a3c4d8b29184f52abd49b8529f210",
+      "source": "https://openpravatar.com/thumbs/ast_london_solicitor_portrait.webp?w=800",
+      "asset": "ast_london_solicitor_portrait",
+      "title": "Solicitor portrait in London",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_030.webp",
+      "sha256": "d1e918c3069dc5a602b7e695f97054bf39553b00ff7b8f27846bdb227464b7f2",
+      "source": "https://openpravatar.com/thumbs/ast_nyc_analyst_portrait.webp?w=800",
+      "asset": "ast_nyc_analyst_portrait",
+      "title": "Junior analyst portrait in New York",
+      "age_band": "young-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_031.webp",
+      "sha256": "0ac429b0ca6fa71c11e95c95ea5dbb45722da73dd21408b93ab01f2764b102c4",
+      "source": "https://openpravatar.com/thumbs/ast_manila_support_profile.webp?w=800",
+      "asset": "ast_manila_support_profile",
+      "title": "Customer support professional in Manila",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_032.webp",
+      "sha256": "07b7e2f0f198d69c6c68a4463bc8f6acec5c17c2d4cfa647bc5a5e144a38c1ec",
+      "source": "https://openpravatar.com/thumbs/ast_osaka_creative_portrait.webp?w=800",
+      "asset": "ast_osaka_creative_portrait",
+      "title": "Creative professional portrait in Osaka",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_033.webp",
+      "sha256": "37c1935e8758d947fee292beb9b7e008460ddff9dd2c3369dbee8caa5016c125",
+      "source": "https://openpravatar.com/thumbs/ast_melbourne_community_portrait.webp?w=800",
+      "asset": "ast_melbourne_community_portrait",
+      "title": "Community portrait in Melbourne",
+      "age_band": "older-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_034.webp",
+      "sha256": "cc16ae76332b7dd533cddc1980b9809f9bf7250decd92b55fd272ca59425b93c",
+      "source": "https://openpravatar.com/thumbs/ast_oslo_winter_portrait.webp?w=800",
+      "asset": "ast_oslo_winter_portrait",
+      "title": "Professional portrait in Oslo winter light",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_035.webp",
+      "sha256": "a73c258d6f489e8cc623fef6624a0ff3ccda4edd66dfca8117940d5f3cd40054",
+      "source": "https://openpravatar.com/thumbs/ast_mexicocity_success_manager.webp?w=800",
+      "asset": "ast_mexicocity_success_manager",
+      "title": "Customer success manager in Mexico City",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_036.webp",
+      "sha256": "aa4334947889754a39ea11bf265fdc86b0e6d0f7006f19a07824283aeb663549",
+      "source": "https://openpravatar.com/thumbs/ast_sao_paulo_startup_portrait.webp?w=800",
+      "asset": "ast_sao_paulo_startup_portrait",
+      "title": "Startup founder portrait in S\u00e3o Paulo",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_037.webp",
+      "sha256": "004caf05c7ec8f233022265bd2dd89f74257d6a8a514b0e64318cd46496eb587",
+      "source": "https://openpravatar.com/thumbs/ast_miami_marketing_portrait.webp?w=800",
+      "asset": "ast_miami_marketing_portrait",
+      "title": "Marketing professional portrait in Miami",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_038.webp",
+      "sha256": "4d8c099cf3eb511820a9fed3a1a5c71233af6fd30bde0797958956cc6f59a9f9",
+      "source": "https://openpravatar.com/thumbs/ast_seoul_engineer_portrait.webp?w=800",
+      "asset": "ast_seoul_engineer_portrait",
+      "title": "Software engineer portrait in Seoul",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_039.webp",
+      "sha256": "7752ceb59f6b79c9940bd10f3fc39bd9c4226b9c276c888c76b04959b789b7f7",
+      "source": "https://openpravatar.com/thumbs/ast_osaka_support_headset.webp?w=800",
+      "asset": "ast_osaka_support_headset",
+      "title": "Friendly support agent in Osaka",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_040.webp",
+      "sha256": "bfaef7f6c1fa89659326b6c2cc6a48dfc8cba21224aab9af0827e4bced23119a",
+      "source": "https://openpravatar.com/thumbs/ast_sf_venture_portrait.webp?w=800",
+      "asset": "ast_sf_venture_portrait",
+      "title": "Venture investor portrait in San Francisco",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_041.webp",
+      "sha256": "46df2f7ae3d5f159986028ea84ccd948e7d9a8f038f021df5b4c65c7c310bd81",
+      "source": "https://openpravatar.com/thumbs/ast_paris_editorial_scarf.webp?w=800",
+      "asset": "ast_paris_editorial_scarf",
+      "title": "Editorial portrait with scarf in Paris",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_042.webp",
+      "sha256": "7c1eca6591ec4bc8d1e6878c0bf61982bb61f103c462f5b6ef25507f62b2f781",
+      "source": "https://openpravatar.com/thumbs/ast_shanghai_fintech_portrait.webp?w=800",
+      "asset": "ast_shanghai_fintech_portrait",
+      "title": "Fintech professional portrait in Shanghai",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_043.webp",
+      "sha256": "ff9701067dfc83f04576f7c4f9ed610879edf2cecfbd380b18b2260c39f838c8",
+      "source": "https://openpravatar.com/thumbs/ast_seattle_product_portrait.webp?w=800",
+      "asset": "ast_seattle_product_portrait",
+      "title": "Product manager portrait in Seattle",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_044.webp",
+      "sha256": "7881a547ac50d03bdd7889c3675666d3266e35591bf436b1bc1b64b5f05cb9ff",
+      "source": "https://openpravatar.com/thumbs/ast_shenzhen_developer_portrait.webp?w=800",
+      "asset": "ast_shenzhen_developer_portrait",
+      "title": "Developer portrait in Shenzhen",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_045.webp",
+      "sha256": "80ffa7fb6b15a26d2c8283cbf67df1da7b05cf529fc289bb8980c28fd9eead5c",
+      "source": "https://openpravatar.com/thumbs/ast_seoul_marketer_profile.webp?w=800",
+      "asset": "ast_seoul_marketer_profile",
+      "title": "Brand marketer portrait in Seoul",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_046.webp",
+      "sha256": "388d92a2ec98f3f4ea527d55d5277500fa23ccfde3fcf524e7f98b96bcbc2f27",
+      "source": "https://openpravatar.com/thumbs/ast_singapore_advisor_portrait.webp?w=800",
+      "asset": "ast_singapore_advisor_portrait",
+      "title": "Senior advisor portrait in Singapore",
+      "age_band": "middle-aged",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_047.webp",
+      "sha256": "7a8ea0db64ed7ccf8ca04c62d4f9a08ea389c012b747a04077b37abde0f7c5c3",
+      "source": "https://openpravatar.com/thumbs/ast_sf_engineer_laptop.webp?w=800",
+      "asset": "ast_sf_engineer_laptop",
+      "title": "Engineer portrait with laptop in San Francisco",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_048.webp",
+      "sha256": "b2a2f1afbdc2b12594580faf62ee27dca32a87745565f145f3df24b0dfff97eb",
+      "source": "https://openpravatar.com/thumbs/ast_singapore_startup_portrait.webp?w=800",
+      "asset": "ast_singapore_startup_portrait",
+      "title": "Startup professional portrait in Singapore",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_049.webp",
+      "sha256": "a2dda543136eb2fc307507f03a7e2ca66c62b5d65cfcc258aed63debfebcd1dc",
+      "source": "https://openpravatar.com/thumbs/ast_singapore_fintech_profile.webp?w=800",
+      "asset": "ast_singapore_fintech_profile",
+      "title": "Fintech analyst portrait in Singapore",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_050.webp",
+      "sha256": "35cc4ae36036a3281142fe18f48195411330a4b48be1e54a43908b14a5faef92",
+      "source": "https://openpravatar.com/thumbs/ast_stockholm_designer_minimal.webp?w=800",
+      "asset": "ast_stockholm_designer_minimal",
+      "title": "Product designer portrait in Stockholm",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_051.webp",
+      "sha256": "0c493ee8cf10f5441431722d917373e8e28f135016d9b9751822e2bc518a678f",
+      "source": "https://openpravatar.com/thumbs/ast_taipei_designer_portrait.webp?w=800",
+      "asset": "ast_taipei_designer_portrait",
+      "title": "UX designer portrait in Taipei",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_052.webp",
+      "sha256": "966c916880f36d6eff9748afdde8d71f91dd6349fe3d97623898ee59f33ac2be",
+      "source": "https://openpravatar.com/thumbs/ast_sydney_advisor_portrait.webp?w=800",
+      "asset": "ast_sydney_advisor_portrait",
+      "title": "Senior advisor portrait in Sydney",
+      "age_band": "middle-aged",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_053.webp",
+      "sha256": "4be1a0e1d6f6e9568907814f0267089b1fb8e8606a9a7fcfbf401848581f6eb9",
+      "source": "https://openpravatar.com/thumbs/ast_tokyo_glasses_portrait.webp?w=800",
+      "asset": "ast_tokyo_glasses_portrait",
+      "title": "Woman wearing glasses in Tokyo",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_054.webp",
+      "sha256": "9142df93a30be50d85b4458782712fb7208b30f00a5309d14ec34fd850b54706",
+      "source": "https://openpravatar.com/thumbs/ast_tokyo_senior_portrait.webp?w=800",
+      "asset": "ast_tokyo_senior_portrait",
+      "title": "Senior professional portrait in Tokyo",
+      "age_band": "older-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_055.webp",
+      "sha256": "9cb79681d0ac7437e9fdd2ca7d3ce0f747c106b7c78ecaf210d5a814e37a3baa",
+      "source": "https://openpravatar.com/thumbs/ast_tokyo_healthcare_portrait.webp?w=800",
+      "asset": "ast_tokyo_healthcare_portrait",
+      "title": "Healthcare professional portrait in Tokyo",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_056.webp",
+      "sha256": "8c183ffa391e400167ea3566b288b33d747d8dc81921c1e422d1957c44118146",
+      "source": "https://openpravatar.com/thumbs/ast_toronto_consultant_portrait.webp?w=800",
+      "asset": "ast_toronto_consultant_portrait",
+      "title": "Management consultant portrait in Toronto",
+      "age_band": "middle-aged",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_057.webp",
+      "sha256": "c23693aa2b0aae36755b6cba117740caa32473455e12eca32826bdf79529c8c6",
+      "source": "https://openpravatar.com/thumbs/ast_tokyo_park_portrait.webp?w=800",
+      "asset": "ast_tokyo_park_portrait",
+      "title": "Young professional in a Tokyo park",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_058.webp",
+      "sha256": "4443fa5c8f9b50b30c1c5f67ae0a4d0352d4d53ff79e1bdf51ba5bcc22bd8d58",
+      "source": "https://openpravatar.com/thumbs/ast_zurich_finance_portrait.webp?w=800",
+      "asset": "ast_zurich_finance_portrait",
+      "title": "Finance professional portrait in Zurich",
+      "age_band": "middle-aged",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_059.webp",
+      "sha256": "f6976239b6dc992e504cfcbff6c5bc4111029964bd6b05cfca64df4dc8a34095",
+      "source": "https://openpravatar.com/thumbs/ast_toronto_educator_portrait.webp?w=800",
+      "asset": "ast_toronto_educator_portrait",
+      "title": "Educator portrait in Toronto",
+      "age_band": "older-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_060.webp",
+      "sha256": "510f6c5e961035854c1a0b20cac3fc768e9c92ff8447403a085d06da803592c1",
+      "source": "https://openpravatar.com/thumbs/ast_amsterdam_commuter_scene.webp?w=800",
+      "asset": "ast_amsterdam_commuter_scene",
+      "title": "Commuter on an Amsterdam canal street",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_061.webp",
+      "sha256": "9141ec0ecf869230cd3c810c04cdf3fc26fa1c4f288522da8566761062f529ed",
+      "source": "https://openpravatar.com/thumbs/ast_toronto_smiling_portrait.webp?w=800",
+      "asset": "ast_toronto_smiling_portrait",
+      "title": "Older woman smiling portrait with glasses",
+      "age_band": "older-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_062.webp",
+      "sha256": "6a80ae1ffe00d7feadd45ecdd092c25955f91ba1c9e1f268926f28b354083a51",
+      "source": "https://openpravatar.com/thumbs/ast_bangalore_startup_scene.webp?w=800",
+      "asset": "ast_bangalore_startup_scene",
+      "title": "Startup team at work in Bangalore",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_063.webp",
+      "sha256": "5ab667a75c1f509d05785e055e720aae11f585ef0555745af39ed8cdf0b3efde",
+      "source": "https://openpravatar.com/thumbs/ast_amsterdam_evening_scene.webp?w=800",
+      "asset": "ast_amsterdam_evening_scene",
+      "title": "Woman on an Amsterdam canal street at dusk",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_064.webp",
+      "sha256": "b17c4b49ca24c6904f354ee52d727f7718177af073ee5b38829f2f1276277610",
+      "source": "https://openpravatar.com/thumbs/ast_berlin_bike_scene.webp?w=800",
+      "asset": "ast_berlin_bike_scene",
+      "title": "Man wearing glasses on a Berlin city street",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_065.webp",
+      "sha256": "6d6cb88e00cf5248a7401a00f023311cc6cfa0a74b0dacee7a0f78362af4f130",
+      "source": "https://openpravatar.com/thumbs/ast_barcelona_terrace_scene.webp?w=800",
+      "asset": "ast_barcelona_terrace_scene",
+      "title": "Professional on a Barcelona rooftop terrace",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_066.webp",
+      "sha256": "40e5c1f580ab7adb9e6cdb0b8aae83f894e519d7eadd90b1f222442d471510f9",
+      "source": "https://openpravatar.com/thumbs/ast_helsinki_winter_scene.webp?w=800",
+      "asset": "ast_helsinki_winter_scene",
+      "title": "Professional on a Helsinki street in winter",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_067.webp",
+      "sha256": "2a63b09f8e7356da6a7075ddc94cd9ee25e64345899fb6d3b09dcbee630ae70e",
+      "source": "https://openpravatar.com/thumbs/ast_beijing_tech_scene.webp?w=800",
+      "asset": "ast_beijing_tech_scene",
+      "title": "Tech professional at work in Beijing",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_068.webp",
+      "sha256": "bfbcdc47be65149df3361f2c4cceb921ea21d04af86a424d43cf512553503064",
+      "source": "https://openpravatar.com/thumbs/ast_hong_kong_finance_scene.webp?w=800",
+      "asset": "ast_hong_kong_finance_scene",
+      "title": "Finance professional in a Hong Kong office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_069.webp",
+      "sha256": "4a01c78ffd60e8319320ddd9daaf49be11c86a385463d10f97ce057836284d32",
+      "source": "https://openpravatar.com/thumbs/ast_berlin_cowork_scene.webp?w=800",
+      "asset": "ast_berlin_cowork_scene",
+      "title": "Designer at a Berlin co-working space",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_070.webp",
+      "sha256": "b5820a1d8673a6aa172747ef265023c1b687273db869eca9eaf0be99d613a358",
+      "source": "https://openpravatar.com/thumbs/ast_kyoto_umbrella_scene.webp?w=800",
+      "asset": "ast_kyoto_umbrella_scene",
+      "title": "Older man with umbrella in Kyoto rain",
+      "age_band": "older-adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_071.webp",
+      "sha256": "4e0362da240d6b9076b6d70a8cf686d480f7246348a82991f261314c03108c0f",
+      "source": "https://openpravatar.com/thumbs/ast_dubai_consultant_scene.webp?w=800",
+      "asset": "ast_dubai_consultant_scene",
+      "title": "Consultant in a Dubai business district office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_072.webp",
+      "sha256": "ab18761b2eefaa9d9fc53756f302316a204d0700c6ef43cc0da749b50414e60d",
+      "source": "https://openpravatar.com/thumbs/ast_lisbon_remote_worker_scene.webp?w=800",
+      "asset": "ast_lisbon_remote_worker_scene",
+      "title": "Remote worker at a Lisbon cafe table",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_073.webp",
+      "sha256": "b8fd91049979bcc02ca38bf766777d5dd025229e9020c706451a027f348d858a",
+      "source": "https://openpravatar.com/thumbs/ast_ho_chi_minh_designer_scene.webp?w=800",
+      "asset": "ast_ho_chi_minh_designer_scene",
+      "title": "Designer on a Ho Chi Minh City street",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_074.webp",
+      "sha256": "6d61f7435ac56d4c855f67079f1140c6818f8fa9fce13f650077e5770529fbb1",
+      "source": "https://openpravatar.com/thumbs/ast_london_fog_scene.webp?w=800",
+      "asset": "ast_london_fog_scene",
+      "title": "Professional walking through London fog",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_075.webp",
+      "sha256": "5fb6e1560b1c4d1a7691ef3455db2021308815699a360343a5294fc016ab96df",
+      "source": "https://openpravatar.com/thumbs/ast_kyoto_mist_scene.webp?w=800",
+      "asset": "ast_kyoto_mist_scene",
+      "title": "Figure in Kyoto morning mist",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_076.webp",
+      "sha256": "0427f75d49bdadf3dcf6ebf69b849bbe24c9b73e2ef9ffc6710efda057c20755",
+      "source": "https://openpravatar.com/thumbs/ast_london_homeworker_scene.webp?w=800",
+      "asset": "ast_london_homeworker_scene",
+      "title": "Home worker at a London home office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_077.webp",
+      "sha256": "be8ce7b29fa21acc901dffc3d737d55cda468b4b43d5b47e1126d33571b1d8b2",
+      "source": "https://openpravatar.com/thumbs/ast_mumbai_rain_scene.webp?w=800",
+      "asset": "ast_mumbai_rain_scene",
+      "title": "Woman outside an office in Mumbai rain",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_078.webp",
+      "sha256": "66d0e6482fdcade88a4b040d414b3bbed7e12d1d0f340fe3abeacf941a77b1fe",
+      "source": "https://openpravatar.com/thumbs/ast_london_office_scene.webp?w=800",
+      "asset": "ast_london_office_scene",
+      "title": "Professional in a quiet London office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_079.webp",
+      "sha256": "a64d22cb808d1161583db2b57b2de87804b014ee3e285aac50a02c412cfb916c",
+      "source": "https://openpravatar.com/thumbs/ast_nairobi_startup_scene.webp?w=800",
+      "asset": "ast_nairobi_startup_scene",
+      "title": "Startup professional at work in Nairobi",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_080.webp",
+      "sha256": "4587ad95860a673afc645ff16d5a6add211934345718a5bd0349914216d7ff0b",
+      "source": "https://openpravatar.com/thumbs/ast_london_park_scene.webp?w=800",
+      "asset": "ast_london_park_scene",
+      "title": "Professional walking in a London park",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_081.webp",
+      "sha256": "96f5a1b1dbdd24c9937e080c1d2596603c74f35ee3e31feef9ebb8bf3a56f01a",
+      "source": "https://openpravatar.com/thumbs/ast_newyork_support_desk_scene.webp?w=800",
+      "asset": "ast_newyork_support_desk_scene",
+      "title": "Support agent at a New York customer desk",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_082.webp",
+      "sha256": "926dc862a0d1fe8b185ce4122866b99d127e8e07840f8db4cfd06eac40363ae1",
+      "source": "https://openpravatar.com/thumbs/ast_london_researcher_scene.webp?w=800",
+      "asset": "ast_london_researcher_scene",
+      "title": "Researcher at work in a London office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_083.webp",
+      "sha256": "efe17b3780d4cfbb7233a2906e9bbc41f47bd75a65ca0e540cb8c196676271d9",
+      "source": "https://openpravatar.com/thumbs/ast_nyc_consultant_scene.webp?w=800",
+      "asset": "ast_nyc_consultant_scene",
+      "title": "Consultant at work in New York",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_084.webp",
+      "sha256": "a5f3395e27fe9723a99c065d3629988fc10235582127ade3cded55828412a573",
+      "source": "https://openpravatar.com/thumbs/ast_melbourne_remote_scene.webp?w=800",
+      "asset": "ast_melbourne_remote_scene",
+      "title": "Remote worker in a Melbourne cafe",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_085.webp",
+      "sha256": "1440d11bac69debd12d93727442f8c966245cf772801c8f852912b6330d7cb5f",
+      "source": "https://openpravatar.com/thumbs/ast_osaka_station_scene.webp?w=800",
+      "asset": "ast_osaka_station_scene",
+      "title": "Woman with coat on an Osaka train platform",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_086.webp",
+      "sha256": "13e5c0ea0e409af5fafaae48c35e10a2334e411eaea59b838a0bac2cf972e6af",
+      "source": "https://openpravatar.com/thumbs/ast_portland_creative_scene.webp?w=800",
+      "asset": "ast_portland_creative_scene",
+      "title": "Creative professional at a Portland cafe",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_087.webp",
+      "sha256": "320ef216889d8130944db047becc53668b520a8fa9f3a4e6bf68970da1053a97",
+      "source": "https://openpravatar.com/thumbs/ast_seoul_cafe_scene.webp?w=800",
+      "asset": "ast_seoul_cafe_scene",
+      "title": "Remote worker in a Seoul cafe",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_088.webp",
+      "sha256": "fe320c8f2579e8a2a2458351c978c0f388bede9534582ecb8ee832bfd5cd55f9",
+      "source": "https://openpravatar.com/thumbs/ast_seoul_airport_arrival_scene.webp?w=800",
+      "asset": "ast_seoul_airport_arrival_scene",
+      "title": "Professional arriving at Seoul Incheon Airport",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_089.webp",
+      "sha256": "16802a2c2c9c73db5899440bc3e4ee4778bc48a356d3ca978391268ee3a1cd35",
+      "source": "https://openpravatar.com/thumbs/ast_sf_creative_scene.webp?w=800",
+      "asset": "ast_sf_creative_scene",
+      "title": "Creative professional at work in San Francisco",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_090.webp",
+      "sha256": "21f687d1d9e2f622074bc77a23ee6504ae1056b3dc2ac4eab8ea58684d3e9718",
+      "source": "https://openpravatar.com/thumbs/ast_sf_cafe_scene.webp?w=800",
+      "asset": "ast_sf_cafe_scene",
+      "title": "Founder working in a San Francisco cafe",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_091.webp",
+      "sha256": "45488f9ecc8ca9f6e255d127a603e14f5395d8cfc3f563e04c86601b553f8e50",
+      "source": "https://openpravatar.com/thumbs/ast_singapore_doctor_office_scene.webp?w=800",
+      "asset": "ast_singapore_doctor_office_scene",
+      "title": "Clinician in a modern Singapore office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_092.webp",
+      "sha256": "4b0b8fc9d3958ffb6a3d91bfedd9572b1c3f23cf3a0354875413ae9fb391386c",
+      "source": "https://openpravatar.com/thumbs/ast_sf_waterfront_scene.webp?w=800",
+      "asset": "ast_sf_waterfront_scene",
+      "title": "Founder at the San Francisco waterfront",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_093.webp",
+      "sha256": "91f0fb21ce77a8e741b8b792ef2da0e81d61548e0f00cf3cd5cef0ef7d53983d",
+      "source": "https://openpravatar.com/thumbs/ast_singapore_fintech_scene.webp?w=800",
+      "asset": "ast_singapore_fintech_scene",
+      "title": "Woman in a modern Singapore finance office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_094.webp",
+      "sha256": "3fd23d85642708e3cc3df1b9465aacbd682098e3bb0d95e2c0a5f7e998e11e8f",
+      "source": "https://openpravatar.com/thumbs/ast_stockholm_meeting_scene.webp?w=800",
+      "asset": "ast_stockholm_meeting_scene",
+      "title": "Designer in a Stockholm meeting room",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_095.webp",
+      "sha256": "fe23f050f767297f46009b20e813edb3621574722c6baa332a1675f89606d1d2",
+      "source": "https://openpravatar.com/thumbs/ast_singapore_park_scene.webp?w=800",
+      "asset": "ast_singapore_park_scene",
+      "title": "Professional in a Singapore park",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_096.webp",
+      "sha256": "77d2cdf232c7f0528ea639e45a9ef5e612e925a38e7d9197327ac2a28eecdc30",
+      "source": "https://openpravatar.com/thumbs/ast_sydney_harbour_scene.webp?w=800",
+      "asset": "ast_sydney_harbour_scene",
+      "title": "Professional near the Sydney Harbour",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_097.webp",
+      "sha256": "42d781c833bdf704e2e7a437b8dcf874c7efcef3b5749025670ee66525e5c0aa",
+      "source": "https://openpravatar.com/thumbs/ast_sydney_recruiter_scene.webp?w=800",
+      "asset": "ast_sydney_recruiter_scene",
+      "title": "Recruiter in a polished Sydney office",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_098.webp",
+      "sha256": "886d09c21c49688d28f62496272d5397819ef832ed9c688a1e0b13f1f78d636b",
+      "source": "https://openpravatar.com/thumbs/ast_tokyo_cowork_scene.webp?w=800",
+      "asset": "ast_tokyo_cowork_scene",
+      "title": "Professional at a Tokyo co-working space",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_099.webp",
+      "sha256": "6f75bea5fa50c9b0f6cc6012071bb3d718d861b24ba7c3d3b796e88398d03198",
+      "source": "https://openpravatar.com/thumbs/ast_taipei_subway_scene.webp?w=800",
+      "asset": "ast_taipei_subway_scene",
+      "title": "Commuter on a Taipei MRT platform",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    },
+    {
+      "file": "person_100.webp",
+      "sha256": "561071bcc77f7dbe2d4ed9329dc8d39dbd8132dc62aa56337c999d9018ad8906",
+      "source": "https://openpravatar.com/thumbs/ast_tokyo_rain_walk_scene.webp?w=800",
+      "asset": "ast_tokyo_rain_walk_scene",
+      "title": "Man walking in rain on a Tokyo side street",
+      "age_band": "adult",
+      "license": "https://openpravatar.com/legal"
+    }
+  ],
+  "scenes": [
+    {
+      "file": "scene_01.jpg",
+      "sha256": "cc9737124c09c9ab03635884310bf55d15ee34018a3b6f8a0eec781e50aeb42b",
+      "source": "https://picsum.photos/id/10/1000/667",
+      "credit": "Paul Jarvis",
+      "original": "https://unsplash.com/photos/6J--NXulQCs",
+      "license": "https://unsplash.com/license"
+    },
+    {
+      "file": "scene_02.jpg",
+      "sha256": "7d26f7b86446777fb800c01eafc139f95d04757871815315cc6cf4b92a1cd6b0",
+      "source": "https://picsum.photos/id/11/1000/667",
+      "credit": "Paul Jarvis",
+      "original": "https://unsplash.com/photos/Cm7oKel-X2Q",
+      "license": "https://unsplash.com/license"
+    },
+    {
+      "file": "scene_03.jpg",
+      "sha256": "5b76298f655d364b0d714b9c62259689b742c5ad7521bfeecd9403b1f834f913",
+      "source": "https://picsum.photos/id/12/1000/667",
+      "credit": "Paul Jarvis",
+      "original": "https://unsplash.com/photos/I_9ILwtsl_k",
+      "license": "https://unsplash.com/license"
+    },
+    {
+      "file": "scene_04.jpg",
+      "sha256": "922153c791afcbb456f1461c5ad4d3144c75b2a974d0671abe6257424d5018bd",
+      "source": "https://picsum.photos/id/13/1000/667",
+      "credit": "Paul Jarvis",
+      "original": "https://unsplash.com/photos/3MtiSMdnoCo",
+      "license": "https://unsplash.com/license"
+    },
+    {
+      "file": "scene_05.jpg",
+      "sha256": "861b6df19d8f47e7930cd5dd4b241c560d8a8357b25e66d74e33a12c7687f44e",
+      "source": "https://picsum.photos/id/14/1000/667",
+      "credit": "Paul Jarvis",
+      "original": "https://unsplash.com/photos/IQ1kOQTJrOQ",
+      "license": "https://unsplash.com/license"
+    },
+    {
+      "file": "scene_06.jpg",
+      "sha256": "ac6e06e9c0b992c2907e4acb23706ecf268386943fc4d3b66a783e6f0e306e7d",
+      "source": "https://picsum.photos/id/15/1000/667",
+      "credit": "Paul Jarvis",
+      "original": "https://unsplash.com/photos/NYDo21ssGao",
+      "license": "https://unsplash.com/license"
+    }
+  ]
+}

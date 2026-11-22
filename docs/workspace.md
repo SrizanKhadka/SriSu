@@ -41,6 +41,11 @@ The generated requirements and environment stay inside ignored `.venv`.
 
 ## Isolated verification
 
+For a populated local app, see [the complete 100-account demo dataset](demo-accounts.md).
+`seed_demo_accounts --dry-run` previews it; `--confirm-local` creates the 100 users,
+50 couples, bundled photos, stories, moments, and plans in a configured development
+database. It does not use the disposable workspace-test database.
+
 ```sh
 .venv/bin/python tools/workspace.py check
 .venv/bin/python tools/workspace.py test
