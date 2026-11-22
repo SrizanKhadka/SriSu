@@ -43,6 +43,7 @@ class UserModel(AbstractUser):
     password = models.CharField(max_length=128, null=True, blank=True)
 
     bio = models.TextField(null=True, blank=True)
+    share_partner_details = models.BooleanField(default=False, db_default=False)
     full_name = models.CharField(max_length=100, null=True, blank=True)
     city = models.CharField(max_length=100, null=True, blank=True)
     country = models.CharField(max_length=100, null=True, blank=True)

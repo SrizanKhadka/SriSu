@@ -253,5 +253,26 @@
         }
       ]
     }
+  },
+  "partner_profile": {
+    "data": {
+      "user": {
+        "id": 2,
+        "full_name": "Maya Sharma",
+        "username": "maya",
+        "phone_number": "+15005550105",
+        "profile_photo": null,
+        "bio": "Coffee and mountain walks.",
+        "user_interests": [
+          {
+            "id": 1,
+            "name": "Walking"
+          }
+        ]
+      },
+      "details_visible": true,
+      "connection_state": "available",
+      "request_id": null
+    }
   }
 }

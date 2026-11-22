@@ -474,6 +474,12 @@
         "time_zone"
       ],
       "public": false
+    },
+    "partner-profile-detail": {
+      "method": "GET",
+      "path": "/api/social/partner-profiles/{id}/",
+      "query": [],
+      "public": false
     }
   },
   "retired_endpoints": {

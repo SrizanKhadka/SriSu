@@ -14,7 +14,8 @@
     "matrix_session": "matrixSession",
     "moment_private": "moment",
     "moment_home": "momentHome",
-    "moment_draft": "momentDraft"
+    "moment_draft": "momentDraft",
+    "partner_profile": "partnerProfile"
   },
   "deployment": "Synapse and Django Matrix control plane before the Matrix KMP client; the replacement is not enabled by a migration alone.",
   "http": {
@@ -70,5 +71,11 @@
     "errors": "400 validation; 401 expired session; concealed 404 inaccessible; 403 creator/partner-only action; 409 revision/payload conflict; 410 expired eligible reference/draft; 429 retry after throttling.",
     "ordering": "Sequence ascending published created_at,id with signed requester/creator/couple-bound cursor. New feed retains Global/Faves ranking and session cursor, returns server_time.",
     "photo_framing": "Optional publish crops map: staged photo UUID -> normalized x,y,width,height. Omit for full originals. Crop intent participates in idempotency; decode/storage before locks, membership/revision revalidated at commit. Deploy server before crop-enabled clients; no migration."
+  },
+  "partner_profile": {
+    "version": "partner-profile-1",
+    "visibility": "Exact-phone search issues a 30-minute signed viewer/target/phone-bound grant. Detail requires that header or a current pending/accepted invitation. Auth, active account and either-direction block are checked on every read. Bio and active interests require owner opt-in before linking; extra photos and personal/couple data are never returned.",
+    "preference": "Owner-only setup-profile share_partner_details defaults false and is preserved when older clients omit it.",
+    "rollout": "Apply authentication 0023 and deploy backend before the updated Find Partner client. Older search clients remain compatible."
   }
 }

@@ -669,17 +669,20 @@ def find_partner(request):
         phone_number = f"+{phone_number}"
 
     try:
-        partner = UserModel.objects.get(phone_number=phone_number, is_active=True)
+        from social.services.moment_service import blocked_user_ids
+        partner = UserModel.objects.exclude(pk__in=blocked_user_ids(request.user)).get(phone_number=phone_number, is_active=True)
     except UserModel.DoesNotExist:
         return Response(
             {"message": "Partner not found."},
             status=status.HTTP_404_NOT_FOUND,
         )
     serializer = PartnerDiscoverySerializer(partner, context={"request": request})
+    from social.services.partner_profile_service import profile_access_token
     return Response(
         {
             "message": "Partner found successfully.",
-            "data": serializer.data,
+            "data": {**serializer.data, "profile_access_token": profile_access_token(request.user, partner)},
         },
         status=status.HTTP_200_OK,
+        headers={"Cache-Control": "private, no-store"},
     )
