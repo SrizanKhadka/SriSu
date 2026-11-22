@@ -121,6 +121,30 @@ class PartnerProfileTests(TestCase):
         self.assertIsNone(response['request_id'])
         self.assertNotIn(self.outsider.phone_number, str(response))
 
+    def test_current_couple_takes_priority_over_newer_duplicate_invitation(self):
+        from social.services.couple_profile_service import create_or_get_couple_for_connection
+        accepted = CoupleConnectionModel.objects.create(sender_number=self.viewer.phone_number, receiver_number=self.target.phone_number, connection_status='ACCEPTED')
+        create_or_get_couple_for_connection(accepted)
+        CoupleConnectionModel.objects.create(sender_number=self.target.phone_number, receiver_number=self.viewer.phone_number, connection_status='PENDING')
+        response = self.detail()
+        self.assertEqual(response.status_code, 200)
+        data = response.data['data']
+        self.assertEqual(data['connection_state'], 'connected')
+        self.assertEqual(data['request_id'], accepted.pk)
+        self.assertTrue(data['details_visible'])
+
+    def test_membership_in_another_couple_does_not_authorize_profile_read(self):
+        from social.services.couple_profile_service import create_or_get_couple_for_connection
+        fourth = UserModel.objects.create_user(phone_number='+15005550104')
+        for first, second in [(self.target, self.outsider), (self.viewer, fourth)]:
+            accepted = CoupleConnectionModel.objects.create(sender_number=first.phone_number, receiver_number=second.phone_number, connection_status='ACCEPTED')
+            create_or_get_couple_for_connection(accepted)
+        self.assertEqual(self.detail().status_code, 404)
+        # Even a stale accepted row between these people cannot borrow either
+        # unrelated couple's memberships to unlock their private details.
+        CoupleConnectionModel.objects.create(sender_number=self.viewer.phone_number, receiver_number=self.target.phone_number, connection_status='ACCEPTED')
+        self.assertEqual(self.detail().status_code, 404)
+
     def test_owner_can_opt_in_and_out_via_existing_profile_update(self):
         self.client.force_authenticate(self.target)
         for value in (True, False):

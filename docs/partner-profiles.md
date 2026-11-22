@@ -21,7 +21,10 @@ change couple-profile section consents or Moment/chat authorization.
   Extra photos, DOB, email, location, private Moments and couple data are omitted.
 - Connection states: `available`, `outgoing`, `incoming`, `connected`,
   `unavailable`, `self`. An unrelated existing invitation/relationship yields
-  only `unavailable`, with no other person's identity or request ID.
+  the action state `unavailable`, with no third person's identity or request ID.
+  It does not revoke the selected owner's explicit opt-in to discovery; their
+  minimal identity and consented details remain readable with a valid grant.
+  A validated current couple takes priority over legacy duplicate pending rows.
 - Reads use the existing discovery throttle and `private, no-store` response.
   Every read rechecks current sharing/block/relationship state. Already viewed
   information cannot be recalled from somebody's memory or screenshots.
@@ -66,3 +69,13 @@ original dirty `codex/couple-chat-rebuild` checkout is preserved unchanged.
 Companion frontend PR: https://github.com/SriZan12/SriSu/pull/33. CI and isolated
 verification use the exact publication tree, including current upstream tests.
 Publication does not migrate or deploy an application database.
+
+Review follow-up: added current-couple precedence and a regression test for
+two unrelated active couples, including a stale accepted pair without shared
+memberships. The shared feature map is in the companion frontend PR. All server
+workers must use the same environment-backed `DJANGO_SECRET_KEY`; this is already
+required for existing session/signing behavior. Preference reads observe the
+database state when the request loads the owner; revocation cannot recall an
+already authorized in-flight response. The existing DRF discovery throttle is
+best-effort and process-local with the default cache, not an atomic distributed
+quota; the grant and current authorization checks do not rely on that quota.

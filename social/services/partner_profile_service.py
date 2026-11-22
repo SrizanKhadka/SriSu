@@ -31,17 +31,19 @@ def partner_profile(viewer, target_id, token):
     target = UserModel.objects.filter(pk=target_id, is_active=True).exclude(pk__in=blocked_user_ids(viewer)).first()
     if target is None:
         raise NotFound("This profile is unavailable.")
-    pair = CoupleConnectionModel.objects.filter(
+    pairs = CoupleConnectionModel.objects.filter(
         Q(sender_number=viewer.phone_number, receiver_number=target.phone_number) |
         Q(sender_number=target.phone_number, receiver_number=viewer.phone_number),
         connection_status__in=["PENDING", "ACCEPTED"], ended_at__isnull=True,
-    ).order_by("-updated_at", "-id").first()
-    if pair and pair.connection_status == "ACCEPTED" and not active_couples().filter(
-        couple_connection=pair,
+    ).order_by("-updated_at", "-id")
+    connected = active_couples().filter(
+        couple_connection__in=pairs.filter(connection_status="ACCEPTED"),
     ).filter(memberships__user=viewer, memberships__ended_at__isnull=True).filter(
         memberships__user=target, memberships__ended_at__isnull=True,
-    ).exists():
-        pair = None
+    ).values("couple_connection_id")
+    # Legacy duplicate invitations must not hide a current, validated couple.
+    # An accepted row alone is insufficient: both memberships must still be active.
+    pair = pairs.filter(pk__in=connected).first() or pairs.filter(connection_status="PENDING").first()
     if viewer.pk != target.pk and pair is None and not _has_discovery_access(viewer, target, token):
         raise NotFound("This profile is unavailable. Search for the person again.")
 
