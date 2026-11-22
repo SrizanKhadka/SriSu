@@ -117,6 +117,7 @@ class SetUpProfileSerializer(WritableNestedModelSerializer):
             "country",
             "city",
             "bio",
+            "share_partner_details",
             "is_engaged",
             "profile_photo_skipped",
             "skip_photo",

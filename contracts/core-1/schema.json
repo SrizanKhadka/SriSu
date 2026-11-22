@@ -1296,6 +1296,109 @@
           }
         }
       }
+    },
+    "partnerProfile": {
+      "type": "object",
+      "required": [
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "type": "object",
+          "required": [
+            "user",
+            "details_visible",
+            "connection_state",
+            "request_id"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "user": {
+              "type": "object",
+              "required": [
+                "id",
+                "full_name",
+                "username",
+                "phone_number",
+                "profile_photo"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "full_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "username": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "phone_number": {
+                  "type": "string"
+                },
+                "profile_photo": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "bio": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "user_interests": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "details_visible": {
+              "type": "boolean"
+            },
+            "connection_state": {
+              "enum": [
+                "available",
+                "outgoing",
+                "incoming",
+                "connected",
+                "unavailable",
+                "self"
+              ]
+            },
+            "request_id": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        }
+      }
     }
   },
   "x-named-errors": {

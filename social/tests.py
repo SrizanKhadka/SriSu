@@ -331,7 +331,7 @@ class CoupleConnectionSecurityTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             set(response.data["data"]),
-            {"id", "full_name", "username", "phone_number", "profile_photo"},
+            {"id", "full_name", "username", "phone_number", "profile_photo", "profile_access_token"},
         )
         self.assertEqual(response.data["data"]["phone_number"], self.receiver.phone_number)
         self.assertNotIn("private@example.test", str(response.data))

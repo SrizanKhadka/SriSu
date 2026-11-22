@@ -39,6 +39,8 @@ def main():
     couple = create_or_get_couple_for_connection(couple_link)
     room = ChatRoom.objects.create(user_one=first, user_two=second, couple=couple)
     visitor = UserModel.objects.create_user(phone_number='+15005550103', full_name='Synthetic Visitor', is_phone_verified=True, is_profile_complete=True)
+    profile_viewer = UserModel.objects.create_user(phone_number='+15005550104', full_name='Profile Alex', username='profile_alex', is_phone_verified=True, is_profile_complete=True)
+    profile_target = UserModel.objects.create_user(phone_number='+15005550105', full_name='Profile Maya', username='profile_maya', is_phone_verified=True, is_profile_complete=True)
     InterestModel.objects.create(name='Synthetic hiking')
     # Disposable current-session tokens are shared only through a private temp file.
     payload = {
@@ -51,6 +53,10 @@ def main():
         'partner_access': create_session(second)['access'],
         'visitor_id': visitor.pk,
         'visitor_access': create_session(visitor)['access'],
+        'profile_viewer_id': profile_viewer.pk,
+        'profile_viewer_access': create_session(profile_viewer)['access'],
+        'profile_target_id': profile_target.pk,
+        'profile_target_access': create_session(profile_target)['access'],
     }
     descriptor = os.open(args.fixture, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as file: json.dump(payload, file)

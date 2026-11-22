@@ -16,6 +16,7 @@ from social.api.views import (
 )
 
 from social.api.moment_views import MomentNoteView
+from social.api.partner_profiles import PartnerProfileDetail
 from social.api.moment_drafts import MomentDraftView
 from social.api.sparks import SparkView
 from social.api.challenges import ChallengeView
@@ -64,6 +65,7 @@ urlpatterns = [
     path("couple-profile/", CoupleProfileAPIView.as_view(), name="couple-profile"),
     path("", include(social_routers.urls)),
     path("find-partner/", find_partner, name="find-partner"),
+    path("partner-profiles/<int:user_id>/", PartnerProfileDetail.as_view(), name="partner-profile-detail"),
     path("have-couple-connection-requested/", have_couple_connection_requested, name="have-couple-connection-requested"),
     path("is-user-engaged/", is_engaged, name="is-user-engaged"),
 ]
