@@ -7,7 +7,7 @@ from srisu.api.cache import PerformanceCache
 
 
 def catalogue_cache():
-    return PerformanceCache(caches["default"], "interest-catalogue", ttl=300)
+    return PerformanceCache(caches["default"], "interest-catalogue", version=2, ttl=300)
 
 
 def interest_catalogue():

@@ -88,6 +88,48 @@ class InterestRepairTests(TestCase):
         self.assertEqual(self.save([{"id": custom.pk, "removed": True}]).status_code, 200)
         custom.refresh_from_db(); self.assertTrue(custom.removed)
 
+    def test_legacy_names_remove_and_reselect_catalogue_rows_without_duplicates(self):
+        from authentication.models import UserInterestModel
+        row = UserInterestModel.objects.create(user=self.owner, interest=self.coffee, name="Coffee")
+        for removed in (True, False, False):
+            self.assertEqual(self.save([{"name": "  Coffee  ", "removed": removed}]).status_code, 200)
+            row.refresh_from_db()
+            self.assertEqual(row.removed, removed)
+            self.assertEqual(row.interest_id, self.coffee.pk)
+            self.assertEqual(UserInterestModel.objects.filter(user=self.owner).count(), 1)
+
+    def test_owned_whitespace_legacy_row_is_updated_in_place_and_can_gain_catalogue_link(self):
+        from authentication.models import UserInterestModel
+        row = UserInterestModel.objects.create(user=self.owner, name="  Coffee   tasting  ")
+        self.assertEqual(self.save([{"id": row.pk, "removed": True}]).status_code, 200)
+        row.refresh_from_db(); self.assertTrue(row.removed)
+        duplicate = UserInterestModel.objects.create(user=self.owner, interest=self.coffee, name="Coffee tasting")
+        self.assertEqual(self.save([{"id": row.pk, "interest": self.coffee.pk}]).status_code, 200)
+        row.refresh_from_db(); duplicate.refresh_from_db()
+        self.assertFalse(row.removed); self.assertTrue(duplicate.removed)
+        self.assertEqual(row.interest_id, self.coffee.pk)
+        self.assertEqual(row.name, "Coffee tasting")
+        self.assertEqual(UserInterestModel.objects.filter(user=self.owner).count(), 2)
+        custom = UserInterestModel.objects.create(user=self.owner, name="  Stargazing  ")
+        self.assertEqual(self.save([{"id": custom.pk, "removed": True}]).status_code, 200)
+        custom.refresh_from_db(); self.assertTrue(custom.removed)
+        self.assertEqual(custom.name, "Stargazing")
+
+    def test_blank_catalogue_id_rejects_entire_batch_before_mutation(self):
+        from authentication.models import InterestModel, UserInterestModel
+        blank = InterestModel.objects.create(name="   ")
+        self.assertEqual(self.save([{"interest": self.coffee.pk}, {"interest": blank.pk}], full_name="Should not save").status_code, 400)
+        self.owner.refresh_from_db(); self.assertEqual(self.owner.full_name, "Alex")
+        self.assertFalse(UserInterestModel.objects.filter(user=self.owner).exists())
+
+    def test_new_catalogue_generation_does_not_reuse_old_presentation_cache(self):
+        from django.core.cache import cache
+        from srisu.api.cache import PerformanceCache
+        from authentication.catalogue import interest_catalogue
+        old = PerformanceCache(cache, "interest-catalogue", version=1, ttl=300)
+        old.read(scope="public-catalogue", resource="all", loader=lambda: [{"name": "old unnormalized label"}])
+        self.assertEqual(interest_catalogue()[0]["name"], "Coffee tasting")
+
     def test_prepared_photo_completes_onboarding_and_survives_next_read(self):
         image = BytesIO(); Image.new("RGB", (1600, 900), "#8d76a4").save(image, format="JPEG")
         result = self.client.patch("/api/auth/setup-profile/", {"profile_photo": SimpleUploadedFile("profile.jpg", image.getvalue(), content_type="image/jpeg")}, format="multipart")

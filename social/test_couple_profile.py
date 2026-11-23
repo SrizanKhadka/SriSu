@@ -108,6 +108,18 @@ class CoupleProfileTests(ProfileFixtures, APITestCase):
         self.assertTrue(row.removed)
         self.assertNotIn('Reading', self.data()['interests']['mine'])
 
+    def test_normalized_catalogue_names_keep_links_and_collapse_legacy_duplicates(self):
+        from authentication.models import InterestModel, UserInterestModel
+        item = InterestModel.objects.create(name="  Coffee   tasting  ")
+        first = UserInterestModel.objects.create(user=self.first, name=" Coffee  tasting ")
+        duplicate = UserInterestModel.objects.create(user=self.first, name="Coffee tasting", interest=item)
+        response = self.save('interests', names=['Coffee tasting'])
+        self.assertEqual(response.status_code, 200, response.data)
+        first.refresh_from_db(); duplicate.refresh_from_db()
+        self.assertEqual(first.interest_id, item.pk)
+        self.assertEqual(first.name, "Coffee tasting")
+        self.assertFalse(first.removed); self.assertTrue(duplicate.removed)
+
     def test_plan_retry_after_start_is_idempotent(self):
         from unittest.mock import patch
         start = timezone.now() + timedelta(minutes=1)
@@ -300,6 +312,35 @@ class CoupleProfileTests(ProfileFixtures, APITestCase):
 
 
 class CoupleProfileConcurrencyTests(ProfileFixtures, APITransactionTestCase):
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_profile_write_is_serialized_before_couple_interest_revision_check(self):
+        from threading import Event
+        from django.db import transaction
+        from authentication.models import UserModel, UserInterestModel
+        from authentication.interests import update_user_interests
+        revision = self.data()['revisions']['interests']
+        lock_attempted = Event()
+        def save_couple():
+            try:
+                def observe(execute, sql, params, many, context):
+                    if 'authentication_usermodel' in sql and 'FOR UPDATE' in sql:
+                        lock_attempted.set()
+                    return execute(sql, params, many, context)
+                client = APIClient(); client.force_authenticate(self.first)
+                with connections['default'].execute_wrapper(observe):
+                    return client.patch(self.base+'sections/interests/', {'expected_revision':revision, 'names':['Old choice']}, format='json').status_code
+            finally:
+                connections.close_all()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with transaction.atomic():
+                user = UserModel.objects.select_for_update().get(pk=self.first.pk)
+                future = pool.submit(save_couple)
+                self.assertTrue(lock_attempted.wait(timeout=10))
+                self.assertFalse(future.done())
+                update_user_interests(user, [{"name": "New profile choice"}])
+            self.assertEqual(future.result(timeout=10), 409)
+        self.assertEqual(list(UserInterestModel.objects.filter(user=self.first, removed=False).values_list('name', flat=True)), ['New profile choice'])
+
     @skipUnlessDBFeature('has_select_for_update')
     def test_simultaneous_same_section_only_one_wins(self):
         revision=self.data()['revisions']['song']

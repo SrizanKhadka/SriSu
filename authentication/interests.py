@@ -44,31 +44,54 @@ def update_user_interests(user, entries):
     if serializer.errors:
         raise serializers.ValidationError({"user_interests": serializer.errors})
     values = serializer.validated_data
-    catalogue = InterestModel.objects.in_bulk({entry["interest"] for entry in values if entry.get("interest")})
-    owned = UserInterestModel.objects.filter(user=user).in_bulk({entry["id"] for entry in values if entry.get("id")})
-    for entry in values:
-        if entry.get("id") and entry["id"] not in owned:
-            raise serializers.ValidationError({"user_interests": "This selection is no longer available."})
-        if entry.get("id") and entry.get("interest") and owned[entry["id"]].interest_id not in (None, entry["interest"]):
-            raise serializers.ValidationError({"user_interests": "The selection does not match its interest."})
-        if entry.get("interest") and entry["interest"] not in catalogue:
-            raise serializers.ValidationError({"user_interests": "An interest is no longer available. Refresh the list."})
-        if not entry.get("interest") and not entry.get("id") and not display_label(entry.get("name")):
-            raise serializers.ValidationError({"user_interests": "Choose a named interest."})
+    catalogue = {item.pk: item for item in InterestModel.objects.order_by("id")}
+    by_name = {}
+    for item in catalogue.values():
+        if display_label(item.name):
+            by_name.setdefault(display_label(item.name).casefold(), item)
+    rows = list(UserInterestModel.objects.filter(user=user).order_by("id"))
+    owned = {row.pk: row for row in rows}
+    plans = []
     for entry in values:
         saved = owned.get(entry.get("id"))
+        if entry.get("id") and saved is None:
+            raise serializers.ValidationError({"user_interests": "This selection is no longer available."})
+        if saved and entry.get("interest") and saved.interest_id not in (None, entry["interest"]):
+            raise serializers.ValidationError({"user_interests": "The selection does not match its interest."})
         interest_id = entry.get("interest") or (saved.interest_id if saved else None)
+        name = display_label(saved.name if saved else entry.get("name"))
         if interest_id:
-            interest = catalogue.get(interest_id) or InterestModel.objects.get(pk=interest_id)
+            interest = catalogue.get(interest_id)
+            if interest is None:
+                raise serializers.ValidationError({"user_interests": "An interest is no longer available. Refresh the list."})
             name = display_label(interest.name)
-            rows = UserInterestModel.objects.filter(user=user, interest_id=interest_id).order_by("id")
         else:
-            name = display_label(saved.name if saved else entry.get("name"))
-            rows = UserInterestModel.objects.filter(user=user, interest__isnull=True, name__iexact=name).order_by("id")
-        existing = rows.first()
+            # Older clients identify selections only by their displayed name.
+            # Preserve links even when an old row label differs from the catalogue.
+            linked = next((row for row in rows if row.interest_id and display_label(row.name).casefold() == name.casefold()), None)
+            item = by_name.get(name.casefold())
+            interest_id = linked.interest_id if linked else (item.pk if item else None)
+            if item:
+                name = display_label(item.name)
+        if not name and not (saved and entry["removed"]):
+            raise serializers.ValidationError({"user_interests": "Choose a named interest."})
+        if interest_id and not display_label(catalogue[interest_id].name) and not entry["removed"]:
+            raise serializers.ValidationError({"user_interests": "Choose a named interest."})
+        plans.append((entry, saved, interest_id, name))
+    for entry, saved, interest_id, name in plans:
+        keys = {name.casefold()}
+        if saved:
+            keys.add(display_label(saved.name).casefold())
+        matches = [row for row in rows if row == saved or
+                   (interest_id is not None and row.interest_id == interest_id) or
+                   display_label(row.name).casefold() in keys]
+        existing = saved or next(iter(matches), None)
         if existing:
-            rows.exclude(pk=existing.pk).update(removed=True)
-            existing.name, existing.removed = name, entry["removed"]
-            existing.save(update_fields=["name", "removed"])
+            duplicates = [row for row in matches if row.pk != existing.pk]
+            UserInterestModel.objects.filter(pk__in=[row.pk for row in duplicates]).update(removed=True)
+            for row in duplicates:
+                row.removed = True
+            existing.name, existing.interest_id, existing.removed = name, interest_id, entry["removed"]
+            existing.save(update_fields=["name", "interest", "removed"])
         elif not entry["removed"]:
-            UserInterestModel.objects.create(user=user, interest_id=interest_id, name=name, removed=False)
+            rows.append(UserInterestModel.objects.create(user=user, interest_id=interest_id, name=name, removed=False))
