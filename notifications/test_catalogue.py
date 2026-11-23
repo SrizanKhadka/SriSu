@@ -149,7 +149,7 @@ class CatalogueTests(MatrixFixtures, APITestCase):
         self.assertEqual(Event.objects.filter(kind="challenge.responded").count(),1)
         with self.assertRaises(NotFound):self.resolve("challenge.invited")
         challenges.act(self.first,challenge.pk,uuid4(),"confirm",2)
-        self.assertFalse(Delivery.objects.filter(event__kind="challenge.progress").exists())
+        self.assertTrue(Delivery.objects.filter(event__kind="challenge.progress").exists())
         challenges.act(self.second,challenge.pk,uuid4(),"confirm",3)
         self.assertEqual(self.resolve("challenge.completed",self.first)["challenge_id"],str(challenge.pk))
         self.assertTrue(Event.objects.get(kind="challenge.completed").quiet)
@@ -243,7 +243,7 @@ class CatalogueTests(MatrixFixtures, APITestCase):
         SingleConnectionModel.objects.create(sender_number=self.third.phone_number,receiver_number=self.first.phone_number,connection_status="BLOCKED")
         with self.assertRaises(NotFound):destination(event,self.third,self.third_sid)
 
-    def test_status_opt_in_hourly_limit_and_clear_invalidates(self):
+    def test_status_changes_each_enqueue_and_clear_invalidates(self):
         Preferences.objects.create(user=self.second,categories={"status":True})
         from social.api.couple_status import STATUSES
         texts=list(STATUSES)
@@ -251,7 +251,7 @@ class CatalogueTests(MatrixFixtures, APITestCase):
             response=self.first_client.put("/api/social/couple-status/mine/",{"couple":self.couple.pk,
                 "text":texts[revision],"expected_revision":revision,"request_id":str(uuid4())},format="json")
             self.assertEqual(response.status_code,200,response.data)
-        self.assertEqual(Delivery.objects.filter(event__kind="status.changed").count(),1)
+        self.assertEqual(Delivery.objects.filter(event__kind="status.changed").count(),2)
         self.assertEqual(self.resolve("status.changed"),{"kind":"home"})
         self.first_client.put("/api/social/couple-status/mine/",{"couple":self.couple.pk,"text":"","expected_revision":2,"request_id":str(uuid4())},format="json")
         with self.assertRaises(NotFound):self.resolve("status.changed")

@@ -68,10 +68,10 @@ def start(user, request_id, couple_id, template_id):
     return challenge, True
 
 
-def notify(kind, user, challenge):
+def notify(kind, user, challenge, *, action=None):
     from notifications.services import partner_event
     partner_event(kind, user, challenge.couple, challenge.pk, f"{challenge.pk}:{challenge.revision}",
-        version=challenge.revision, context={"state": challenge.state})
+        version=challenge.revision, context={"state": challenge.state, "action": action})
 
 
 @transaction.atomic
@@ -129,7 +129,7 @@ def act(user, pk, request_id, action, expected_revision):
     elif action == "cancel" and previous[0] != "invited":
         notify("challenge.cancelled", user, challenge)
     elif action in ("confirm", "pause", "resume") and previous != (challenge.state, challenge.confirmed_by, challenge.paused_by):
-        notify("challenge.progress", user, challenge)
+        notify("challenge.progress", user, challenge, action=action)
     return challenge
 
 

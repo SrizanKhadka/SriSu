@@ -102,7 +102,9 @@ def preview(event, user, session_id):
         challenge = CoupleChallenge.objects.get(pk=event.resource)
         verb = {"challenge.invited": "invited you to a challenge", "challenge.completed": "completed your challenge with you",
             "challenge.cancelled": "cancelled your challenge", "challenge.responded": "declined your challenge" if challenge.state == "declined" else "accepted your challenge",
-            "challenge.progress": "paused your challenge" if challenge.state == "paused" else "updated your challenge"}[kind]
+            "challenge.progress": {"confirm": "finished their part of your challenge", "pause": "paused their part of your challenge",
+                "resume": "resumed their part of your challenge"}.get(event.context.get("action"),
+                    "paused your challenge" if challenge.state == "paused" else "updated your challenge")}[kind]
         result.update(title=f"{actor} {verb}", body=challenge.snapshot.get("title") or title)
     elif kind in {"moment.published", "moment.hearted"}:
         from social.models import CoupleMomentModel

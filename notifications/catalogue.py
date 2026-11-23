@@ -6,8 +6,8 @@ CAPABILITY = "notification-catalogue-2"
 CATEGORY_DEFAULTS = {
     "requests": True, "plans": True, "questions": True, "challenges": True,
     "moments": True, "moment_replies": True,
-    "appreciations": False, "moment_reactions": False, "status": False,
-    "ideas": False, "spark_progress": False, "challenge_progress": False,
+    "appreciations": True, "moment_reactions": True, "status": True,
+    "ideas": True, "spark_progress": True, "challenge_progress": True,
 }
 
 

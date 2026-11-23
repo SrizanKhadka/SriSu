@@ -100,9 +100,6 @@ def emit(kind, recipient, source, resource, *, couple=None, audience=(), version
     for install in installs:
         if policy.modern and (install.platform != "android" or CAPABILITY not in install.capabilities):
             continue
-        if kind == "status.changed" and Delivery.objects.filter(installation=install,
-                event__kind=kind, event__resource=str(resource), event__created_at__gt=timezone.now()-timedelta(hours=1)).exists():
-            continue
         Delivery.objects.create(event=event, installation=install, binding_version=install.version,
             next_attempt_at=timezone.now() + timedelta(seconds=2))
     return event

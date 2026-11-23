@@ -29,7 +29,8 @@ def message(delivery, *, audible):
     group_source = (f"chat:{event.resource}" if event.kind in {"chat.message", "matrix.message"}
         else f"activity:{family}:{event.resource}")
     group = salted_hmac("notification.group", group_source).hexdigest()[:32]
-    # At most two FCM collapse groups per installation, while the OS groups each room.
+    # Retained for legacy automatic-display clients. Schema 2 must not collapse
+    # unrelated activity together: a status cannot erase a queued Spark or Challenge.
     collapse = "chat" if event.kind in {"chat.message", "matrix.message"} else "activity"
     from .previews import CAPABILITY, FALLBACKS
     title, body = FALLBACKS.get(event.kind, ("SriSu", "Open SriSu to see what's new."))
@@ -42,8 +43,11 @@ def message(delivery, *, audible):
                 "installation_id": str(install.pk), "binding_version": str(delivery.binding_version),
                 "created_at": str(event.matrix_timestamp_ms or int(event.created_at.timestamp() * 1000)),
                 "audible": "true" if audible else "false"},
-            android=messaging.AndroidConfig(priority="normal" if event.quiet else "high",
-                ttl=timedelta(seconds=ttl), collapse_key=collapse))
+            # Transport urgency and sound are separate. Every eligible schema-2
+            # message immediately produces a visible alert (or foreground banner),
+            # even when its notification channel is quiet.
+            android=messaging.AndroidConfig(priority="high", ttl=timedelta(seconds=ttl),
+                collapse_key="chat" if collapse == "chat" else None))
     return messaging.Message(**{install.target_kind: install.target},
         notification=messaging.Notification(title=title, body=body),
         data={"schema": "1", "delivery_id": str(delivery.pk), "expires_at": str(int(event.expires_at.timestamp()))},

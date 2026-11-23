@@ -21,8 +21,9 @@ or new physical-phone delivery tests. Earlier October device evidence is histori
 2. OS notification tags distinguish the chat room from each activity resource.
    Updates to the same Plan replace its earlier tray entry; another Plan or chat
    has its own entry. Appreciation thread IDs have a separate namespace from
-   Moment IDs. Provider transport still uses two bounded collapse keys, chat and
-   activity: offline activity may coalesce, so the tray is not an exhaustive inbox.
+   Moment IDs. Schema-2 activity pushes are non-collapsible so unrelated queued
+   events do not replace each other. Legacy schema-1 clients still use the two
+   collapse keys, chat and activity. The tray is not a durable activity inbox.
 3. Plan alerts use the effective original/proposed future deadline and a keyed
    signature of meaningful proposal state. Checklist-only revisions do not
    invalidate responses. Declines, withdrawn changes and cancellations have their
@@ -30,6 +31,14 @@ or new physical-phone delivery tests. Earlier October device evidence is histori
    proposal, completion, removal or authorization still invalidate stale entries.
 
 ## Events and defaults
+
+Updated 23 November 2026: missing category values now enable the full catalogue,
+repeated actual status changes are no longer dropped for an hour, and schema-2
+activity transport no longer collapses unrelated events. No new migration is needed
+on top of the preview release. Deploy backend code and restart web/worker, then
+update Android for matching settings and the Home status banner. Explicit opt-outs,
+quiet policies, stale-event checks and capability gates remain authoritative.
+Challenge progress copy identifies confirmation, pause and resume separately.
 
 The original generic copy is superseded by `notification-previews-1` (23 November
 2026). Capable Android clients receive schema-2 data-only routing metadata and safe,
@@ -51,26 +60,28 @@ The actor is excluded except an explicit visitor/couple appreciation exchange.
 | `plan.cancelled` | Other partner / cancelled Plan | On | Audible, 6 hours |
 | `spark.started` | Other partner / manual question | On | Quiet, 6 hours |
 | `spark.revealed` | Partner who answered first / revealed answers | On | Quiet, 6 hours |
-| `spark.submitted` | Partner who has not answered / question | Off | Quiet, 6 hours |
+| `spark.submitted` | Partner who has not answered / question | On | Quiet, 6 hours |
 | `challenge.invited` | Other partner / Challenge | On | Audible, 24 hours |
 | `challenge.responded` | Original inviter / Challenge | On | Quiet, 6 hours |
 | `challenge.completed` | Partner who confirmed first / Challenge | On | Quiet, 6 hours |
 | `challenge.cancelled` | Other partner / formerly active Challenge | On | Quiet, 6 hours |
-| `challenge.progress` | Other partner / confirmation, pause or resume | Off | Quiet, 6 hours |
+| `challenge.progress` | Other partner / confirmation, pause or resume | On | Quiet, 6 hours |
 | `moment.published` | Other partner / live Moment | On | Quiet, 6 hours or Moment expiry |
-| `moment.hearted` | Moment creator / Moment | Off | Quiet, 6 hours or Moment expiry |
-| `moment.appreciated` | Each opted-in original couple member / private thread | Off | Quiet, 24 hours |
+| `moment.hearted` | Moment creator / Moment | On | Quiet, 6 hours or Moment expiry |
+| `moment.appreciated` | Each enabled original couple member / private thread | On | Quiet, 24 hours |
 | `moment.replied` | Original appreciation sender / private thread | On | Quiet, 24 hours |
-| `status.changed` | Other partner / current Home status | Off | Quiet, 1 hour; at most one per hour per device |
-| `idea.created` | Other partner / exact shared idea | Off | Quiet, 6 hours |
-| `idea.interested` | Idea creator / mutual idea | Off | Quiet, 6 hours |
+| `status.changed` | Other partner / current Home status | On | Quiet, 1 hour; each actual nonempty change |
+| `idea.created` | Other partner / exact shared idea | On | Quiet, 6 hours |
+| `idea.interested` | Idea creator / mutual idea | On | Quiet, 6 hours |
 
 Audible means eligible for the existing audible channel, subject to the shared
 30-second sound budget and Android permission, channel, volume and DND settings.
-Quiet activity uses normal FCM transport priority and the quiet channel; it does
-not consume the sound budget. Android may delay normal-priority delivery while idle.
-Foreground updates use authorized previews and are suppressed on the
-matching visible destination. Already accepted provider messages cannot be recalled.
+Schema-2 activity uses high FCM transport priority, including quiet categories,
+so an eligible visible notification can arrive promptly during idle. Sound remains
+controlled by the channel and does not follow transport priority. Legacy schema-1
+quiet activity retains normal priority. Foreground updates use authorized previews
+and are suppressed on the matching feature destination, except status updates:
+Home is a broad dashboard, so status banners also appear while Home is visible. Already accepted provider messages cannot be recalled.
 
 There is no extra alert for Matrix reactions/edits/reads/presence, ordinary profile
 or Moment edits, deletion/expiry, views, checklist updates, status clearing,
@@ -82,8 +93,9 @@ Repeated hearts on one Moment do not create additional alerts.
 ## Controls and compatibility
 
 The existing push/activity/chat switches and chat mute remain authoritative.
-Twelve category keys in `notifications/catalogue.py` provide six default-on and
-six optional groups. Preferences writes merge only supplied keys and retain
+All twelve category keys in `notifications/catalogue.py` now default on. Explicit
+stored false values still win; missing keys adopt the current defaults without
+rewriting user preferences. Preferences writes merge only supplied keys and retain
 optimistic revisions; old clients omitting categories preserve all choices.
 Unknown keys are rejected. Preferences remain account-wide; permission and channel
 sound remain device-specific. Local Plan reminders retain their existing controls.
@@ -123,8 +135,8 @@ the existing Plan editor. Home's bell remains the current requests view.
    endpoint, database replacement or credential distribution is needed.
 3. Install the new Android app and update clients used to send feature cards.
    Check registration, categories, one domain alert per marked card, and correct
-   Plan/Challenge/Moment/note/idea taps. Check an opted-out category, hourly status
-   suppression, revoked/blocked access, offline expiry and closed/locked delivery.
+   Plan/Challenge/Moment/note/idea taps. Check an opted-out category, repeated actual
+   status changes, revoked/blocked access, offline expiry and closed/locked delivery.
    Confirm actual sound with the device owner; provider acceptance is insufficient.
 4. Roll back Android first if returning to the old backend; new Android registration
    and card reservation require the new API. Keep the additive database fields.
