@@ -73,8 +73,8 @@ def create(user, request_id, couple_id, **values):
         raise ValidationError({'starts_at': 'Choose a future time.'})
     plan = CouplePlanModel.objects.create(couple=couple, created_by=user, request_id=request_id,
         audience_membership_ids=[m.pk for m in members], creation_payload=original, **values)
-    from notifications.services import partner_event
-    partner_event("plan.created", user, couple, plan.pk, plan.pk, expires_at=plan.starts_at)
+    from notifications.domain import plan_event
+    plan_event("plan.created", user, plan, plan.pk)
     return plan, True
 
 
@@ -140,6 +140,9 @@ def act(user, pk, request_id, expected_revision, action, **values):
     PlanOperation.objects.create(plan=plan, author=user, request_id=request_id, payload=intent)
     if (action in ('accept', 'decline', 'propose', 'withdraw_change')
             and previous_proposal != payload(dict(response=plan.response, note=plan.response_note, change=plan.pending_change))):
-        from notifications.services import partner_event
-        partner_event("plan.responded", user, plan.couple, plan.pk, f"{plan.pk}:{plan.revision}", version=plan.revision, expires_at=plan.starts_at)
+        from notifications.domain import plan_event
+        plan_event("plan.responded", user, plan, f"{plan.pk}:{plan.revision}", action=action)
+    elif action == 'cancel':
+        from notifications.domain import plan_event
+        plan_event("plan.cancelled", user, plan, f"{plan.pk}:{plan.revision}")
     return plan

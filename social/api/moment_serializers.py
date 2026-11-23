@@ -157,6 +157,11 @@ class MomentNoteReplySerializer(serializers.ModelSerializer):
 class MomentNoteSerializer(serializers.ModelSerializer):
     message = serializers.CharField(max_length=1000, allow_blank=False, trim_whitespace=True)
     replies = serializers.SerializerMethodField()
+    can_reply = serializers.SerializerMethodField()
+
+    def get_can_reply(self, obj):
+        # The authorized queryset computes this once, including embedded threads.
+        return getattr(obj, "notification_can_reply", False)
 
     def get_replies(self, obj):
         rows = getattr(obj, "recent_replies", None)
@@ -166,5 +171,5 @@ class MomentNoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CoupleMomentNoteModel
-        fields = ["id", "moment", "sender", "message", "created_at", "replies"]
+        fields = ["id", "moment", "sender", "message", "created_at", "replies", "can_reply"]
         read_only_fields = ["id", "moment", "sender", "created_at"]

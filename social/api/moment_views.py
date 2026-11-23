@@ -139,7 +139,11 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
             if request.user.pk not in obj.audience_user_ids or request.user.pk == obj.created_by_id:
                 raise PermissionDenied()
             if request.data["reacted"]:
-                MomentReaction.objects.get_or_create(moment=obj, user=request.user)
+                reaction, created = MomentReaction.objects.get_or_create(moment=obj, user=request.user)
+                if created:
+                    from notifications.services import partner_event
+                    partner_event("moment.hearted", request.user, obj.couple, obj.pk, obj.pk,
+                        context={"actor_id": request.user.pk}, expires_at=obj.expires_at)
             else:
                 MomentReaction.objects.filter(moment=obj, user=request.user).delete()
         return Response({"data": self.get_serializer(self.get_object()).data})
@@ -262,6 +266,10 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
             serializer.is_valid(raise_exception=True)
             note = serializer.save(moment=moment, sender=request.user, recipient_membership_ids=recipients,
                 recipient_user_ids=list(moment.couple.memberships.filter(ended_at__isnull=True).order_by("id").values_list("user_id", flat=True)))
+            from notifications.services import emit
+            for member in moment.couple.memberships.filter(ended_at__isnull=True).select_related("user"):
+                emit("moment.appreciated", member.user, note.pk, note.pk,
+                    couple=moment.couple, audience=note.recipient_membership_ids)
         return Response({"data": MomentNoteSerializer(note).data}, status=status.HTTP_201_CREATED)
 
 
@@ -299,6 +307,9 @@ class MomentNoteView(PrivateResponseMixin, mixins.ListModelMixin, mixins.Retriev
             serializer = MomentNoteReplySerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             reply = serializer.save(note=note, author=request.user)
+            from notifications.services import emit
+            emit("moment.replied", note.sender, reply.pk, note.pk, couple=note.moment.couple,
+                audience=note.recipient_membership_ids, context={"reply_id": reply.pk})
         return Response({"data": MomentNoteReplySerializer(reply).data}, status=status.HTTP_201_CREATED)
 
     def perform_destroy(self, instance):

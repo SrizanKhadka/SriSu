@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 from django.db import transaction
-from django.db.models import Count, Q, F, BigIntegerField, Prefetch
+from django.db.models import Count, Q, F, BigIntegerField, Prefetch, Case, When, Value, BooleanField
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
 from django.utils import timezone
@@ -78,14 +78,17 @@ def visible_notes(user, recipients_only=False):
     """One privacy policy for note endpoints, embedded notes and partner replies."""
     membership = CoupleMembershipModel.objects.filter(user=user, ended_at__isnull=True).first()
     allowed = Q(pk__in=[]) if recipients_only else Q(sender=user)
+    recipient_access = Q(pk__in=[])
     if membership:
-        allowed |= (Q(moment__couple_id=membership.couple_id,
+        recipient_access = (Q(moment__couple_id=membership.couple_id,
                       moment__couple_id__in=active_couples().values("id")) &
             (Q(recipient_membership_ids__0=membership.id, recipient_user_ids__0=user.id) |
              Q(recipient_membership_ids__1=membership.id, recipient_user_ids__1=user.id)))
+        allowed |= recipient_access
     blocked = list(blocked_user_ids(user))
     return (CoupleMomentNoteModel.objects.filter(allowed).exclude(sender_id__in=blocked).exclude(
         moment__couple__memberships__user_id__in=blocked)
+        .annotate(notification_can_reply=Case(When(recipient_access, then=Value(True)), default=Value(False), output_field=BooleanField()))
         .prefetch_related(Prefetch("replies", queryset=CoupleMomentNoteReplyModel.objects.order_by("-created_at", "-id")[:50], to_attr="recent_replies")).order_by("-created_at", "-id"))
 
 
@@ -174,7 +177,8 @@ def save_moment(serializer, user, moment=None):
     caption = data.get("caption", moment.caption if moment else "")
     if not caption.strip() and not retained and not uploads:
         raise ValidationError("A caption or at least one photo is required.")
-    if moment is None:
+    created = moment is None
+    if created:
         moment = CoupleMomentModel.objects.create(
             couple=couple, created_by=user, audience_membership_ids=[m.id for m in members],
             audience_user_ids=[m.user_id for m in members], **data)
@@ -195,4 +199,7 @@ def save_moment(serializer, user, moment=None):
         CoupleMomentPhotoModel.objects.create(moment=moment, order=index, image=stored,
             width=dimensions[0], height=dimensions[1])
     moment._prefetched_objects_cache = {}
+    if created:
+        from notifications.services import partner_event
+        partner_event("moment.published", user, couple, moment.pk, moment.pk, expires_at=moment.expires_at)
     return moment

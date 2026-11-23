@@ -84,7 +84,7 @@ def session_for(user, spark_id, *, lock=False):
 
 
 @transaction.atomic
-def start(user, request_id, couple_id, question_id):
+def start(user, request_id, couple_id, question_id, *, automatic=False):
     couple, members = current_couple(user, couple_id, lock=True)
     room, mapping, _ = room_for(couple, members)
     existing = SparkSession.objects.filter(pk=request_id).first()
@@ -102,10 +102,14 @@ def start(user, request_id, couple_id, question_id):
         else:
             raise SparkConflict("You already have a Spark together. Finish or skip it before starting another.")
     question = QUESTIONS[question_id]
-    return SparkSession.objects.create(id=request_id, couple=couple, creator=user,
+    spark = SparkSession.objects.create(id=request_id, couple=couple, creator=user,
         audience_membership_ids=[m.pk for m in members], audience_user_ids=[m.user_id for m in members],
         room_id=room.pk, matrix_room_id=mapping.matrix_room_id, membership_epoch=mapping.membership_epoch,
-        question_id=question_id, question=question["text"], deck=question["deck"]), True
+        question_id=question_id, question=question["text"], deck=question["deck"], assigned_automatically=automatic)
+    if not automatic:
+        from notifications.services import partner_event
+        partner_event("spark.started", user, couple, spark.pk, spark.pk)
+    return spark, True
 
 
 @transaction.atomic
@@ -130,6 +134,9 @@ def submit(user, spark_id, envelope):
     if spark.state == "revealed":
         from notifications.services import partner_event
         partner_event("spark.revealed", user, spark.couple, spark.pk, spark.pk)
+    else:
+        from notifications.services import partner_event
+        partner_event("spark.submitted", user, spark.couple, spark.pk, spark.pk)
     return spark
 
 
@@ -197,9 +204,7 @@ def daily(user, couple_id, time_zone):
         qid = next((key for key in QUESTIONS if key not in latest), None)
         if qid is None:
             qid = min(QUESTIONS, key=lambda key: latest[key])
-        selected, _ = start(user, uuid4(), couple.pk, qid)
-        selected.assigned_automatically = True
-        selected.save(update_fields=["assigned_automatically"])
+        selected, _ = start(user, uuid4(), couple.pk, qid, automatic=True)
     schedule.day = today
     schedule.spark = selected
     schedule.save()

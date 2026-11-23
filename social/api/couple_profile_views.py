@@ -196,8 +196,8 @@ class ProfilePlans(ProfileAPI):
                 raise ProfileConflict()
             if created:
                 record_change(couple, request.user, "plans")
-                from notifications.services import partner_event
-                partner_event("plan.created", request.user, couple, plan.pk, plan.pk, expires_at=plan.starts_at)
+                from notifications.domain import plan_event
+                plan_event("plan.created", request.user, plan, plan.pk)
             return Response({"message": "Plan saved.", "data": plan_data(plan)}, status=201 if created else 200)
 
 
@@ -238,8 +238,8 @@ class ProfilePlanDetail(ProfileAPI):
             plan.save(update_fields=["response", "response_note", "completed", "completed_at", "completed_by", "revision"])
             record_change(couple, request.user, "plans")
             if "response" in data:
-                from notifications.services import partner_event
-                partner_event("plan.responded", request.user, couple, plan.pk, f"{plan.pk}:{plan.revision}", version=plan.revision, expires_at=plan.starts_at)
+                from notifications.domain import plan_event
+                plan_event("plan.responded", request.user, plan, f"{plan.pk}:{plan.revision}")
             return Response({"message": "Plan saved.", "data": plan_data(plan)})
 
 

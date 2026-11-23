@@ -120,6 +120,8 @@ def _encrypted_event(item):
         return
     room = mapping.chat_room
     recipient = room.user_two if sender.pk == room.user_one_id else room.user_one
+    from .cards import MARKER, match_marker
+    card_kind = match_marker(content.get(MARKER), sender, mapping, item["event_id"])
     _, members = current_couple(sender, room.couple_id)
     event, created = Event.objects.get_or_create(recipient=recipient, kind="matrix.message",
         source=digest(item["room_id"] + "\n" + item["event_id"]), defaults={
@@ -127,6 +129,7 @@ def _encrypted_event(item):
             "couple": room.couple, "audience_membership_ids": [member.pk for member in members],
             "matrix_room_id": item["room_id"], "matrix_event_id": item["event_id"],
             "matrix_timestamp_ms": timestamp,
+            "context": {"card_kind": card_kind} if card_kind else {},
             "expires_at": datetime.fromtimestamp(timestamp / 1000, datetime_timezone.utc) + MAX_AGE})
     if not created or not enabled_for(event) or suppressed(event, read=True):
         return
@@ -136,6 +139,11 @@ def _encrypted_event(item):
         updated_at__gte=installation_cutoff(), session__revoked_at__isnull=True,
         session__expires_at__gt=now)
     for install in installs:
+        from .catalogue import CAPABILITY as CATALOGUE_CAPABILITY
+        # Plans already have a domain alert on old clients. New clients also
+        # have dedicated Challenge/Spark alerts (or intentionally silent daily questions).
+        if card_kind == "plan" or (card_kind and CATALOGUE_CAPABILITY in install.capabilities):
+            continue
         if CAPABILITY in install.capabilities:
             Delivery.objects.create(event=event, installation=install, binding_version=install.version,
                 next_attempt_at=now + timedelta(seconds=2))
