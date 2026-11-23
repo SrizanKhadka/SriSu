@@ -190,7 +190,57 @@ class PreviewView(NotificationView):
         return Response({"data": value})
 
 
+class InboxQuery(StrictSerializer):
+    cursor = serializers.CharField(max_length=2048, required=False)
+    unread = serializers.ChoiceField(choices=["true", "false"], required=False, default="false")
+
+
+class InboxRead(StrictSerializer):
+    ids = serializers.ListField(child=serializers.UUIDField(), min_length=1, max_length=50, required=False)
+    through = serializers.CharField(max_length=2048, required=False)
+
+    def validate(self, data):
+        if ("ids" in data) == ("through" in data):
+            raise serializers.ValidationError("Choose notification IDs or a read boundary.")
+        return data
+
+
+class InboxView(NotificationView):
+    def get(self, request):
+        from .inbox import page
+        query = InboxQuery(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        return Response({"data": page(request.user, cursor=query.validated_data.get("cursor"),
+            unread=query.validated_data["unread"] == "true")})
+
+
+class InboxSummaryView(NotificationView):
+    def get(self, request):
+        from .inbox import summary
+        return Response({"data": summary(request.user)})
+
+
+class InboxReadView(NotificationView):
+    def post(self, request):
+        from .inbox import mark_read
+        value = InboxRead(data=request.data)
+        value.is_valid(raise_exception=True)
+        return Response({"data": mark_read(request.user, **value.validated_data)})
+
+
+class InboxOpenView(NotificationView):
+    def post(self, request, event_id):
+        from .inbox import open_item
+        if request.data:
+            raise serializers.ValidationError("Opening a notification accepts no fields.")
+        return Response({"data": open_item(request.user, event_id)})
+
+
 urlpatterns = [path("v1/installations/", InstallationView.as_view()),
+    path("v1/inbox/", InboxView.as_view()),
+    path("v1/inbox/summary/", InboxSummaryView.as_view()),
+    path("v1/inbox/read/", InboxReadView.as_view()),
+    path("v1/inbox/<uuid:event_id>/open/", InboxOpenView.as_view()),
     path("v1/cards/", CardView.as_view()),
     path("v1/preferences/", PreferencesView.as_view()),
     path("v1/deliveries/<uuid:delivery_id>/preview/", PreviewView.as_view()),

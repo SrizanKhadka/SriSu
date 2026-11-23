@@ -69,13 +69,15 @@ class Event(models.Model):
     quiet = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(db_index=True)
+    inbox_read_at = models.DateTimeField(null=True, blank=True)
     matrix_room_id = models.CharField(max_length=255, blank=True)
     matrix_event_id = models.CharField(max_length=255, blank=True)
     matrix_timestamp_ms = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["recipient", "kind", "source"], name="notification_source_once")]
-        indexes = [models.Index(fields=["matrix_room_id", "matrix_event_id"], name="notification_matrix_event")]
+        indexes = [models.Index(fields=["matrix_room_id", "matrix_event_id"], name="notification_matrix_event"),
+            models.Index(fields=["recipient", "-created_at", "-id"], name="notification_inbox_order")]
 
 
 class Delivery(models.Model):

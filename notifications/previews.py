@@ -55,6 +55,11 @@ def preview(event, user, session_id):
     destination(event, user, session_id)
     if not enabled_for(event):
         raise NotFound()
+    return display_copy(event, user)
+
+
+def display_copy(event, user):
+    """Private transient copy: caller MUST authorize the current resource first."""
     title, body = FALLBACKS.get(event.kind, ("SriSu", "Open SriSu to see what's new."))
     partner = event.couple.memberships.filter(ended_at__isnull=True).exclude(user=user).select_related("user").first() if event.couple_id else None
     actor = name(partner.user if partner else None)

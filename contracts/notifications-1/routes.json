@@ -26,5 +26,21 @@
   {
     "method": "GET",
     "path": "api/notifications/v1/deliveries/{delivery_id}/preview/"
+  },
+  {
+    "method": "GET",
+    "path": "api/notifications/v1/inbox/"
+  },
+  {
+    "method": "GET",
+    "path": "api/notifications/v1/inbox/summary/"
+  },
+  {
+    "method": "POST",
+    "path": "api/notifications/v1/inbox/read/"
+  },
+  {
+    "method": "POST",
+    "path": "api/notifications/v1/inbox/{event_id}/open/"
   }
 ]

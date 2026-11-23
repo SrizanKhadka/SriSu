@@ -80,7 +80,7 @@ ACTIVITY_KINDS = set(POLICIES)
 
 def emit(kind, recipient, source, resource, *, couple=None, audience=(), version=0, expires_at=None, context=None, quiet=None):
     """Capture current bindings in the domain transaction; never backfill or inspect Matrix."""
-    if not settings.NOTIFICATIONS_ENABLED or kind not in ACTIVITY_KINDS:
+    if kind not in ACTIVITY_KINDS:
         return None
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError("Notification events require a domain transaction")
@@ -92,7 +92,7 @@ def emit(kind, recipient, source, resource, *, couple=None, audience=(), version
         "resource": str(resource), "couple": couple, "audience_membership_ids": list(audience),
         "resource_version": version, "expires_at": expiry, "context": context or {},
         "quiet": not policy.audible if quiet is None else quiet})
-    if not created or not enabled_for(event) or expiry <= timezone.now():
+    if not created or not settings.NOTIFICATIONS_ENABLED or not enabled_for(event) or expiry <= timezone.now():
         return event
     installs = Installation.objects.filter(user=recipient, active=True, permitted=True,
         updated_at__gte=installation_cutoff(),
@@ -172,8 +172,6 @@ def destination(event, user, sid):
 
 
 def partner_event(kind, actor, couple, resource, source, **kwargs):
-    if not settings.NOTIFICATIONS_ENABLED:
-        return None
     try:
         couple, members = current_couple(actor, couple.pk)
     except Http404:
