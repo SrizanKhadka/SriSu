@@ -1,6 +1,7 @@
 from datetime import timedelta
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from django.urls import path
 from rest_framework import serializers
@@ -15,6 +16,7 @@ from rest_framework.exceptions import ParseError
 from .models import Delivery, Installation, Preferences
 from .services import BindingConflict, destination, register
 from .catalogue import CAPABILITY, CATEGORY_DEFAULTS, categories
+from .previews import CAPABILITY as PREVIEW_CAPABILITY
 
 
 class BoundedJSONParser(JSONParser):
@@ -41,8 +43,8 @@ class Registration(StrictSerializer):
     target_kind = serializers.ChoiceField(choices=["fid", "token"])
     target = serializers.CharField(min_length=16, max_length=4096, trim_whitespace=False)
     permitted = serializers.BooleanField()
-    capabilities = serializers.ListField(child=serializers.ChoiceField(choices=["matrix-chat-push-1", CAPABILITY]),
-        max_length=2, required=False, default=list)
+    capabilities = serializers.ListField(child=serializers.ChoiceField(choices=["matrix-chat-push-1", CAPABILITY, PREVIEW_CAPABILITY]),
+        max_length=3, required=False, default=list)
 
     def validate_capabilities(self, value):
         if len(value) != len(set(value)):
@@ -121,7 +123,7 @@ def preferences_data(pref):
     return {"contract": "notifications-1", "push": pref.push, "chat": pref.chat, "activity": pref.activity,
         "mute_until": pref.mute_until, "mute_forever": pref.mute_forever, "revision": pref.revision,
         "categories": categories(pref),
-        "capabilities": ["activity-notifications-1", "spark-notifications-1", CAPABILITY] +
+        "capabilities": ["activity-notifications-1", "spark-notifications-1", CAPABILITY, PREVIEW_CAPABILITY] +
             (["matrix-chat-push-1"] if settings.MATRIX_CHAT_PUSH_ENABLED else [])}
 
 
@@ -171,7 +173,25 @@ class CardView(NotificationView):
         return Response({"data": {"key": str(binding.pk)}})
 
 
+class PreviewView(NotificationView):
+    def get(self, request, delivery_id):
+        from .previews import preview
+        delivery = Delivery.objects.select_related("event__couple", "installation").filter(pk=delivery_id,
+            event__recipient=request.user, installation__user=request.user,
+            installation__session_id=request.auth["sid"], installation__active=True,
+            installation__permitted=True).first()
+        if delivery is None or delivery.binding_version != delivery.installation.version:
+            raise NotFound()
+        try:
+            value = preview(delivery.event, request.user, request.auth["sid"])
+        except ObjectDoesNotExist:
+            # A resource may be deleted between authorization and copy loading.
+            raise NotFound() from None
+        return Response({"data": value})
+
+
 urlpatterns = [path("v1/installations/", InstallationView.as_view()),
     path("v1/cards/", CardView.as_view()),
     path("v1/preferences/", PreferencesView.as_view()),
+    path("v1/deliveries/<uuid:delivery_id>/preview/", PreviewView.as_view()),
     path("v1/deliveries/<uuid:delivery_id>/", ResolveView.as_view())]

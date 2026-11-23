@@ -31,8 +31,21 @@ def message(delivery, *, audible):
     group = salted_hmac("notification.group", group_source).hexdigest()[:32]
     # At most two FCM collapse groups per installation, while the OS groups each room.
     collapse = "chat" if event.kind in {"chat.message", "matrix.message"} else "activity"
+    from .previews import CAPABILITY, FALLBACKS
+    title, body = FALLBACKS.get(event.kind, ("SriSu", "Open SriSu to see what's new."))
+    if install.platform == "android" and CAPABILITY in install.capabilities:
+        # Data-only delivery lets Android fetch authorized details and decrypt
+        # messages locally, including when the activity/process is not running.
+        return messaging.Message(**{install.target_kind: install.target},
+            data={"schema": "2", "delivery_id": str(delivery.pk), "expires_at": str(int(event.expires_at.timestamp())),
+                "kind": event.kind, "title": title, "body": body, "group": group,
+                "installation_id": str(install.pk), "binding_version": str(delivery.binding_version),
+                "created_at": str(event.matrix_timestamp_ms or int(event.created_at.timestamp() * 1000)),
+                "audible": "true" if audible else "false"},
+            android=messaging.AndroidConfig(priority="normal" if event.quiet else "high",
+                ttl=timedelta(seconds=ttl), collapse_key=collapse))
     return messaging.Message(**{install.target_kind: install.target},
-        notification=messaging.Notification(title="SriSu", body="You have an update. Open SriSu to view it."),
+        notification=messaging.Notification(title=title, body=body),
         data={"schema": "1", "delivery_id": str(delivery.pk), "expires_at": str(int(event.expires_at.timestamp()))},
         android=messaging.AndroidConfig(priority="normal" if event.quiet else "high", ttl=timedelta(seconds=ttl), collapse_key=collapse,
             notification=messaging.AndroidNotification(channel_id="srisu_updates" if audible else "srisu_updates_quiet",

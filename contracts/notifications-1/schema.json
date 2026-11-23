@@ -40,12 +40,13 @@
         },
         "capabilities": {
           "type": "array",
-          "maxItems": 2,
+          "maxItems": 3,
           "uniqueItems": true,
           "items": {
             "enum": [
               "matrix-chat-push-1",
-              "notification-catalogue-2"
+              "notification-catalogue-2",
+              "notification-previews-1"
             ]
           }
         }
@@ -116,7 +117,8 @@
               "activity-notifications-1",
               "spark-notifications-1",
               "matrix-chat-push-1",
-              "notification-catalogue-2"
+              "notification-catalogue-2",
+              "notification-previews-1"
             ]
           }
         },
@@ -504,6 +506,102 @@
       },
       "required": [
         "key"
+      ]
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event_kind": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "room_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "matrix_event_id": {
+          "type": "string",
+          "pattern": "^\\$.{1,254}$"
+        }
+      },
+      "required": [
+        "event_kind",
+        "title",
+        "body"
+      ]
+    },
+    "push_data_v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "2"
+        },
+        "delivery_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expires_at": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "installation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "binding_version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "group": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z]+\\.[a-z_]+$",
+          "maxLength": 32
+        },
+        "audible": {
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "schema",
+        "delivery_id",
+        "expires_at",
+        "installation_id",
+        "binding_version",
+        "created_at",
+        "group",
+        "kind",
+        "audible",
+        "title",
+        "body"
       ]
     }
   }

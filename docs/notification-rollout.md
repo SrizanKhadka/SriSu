@@ -31,9 +31,12 @@ or new physical-phone delivery tests. Earlier October device evidence is histori
 
 ## Events and defaults
 
-All remote copy remains generic: **SriSu** / **You have an update. Open SriSu to
-view it.** Only schema, opaque delivery UUID and expiry go through FCM. The worker
-and tap endpoint reauthorize current state. No historical events are backfilled.
+The original generic copy is superseded by `notification-previews-1` (23 November
+2026). Capable Android clients receive schema-2 data-only routing metadata and safe,
+event-specific fallback text, then fetch the authenticated `/preview/` endpoint.
+Names, message text, plan details and private content never enter FCM or the outbox.
+Matrix message text is decrypted only on Android. Legacy clients retain schema-1
+auto-display with specific safe copy. No historical events are backfilled.
 The actor is excluded except an explicit visitor/couple appreciation exchange.
 
 | Event | Recipient / destination | Default | Sound / maximum lifetime |
@@ -66,7 +69,7 @@ Audible means eligible for the existing audible channel, subject to the shared
 30-second sound budget and Android permission, channel, volume and DND settings.
 Quiet activity uses normal FCM transport priority and the quiet channel; it does
 not consume the sound budget. Android may delay normal-priority delivery while idle.
-Foreground updates use the existing generic banner and are suppressed on the
+Foreground updates use authorized previews and are suppressed on the
 matching visible destination. Already accepted provider messages cannot be recalled.
 
 There is no extra alert for Matrix reactions/edits/reads/presence, ordinary profile
@@ -149,3 +152,59 @@ category/legacy-write behavior, private payloads, card correlation and mixed-cli
 fallback, stale authorization, rescheduling and note expiry. See the paired
 frontend `docs/validation/notifications/rollout-20261122.md` for executed counts,
 HTTP/UI checks, commits and remaining live-device coverage.
+
+## Specific notification previews — 23 November 2026
+
+The `notification-previews-1` capability replaces the universal update text with
+an action, actor and useful preview. Android receives a schema-2 **data-only** push,
+posts a safe event-specific fallback immediately, and schedules bounded background
+work to load `/api/notifications/v1/deliveries/{delivery_id}/preview/`. This endpoint
+rechecks the current user, device session, installation binding, permission,
+preferences and live resource authorization. Responses are `private, no-store`.
+Older installations retain schema-1 automatic display with specific safe wording.
+
+| Notification | Detailed presentation |
+| --- | --- |
+| Chat message | Partner name and the actual text; photo/video/voice labels with a caption when present |
+| Plan invitation, response or cancellation | Partner/action, plan title, scheduled or proposed local date/time, time zone and place |
+| Local Plan reminder | “Coming up: [title]”, agreed date/time, time zone and place |
+| Partner invitation/acceptance | Person's name and connection action |
+| Sharing proposal/approval | Partner's name and sharing action |
+| Question started/answered/revealed | Partner/action and the question; unrevealed private answers are never previewed |
+| Challenge invitation/response/progress/completion/cancellation | Partner/action and challenge title |
+| Moment published/hearted | Partner/action and moment caption, title or photo label |
+| Appreciation or reply | Actual author and note/reply text |
+| Status | Partner name and current authorized status text |
+| Shared date idea/mutual interest | Partner/action and the idea, such as Coffee together |
+
+Encrypted Matrix messages are decrypted **only on the receiving device**, from the
+exact authorized event in the existing protected Matrix store. Django/FCM never
+receive their plaintext. The background reader does not enable the outbox, send
+read receipts, download media, or take over a foreground conversation. Android's
+activity and workers share one process-owned dependency graph/crypto client.
+This is necessary for a closed app to read the same keys without opening a second
+writer on the encrypted store. iOS retains its existing graph lifetime.
+
+Android uses MessagingStyle for chat and expanded text for activity. Updating a
+fallback with private detail does not alert again. A newer delivery, dismissal,
+expiry, revoked authorization, logout or account/binding change prevents stale
+work from displaying old content. WorkManager and replay metadata contain only
+opaque IDs and safe copy; private fetched content is not persisted by this feature.
+Local reminder details use encrypted KVault storage and are cleared when removed;
+reminders still reflect the last authorized sync while offline.
+
+Private details have Android PRIVATE visibility with an event-specific public
+version; the user's lock-screen settings control whether details are visible.
+Missing network or decryption keys keep a specific safe fallback, not invented
+message text. Existing sound/mute/category policies and tap destinations remain.
+Foreground banners use the same preview where available, suppressing the matching
+visible destination. Notification text is bounded and strips unsafe controls.
+
+Deploy the backend first, then install/launch the Android update to register the
+new capability. This increment adds **no migration** beyond the catalogue baseline
+`notifications.0005`. Do not roll a registered schema-2 client back before removing
+its capability. The application has no push-delivery guarantee after Android
+Force stop. Apple enrollment/APNs remains skipped.
+
+These are native Android presentation changes, with no new Figma screen or claimed
+live Figma match. Figma remains `LztysD1YvINX7RwZpnhhTt`; no design file is changed.

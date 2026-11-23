@@ -62,7 +62,7 @@ class NotificationTests(Fixtures, APITestCase):
         row=Delivery.objects.get(); wire=message(row, audible=True)
         self.assertEqual(set(wire.data), {'schema','delivery_id','expires_at'})
         self.assertNotIn(plan.title, str(wire.data))
-        self.assertEqual(wire.notification.body, 'You have an update. Open SriSu to view it.')
+        self.assertEqual(wire.notification.body, 'Your partner invited you to a plan.')
         url=f'/api/notifications/v1/deliveries/{row.pk}/'
         self.assertEqual(self.third_client.get(url).status_code, 404)
         self.assertEqual(self.first_client.get(url).status_code, 404)
