@@ -14,7 +14,8 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
 
-from authentication.models import UserInterestModel, InterestModel
+from authentication.models import UserInterestModel, InterestModel, UserModel
+from authentication.interests import display_label
 from social.models import (CoupleModel, CoupleMembershipModel, CoupleConnectionModel,
     CoupleStoryAnswerModel, CoupleSongModel, CoupleProfileChangeModel,
     CouplePrivacyConsentModel, CoupleFaveModel)
@@ -173,6 +174,9 @@ def record_change(couple, user, section, action="updated"):
 
 
 def update_section(couple, members, user, section, data):
+    if section == "interests":
+        # Serialize both editors before reading the revision or any selections.
+        UserModel.objects.select_for_update().get(pk=user.pk)
     if not (section == "sharing" and data.get("action") == "revoke"):
         ensure_revision(couple, members, user, section, data["expected_revision"])
     if section == "story":
@@ -191,12 +195,15 @@ def update_section(couple, members, user, section, data):
         couple.anniversary_date = data["anniversary_date"]
         couple.save(update_fields=["anniversary_date"])
     elif section == "interests":
-        names = data["names"]
-        existing = list(UserInterestModel.objects.filter(user=user))
-        catalogue = {item.name.casefold(): item for item in InterestModel.objects.all()}
+        names = list(dict.fromkeys(display_label(name) for name in data["names"] if display_label(name)))
+        existing = list(UserInterestModel.objects.filter(user=user).order_by("id"))
+        catalogue = {}
+        for item in InterestModel.objects.order_by("id"):
+            if display_label(item.name):
+                catalogue.setdefault(display_label(item.name).casefold(), item)
         kept = set()
         for name in names:
-            row = next((item for item in existing if item.name.casefold() == name.casefold() and item.pk not in kept), None)
+            row = next((item for item in existing if display_label(item.name).casefold() == name.casefold() and item.pk not in kept), None)
             if row is None:
                 row = UserInterestModel(user=user)
             row.name = name

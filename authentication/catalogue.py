@@ -7,16 +7,14 @@ from srisu.api.cache import PerformanceCache
 
 
 def catalogue_cache():
-    return PerformanceCache(caches["default"], "interest-catalogue", ttl=300)
+    return PerformanceCache(caches["default"], "interest-catalogue", version=2, ttl=300)
 
 
 def interest_catalogue():
-    from authentication.api.serializers import InterestSerializer
+    from authentication.interests import catalogue_rows
     return catalogue_cache().read(
         scope="public-catalogue", resource="all",
-        loader=lambda: list(InterestSerializer(
-            InterestModel.objects.select_related("category").order_by("name", "id"), many=True,
-        ).data),
+        loader=catalogue_rows,
     )
 
 
