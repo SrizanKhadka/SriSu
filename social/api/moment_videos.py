@@ -55,9 +55,20 @@ class VideoUpload(PrivateResponseMixin, APIView):
         return Response({"data": video_data(video)})
 
 
+class VideoChunkBurstThrottle(UserRateThrottle):
+    scope = "moment_video_chunk_burst"
+    rate = "360/minute"
+
+
+class VideoChunkHourlyThrottle(UserRateThrottle):
+    scope = "moment_video_chunk_hour"
+    rate = "1000/hour"
+
+
 class VideoChunkUpload(PrivateResponseMixin, APIView):
     permission_classes = [permissions.IsAuthenticated]
-    # One video can require 50 requests. Draft creation is throttled separately.
+    # Includes replays and rejected attempts; each body is capped at 2 MiB.
+    throttle_classes = [VideoChunkBurstThrottle, VideoChunkHourlyThrottle]
     parser_classes = []
 
     def put(self, request, draft_id, video_id, offset):
@@ -141,6 +152,9 @@ class VideoCookieAuthentication(BaseAuthentication):
 
 
 class VideoStream(PrivateResponseMixin, APIView):
+    def head(self, request, video_id, name):
+        return self.get(request, video_id, name)
+
     permission_classes = [permissions.IsAuthenticated]
     authentication_classes = [SessionJWTAuthentication, VideoCookieAuthentication]
 

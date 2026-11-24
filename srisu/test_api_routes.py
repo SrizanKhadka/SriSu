@@ -14,7 +14,7 @@ class ClientRouteTests(SimpleTestCase):
         for name, route in routes.items():
             with self.subTest(operation=name):
                 path = route['path'].replace('{id}', '1').replace(
-                    '{uuid}', '12345678-1234-1234-1234-123456789abc')
+                    '{uuid}', '12345678-1234-1234-1234-123456789abc').replace('{offset}', '0').replace('{name}', 'master.m3u8')
                 match = resolve(path)
                 method = route['method'].lower()
                 view = match.func.cls

@@ -240,3 +240,12 @@ No API, media-processing logic, dependencies, or schemas changed. Full Django,
 new video upload/transcode/playback, and native-device suites were not rerun for
 this startup-only change. Existing user changes and uploaded media were preserved;
 nothing was pushed.
+
+### Video worker readiness
+
+The combined launcher also runs `process_moment_videos --check` before stopping
+application services, verifying H.264/AAC encoders as well as FFmpeg/ffprobe.
+After startup it waits for `process_moment_videos --healthcheck`; Compose uses
+the same fresh-heartbeat check. The worker is required for uploads to leave
+the queued state. These checks do not change the shared-image, symlink-safe
+environment handling, migration guards or stopped-service restoration above.

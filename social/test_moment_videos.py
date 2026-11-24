@@ -3,11 +3,15 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import io
+import os
+import time
 from uuid import uuid4
 from unittest.mock import patch
 
 from django.core import signing
-from django.test import override_settings
+from django.core.management import call_command, CommandError
+from django.test import override_settings, SimpleTestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient, APITransactionTestCase
 
@@ -15,8 +19,74 @@ from social.test_moments import MomentAPITests
 from social.models import MomentVideo, MomentVideoFile, MomentDraftPhoto, CoupleMomentModel, CoupleMembershipModel, SingleConnectionModel
 from authentication.models import DeviceSession
 from social.services.moment_video import CHUNK_BYTES, MAX_BYTES
-from social.services.moment_video_processing import process_one
+from social.services.moment_video_processing import process_one, encode
 from social.api.moment_videos import COOKIE, SALT
+
+
+class MomentVideoWorkerCommandTests(SimpleTestCase):
+    command_module = "social.management.commands.process_moment_videos."
+
+    def test_missing_media_tools_fail_before_claiming_any_video(self):
+        with patch(self.command_module+"check_video_tools",side_effect=FileNotFoundError()), \
+                patch(self.command_module+"process_one") as process:
+            with self.assertRaisesRegex(CommandError,"Rebuild the backend image"):
+                call_command("process_moment_videos",watch=True,stdout=io.StringIO())
+            process.assert_not_called()
+
+    def test_preflight_checks_tools_without_processing_jobs(self):
+        with patch(self.command_module+"check_video_tools") as check, \
+                patch(self.command_module+"process_one") as process:
+            call_command("process_moment_videos",check=True,stdout=io.StringIO())
+            check.assert_called_once()
+            process.assert_not_called()
+
+    def test_worker_health_reports_missing_fresh_and_stale_heartbeats(self):
+        with tempfile.TemporaryDirectory() as directory:
+            heartbeat=Path(directory)/"heartbeat"
+            with override_settings(MOMENT_VIDEO_HEARTBEAT_PATH=str(heartbeat)):
+                with self.assertRaises(CommandError):
+                    call_command("process_moment_videos",healthcheck=True,stdout=io.StringIO())
+                heartbeat.touch()
+                call_command("process_moment_videos",healthcheck=True,stdout=io.StringIO())
+                os.utime(heartbeat,(time.time()-301,)*2)
+                with self.assertRaises(CommandError):
+                    call_command("process_moment_videos",healthcheck=True,stdout=io.StringIO())
+
+    def test_watch_updates_health_and_cleans_it_on_shutdown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            heartbeat=Path(directory)/"heartbeat"
+            def process():
+                self.assertTrue(heartbeat.is_file())
+                raise KeyboardInterrupt()
+            with override_settings(MOMENT_VIDEO_HEARTBEAT_PATH=str(heartbeat)), \
+                    patch(self.command_module+"check_video_tools"), \
+                    patch(self.command_module+"process_one",side_effect=process):
+                with self.assertRaises(KeyboardInterrupt):
+                    call_command("process_moment_videos",watch=True,stdout=io.StringIO())
+            self.assertFalse(heartbeat.exists())
+
+    def test_single_pass_handles_silent_small_video_and_hdr_portrait(self):
+        ffmpeg=shutil.which("ffmpeg")
+        if not ffmpeg:
+            self.skipTest("ffmpeg is required for the synthetic video check")
+        cases=[("small","640x360",["-c:v","libx264"],False),
+            ("hdr","720x1280",["-c:v","libx265","-pix_fmt","yuv420p10le",
+                "-x265-params","pools=1:frame-threads=1:log-level=error",
+                "-color_primaries","bt2020","-color_trc","smpte2084","-colorspace","bt2020nc"],True)]
+        for name,size,codec,has_high in cases:
+            with self.subTest(name=name),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);source=root/"source.mp4";output=root/"output";output.mkdir()
+                subprocess.run([ffmpeg,"-v","error","-f","lavfi","-i",f"testsrc2=size={size}:rate=30",
+                    "-t","1.2",*codec,str(source)],check=True,timeout=30,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                duration,dimensions,files=encode(source,output)
+                self.assertEqual(duration,1200)
+                self.assertEqual(dimensions,tuple(map(int,size.split("x"))))
+                names={p.name for p in files}
+                self.assertIn("poster.jpg",names)
+                self.assertEqual("720.m3u8" in names,has_high)
+                for playlist in output.glob("[37]*.m3u8"):
+                    subprocess.run([ffmpeg,"-v","error","-i",str(playlist),"-f","null","-"],
+                        check=True,timeout=15,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 
 class MomentVideoTests(APITestCase):
@@ -59,8 +129,9 @@ class MomentVideoTests(APITestCase):
 
     def test_status_polls_do_not_consume_draft_write_allowance(self):
         _, _, base = self.start()
-        for _ in range(70):
+        for _ in range(120):
             self.assertEqual(self.client.get(base).status_code, 200)
+        self.assertEqual(self.client.get(base).status_code, 429)
         self.upload(base, b"synthetic")
 
     def test_limits_invalid_media_and_removal_cleanup(self):
@@ -78,6 +149,30 @@ class MomentVideoTests(APITestCase):
         self.assertFalse(MomentVideo.objects.filter(pk=video).exists())
 
         self.assertFalse(MomentVideoFile.objects.exists())
+        self.assertFalse(list(Path(self.media.name).rglob("*.part")))
+
+    def test_chunk_throttles_cover_replays_and_keep_resume_state(self):
+        from django.core.cache import cache
+        for throttle in ["VideoChunkBurstThrottle", "VideoChunkHourlyThrottle"]:
+            cache.clear()
+            _,video,base=self.start(b"x")
+            with patch("social.api.moment_videos."+throttle+".rate","2/minute"):
+                for _ in range(2):
+                    self.assertEqual(self.client.put(base+"chunks/0/",b"x",content_type="application/octet-stream").status_code,200)
+                self.assertEqual(self.client.put(base+"chunks/0/",b"x",content_type="application/octet-stream").status_code,429)
+            self.assertEqual(MomentVideo.objects.get(pk=video).received_bytes,1)
+            self.assertEqual(self.client.get(base).status_code,200)
+
+    def test_owner_deletion_cascades_both_published_and_draft_video_references(self):
+        from social.models import CoupleMomentPhotoModel
+        _,video,_=self.start()
+        moment=CoupleMomentModel.objects.create(couple=self.couple,created_by=self.creator,
+            caption="Synthetic",moment_date=timezone.now().date())
+        CoupleMomentPhotoModel.objects.create(moment=moment,video_id=video,image="synthetic-poster.jpg")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.creator.delete()
+        self.assertFalse(MomentVideo.objects.filter(pk=video).exists())
+        self.assertFalse(CoupleMomentPhotoModel.objects.filter(moment_id=moment.pk).exists())
 
     def test_worker_failure_retry_and_stale_lease(self):
         _,video,base=self.start()
@@ -110,7 +205,11 @@ class MomentVideoTests(APITestCase):
         self.assertEqual(moment.status_code,201,moment.data)
         mid=moment.data['data']['id']
         self.assertEqual(moment.data['data']['photos'][0]['video']['state'],'ready')
-        self.assertTrue(moment.data['data']['photos'][0]['image']) # Old clients get the poster.
+        poster_response=self.client.get(moment.data['data']['photos'][0]['image'])
+        self.assertEqual(poster_response.status_code,200)
+        self.assertTrue(b"".join(poster_response.streaming_content).startswith(b"\xff\xd8"))
+        self.assertEqual((row.width,row.height),(360,720))
+        self.assertEqual(moment.data['data']['photos'][0]['height'],640)
         self.assertEqual(self.client.post(f'/api/social/moment-drafts/{draft}/publish/',body,format='json').status_code,200)
         self.client.force_authenticate(self.other)
         handshake=f'/api/social/moment-videos/{video}/playback/'
@@ -175,14 +274,19 @@ class MomentVideoConcurrencyTests(APITransactionTestCase):
         data = b'synthetic chunk'
         draft, video, _ = self.start(data)
         barrier = Barrier(2)
+        storage=MomentVideoFile._meta.get_field("file").storage
+        save=storage.save
+        def competing_save(*args,**kwargs):
+            path=save(*args,**kwargs)
+            barrier.wait(timeout=10)  # Both missed the first lookup and wrote distinct files.
+            return path
         def send():
             close_old_connections()
             try:
-                barrier.wait(timeout=5)
                 return upload_chunk(self.creator, draft, video, 0, ContentFile(data)).received_bytes
             finally:
                 close_old_connections()
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with patch.object(storage,"save",side_effect=competing_save), ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(lambda _: send(), range(2)))
         self.assertEqual(results, [len(data), len(data)])
         self.assertEqual(MomentVideoFile.objects.filter(video_id=video).count(), 1)

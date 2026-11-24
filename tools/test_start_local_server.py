@@ -195,7 +195,7 @@ class LocalServerStartupTests(unittest.TestCase):
                 self.assertEqual(configure_matrix.main(), 0)
                 self.assertEqual(shared.read_text(encoding="utf-8"), first_result)
                 self.assertTrue(
-                    all(call.kwargs["dir"] == shared_directory for call in mkstemp.call_args_list)
+                    all(Path(call.kwargs["dir"]).resolve() == shared_directory.resolve() for call in mkstemp.call_args_list)
                 )
             self.assertTrue(link.is_symlink())
             self.assertEqual(os.readlink(link), str(Path("..") / "shared" / "local.env"))
@@ -405,11 +405,16 @@ class LocalServerStartupTests(unittest.TestCase):
         for binary in ("ffmpeg", "ffprobe"):
             video_preflight = ("run", "--rm", "--no-deps", "moment_video_worker", binary, "-version")
             self.assertLess(calls.index(video_preflight), calls.index(stop))
+        self.assertLess(calls.index(("run", "--rm", "--no-deps", "moment_video_worker", "python", "manage.py", "process_moment_videos", "--check")), calls.index(stop))
         self.assertLess(calls.index(stop), calls.index(migration))
         self.assertIn(("up", "-d", "--force-recreate", "web", "matrix_reconciler", "moment_video_worker"), calls)
         wait.assert_any_call(
             ["docker", "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "check"],
             "Moment video worker", 30,
+        )
+        wait.assert_any_call(
+            ["docker", "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "process_moment_videos", "--healthcheck"],
+            "Moment video worker heartbeat", 30,
         )
 
     def test_stale_web_image_is_rejected_before_services_stop_or_migrate(self) -> None:

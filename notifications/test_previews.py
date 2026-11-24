@@ -7,7 +7,8 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from authentication.sessions import create_session
 from authentication.models import DeviceSession
-from social.models import ChallengeTemplate, CoupleMomentModel, CoupleMomentNoteModel, SingleConnectionModel
+from social.models import (ChallengeTemplate, CoupleMomentModel, CoupleMomentNoteModel,
+    CoupleMomentPhotoModel, MomentVideo, SingleConnectionModel)
 from social.services import challenges, sparks, date_ideas, plans
 from .test_matrix_push import MatrixFixtures, SETTINGS
 from .models import Delivery, Event, Installation, Preferences
@@ -112,6 +113,77 @@ class PreviewTests(MatrixFixtures, APITestCase):
         self.assertEqual(text('<b>Hello</b>\n\u202eWorld\x00'),'Hello World')
         self.assertLessEqual(len(text('🌻'*1000)),240)
         self.assertTrue(text('🌻'*1000).endswith('…'))
+
+    def moment_with_media(self, kinds, caption="", title=""):
+        response=self.first_client.post('/api/social/couple-moments/',
+            {'couple':self.couple.pk,'caption':caption or 'Synthetic fixture setup','title':title,'visibility':'private'},format='json')
+        self.assertEqual(response.status_code,201,response.data)
+        moment=CoupleMomentModel.objects.get(pk=response.data['data']['id'])
+        # Published video rows retain an image poster. Classification must use
+        # the video relation, never the .jpg suffix or the photos relation name.
+        for order,kind in enumerate(kinds):
+            video=MomentVideo.objects.create(owner=self.first,state='ready',source_bytes=5,
+                received_bytes=5,duration_ms=1000,width=160,height=240) if kind=='video' else None
+            CoupleMomentPhotoModel.objects.create(moment=moment,video=video,
+                image='synthetic-notification-poster.jpg',order=order,width=160,height=240)
+        moment.caption=caption;moment.save(update_fields=['caption'])
+        return moment
+
+    def test_moment_previews_and_inbox_distinguish_photos_videos_and_mixed_media(self):
+        cases=[(['photo'],'photo moment','Photo moment'),
+            (['video'],'video moment','Video moment'),
+            (['video','video'],'video moment','Video moment'),
+            (['photo','video'],'moment with photos and videos','Photo and video moment'),
+            (['video','photo'],'moment with photos and videos','Photo and video moment'),
+            ([], 'moment','Moment')]
+        for kinds,description,label in cases:
+            with self.subTest(kinds=kinds):
+                moment=self.moment_with_media(kinds)
+                value=self.preview('moment.published')
+                self.assertEqual(value['title'],f'{self.first.full_name} shared a {description}')
+                self.assertEqual(value['body'],label)
+                event=Event.objects.get(kind='moment.published',resource=str(moment.pk))
+                inbox=self.second_client.get('/api/notifications/v1/inbox/').data['data']['items']
+                row=next(row for row in inbox if row['id']==str(event.pk))
+                self.assertEqual((row['title'],row['body']),(value['title'],value['body']))
+
+    def test_video_caption_title_hearts_and_current_media_are_used_without_leaking_to_push(self):
+        moment=self.moment_with_media(['video'],caption='Synthetic sunset clip',title='Synthetic title')
+        value=self.preview('moment.published')
+        self.assertIn('video moment',value['title'])
+        self.assertEqual(value['body'],moment.caption)
+        moment.caption='';moment.save(update_fields=['caption'])
+        self.assertEqual(self.preview('moment.published')['body'],moment.title)
+        moment.title='';moment.save(update_fields=['title'])
+        self.assertEqual(self.preview('moment.published')['body'],'Video moment')
+        delivery=Delivery.objects.get(event__kind='moment.published',event__resource=str(moment.pk))
+        wire=message(delivery,audible=False)
+        self.assertEqual(wire.data['title'],'New moment')
+        self.assertEqual(wire.data['body'],'Your partner shared a new moment.')
+        self.assertNotIn('Synthetic',str(wire.data))
+        self.assertNotIn('video',str(wire.data).lower())
+        self.register_other(self.first,self.first_client)
+        reaction=self.second_client.put(f'/api/social/couple-moments/{moment.pk}/reaction/',{'reacted':True},format='json')
+        self.assertEqual(reaction.status_code,200,reaction.data)
+        response=self.first_client.get(self.url('moment.hearted',self.first))
+        self.assertEqual(response.status_code,200,response.data)
+        heart=response.data['data']
+        self.assertEqual(heart['title'],f'{self.second.full_name} liked your video moment')
+        self.assertEqual(heart['body'],'Video moment')
+
+    def test_video_type_and_caption_remain_authorized_and_expire(self):
+        moment=self.moment_with_media(['video'],caption='Synthetic private clip')
+        url=self.url('moment.published')
+        self.assertEqual(self.third_client.get(url).status_code,404)
+        block=SingleConnectionModel.objects.create(sender_number=self.first.phone_number,
+            receiver_number=self.second.phone_number,connection_status='BLOCKED')
+        self.assertEqual(self.second_client.get(url).status_code,404);block.delete()
+        moment.expires_at=timezone.now()-timedelta(seconds=1);moment.save(update_fields=['expires_at'])
+        self.assertEqual(self.second_client.get(url).status_code,404)
+        row=self.second_client.get('/api/notifications/v1/inbox/').data['data']['items'][0]
+        self.assertFalse(row['available'])
+        self.assertNotIn('video',row['title'])
+        self.assertNotIn(moment.caption,row['body'])
 
     def register_other(self, user, client):
         result = self.bind(client, installation_id=str(uuid4()), target=f'synthetic-target-{user.pk}',

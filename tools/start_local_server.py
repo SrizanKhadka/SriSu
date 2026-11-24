@@ -605,6 +605,7 @@ def validate_notification_environment(values: dict[str, str]) -> None:
 
 def validate_runtime_capabilities(docker: str) -> None:
     """Verify chat/video commands and encoders before stopping apps or migrating."""
+    compose(docker, "run", "--rm", "--no-deps", "moment_video_worker", "python", "manage.py", "process_moment_videos", "--check")
     compose(docker, "run", "--rm", "--no-deps", "web", "python", "manage.py", "check")
     compose(
         docker,
@@ -870,6 +871,10 @@ def start_server(args: argparse.Namespace) -> None:
         [docker, "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "check"],
         "Moment video worker",
         args.wait_seconds,
+    )
+    wait_for_command(
+        [docker, "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "process_moment_videos", "--healthcheck"],
+        "Moment video worker heartbeat", args.wait_seconds,
     )
     if args.with_notifications:
         compose(

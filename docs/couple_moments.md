@@ -392,6 +392,10 @@ revocation limitation, bounded here by the short cookie lifetime.
    It shares private storage and the database; its container is limited to two
    CPUs and 2 GiB. Without a worker, uploads remain queued and the client offers
    a retry instead of publishing an unplayable item.
+   The local launcher now includes this required service and checks its
+   heartbeat. An already-running stack needs
+   `docker compose up -d --build moment_video_worker`; switching branches alone
+   does not start the new service. See [local startup](local-server-startup.md#video-uploaded-but-stuck-preparing).
 3. Keep the existing scheduled `cleanup_moments --sweep-orphans` job. Unpublished
    drafts expire after seven days; published media retains the existing purge
    policy (30 days after expiry). Deletion/expiry immediately denies new reads;
@@ -418,3 +422,79 @@ caveats, prior contract drift and remaining physical-device/deployment checks.
 PR branch: `codex/video-moments`, targeting `dev-core-architecture` from
 `9e2f5b8`. Companion frontend uses the same feature/integration branch names.
 PR descriptions record final commits and CI. Unrelated local work is excluded.
+
+### Stalled preparation and latency follow-up — 24 November 2026
+
+An Android report of “Preparing video 1 of 1” was traced to the server queue,
+not the upload-size limit. The other laptop's `docker compose ps
+moment_video_worker` output contained no running worker. The local startup
+script also omitted this service from its explicit startup list.
+
+- The launcher now includes, quiesces, restores on migration failure, and starts
+  the video worker alongside the API and Matrix reconciler. Preflight checks
+  FFmpeg/ffprobe plus H.264/AAC encoders before any job is claimed or application
+  service stopped. Compose exposes worker health and the launcher waits for a
+  fresh heartbeat. Job timing output contains no user IDs or media paths.
+- The encoder generates both HLS renditions and the poster from one decode pass,
+  with bounded threads and downscaling before HDR tone mapping. Authenticated
+  delivery, bitrate targets, chunk offsets, publication rules and leases remain
+  compatible. No schema or API changes are needed.
+- The shared app shows separate uploaded/waiting and processing states. Queue
+  waiting stops after 30 seconds; active processing waiting stops after 90
+  seconds, including time spent in status requests. These are client wait
+  limits, not job cancellation: the server can finish, the draft stays intact,
+  and Share resumes without uploading confirmed chunks again.
+- Startup regression tests uncovered pre-existing duplicate managed environment
+  keys and `.env` symlink replacement in the Matrix configuration helper. The
+  helper now preserves the symlink target and canonicalizes only managed keys;
+  the actual ignored environment was not changed during verification.
+
+Local benchmark: a synthetic 60-second 1280×720 H.264/AAC clip, 17,356,620 bytes,
+three alternating runs per version on the development Mac. Median wall time was
+4.949s before and 3.731s after (24.6% lower). Median child CPU time was 18.772s
+and 18.991s respectively; this is a latency improvement, not a demonstrated
+CPU-time reduction. All 64 output files matched byte-for-byte for this SDR
+fixture. This is not a benchmark of the other laptop, a Docker CPU quota,
+production queue load, physical-phone codecs, or cellular networking.
+
+Verification: 464 isolated backend tests, zero failures, 35 PostgreSQL-only
+skips; 20 startup tests; configuration/migration/contract checks; Compose schema;
+real FFmpeg checks for silent/small and HDR/portrait videos; real Ktor upload →
+processing → publication → partner-playback integration; 3/3 Android API 35
+native checks; production iOS AVPlayer on the iPhone 17 Pro/iOS 26.5 simulator.
+Both native checks used disposable synthetic accounts/media. Frontend state
+regressions cover absent workers, slow HTTP status requests, preserved drafts,
+and retry without duplicate upload/publication. Current uncommitted changes are
+on `codex/video-moments` in both repositories, based on frontend `c06fc02` and
+backend `1ea9eacd`. Existing Xcode project edits, environment files and private
+media were preserved. No live deployment, migration, push or merge was performed.
+
+### Publication review — 24 November 2026
+
+The merged working snapshot preserves the other laptop's `041fe7c` launcher
+improvements plus encoder-capability preflight and heartbeat readiness. Video
+chunk requests, including replays, are limited per account to 360/minute and
+1,000/hour (each body is capped at 2 MiB); throttling preserves resumable offsets.
+Status polling remains separately limited to 120/minute.
+
+Video metadata now reports the encoded rendition's dimensions/duration; poster
+rows retain their own smaller image dimensions. Leases refresh while copying
+chunks and storing renditions; the single FFmpeg pass has a 180-second deadline,
+below the ten-minute recovery lease. Failures log resource ID, category and
+exception class, excluding exception text, FFmpeg stderr and private media.
+
+Review regressions verify actual poster bytes, on-disk chunk removal, status and
+chunk throttles, and owner deletion with both published and draft references.
+Django already cascades the owner's Moment and its photo before the restricted
+video reference is removed; that deletion test passes without changing the
+schema. The competing-chunk test synchronizes after both storage writes, forcing
+the losing-file cleanup path on PostgreSQL. The FFmpeg subprocess uses a fixed
+argument list without a shell, allowlisted formats and private local filenames.
+
+Verification: 469 isolated tests passed with 35 PostgreSQL-only skips; all 34
+video tests passed in disposable PostgreSQL; 23 launcher tests passed. Migration
+consistency and authoritative contract checks passed. This follow-up adds no
+migration beyond the original video feature's `social.0024_moment_video`.
+Companion PRs are backend #45 and frontend SriZan12/SriSu#36; target both at
+`dev-core-architecture`. Rebuild web/worker images and run the video worker for
+clients using these APIs; merging source does not deploy the other laptop.
