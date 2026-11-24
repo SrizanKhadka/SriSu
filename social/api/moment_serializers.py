@@ -34,10 +34,17 @@ class MomentImageField(serializers.ImageField):
 
 class CoupleMomentPhotoSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
+    video = serializers.SerializerMethodField()
 
     class Meta:
         model = CoupleMomentPhotoModel
-        fields = ["id", "image", "order", "uploaded_at", "width", "height"]
+        fields = ["id", "image", "order", "uploaded_at", "width", "height", "video"]
+
+    def get_video(self, obj):
+        if not obj.video_id:
+            return None
+        from social.services.moment_video import video_data
+        return video_data(obj.video)
 
     def get_image(self, obj):
         path = reverse("couple_moments-photo", args=[obj.moment_id, obj.id])

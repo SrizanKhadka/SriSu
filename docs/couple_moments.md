@@ -327,3 +327,90 @@ accounts. The paired KMP HTTP test also verifies cropped pixels/dimensions,
 photo ordering, duplicate replay, changed-intent conflict, partner receipts and
 unrelated-user denial against a disposable loopback server. No deployed service
 or real couple account is used; migration and core-1 cross-repository checks pass.
+
+## Video Moments — 24 November 2026
+
+Additive client contract; existing `photos` arrays/IDs/order are retained. Each item
+now has `video: null | {id, state, source_bytes, received_bytes, chunk_bytes,
+duration_ms, width, height, error_code}`. For videos, `image` is an authenticated
+JPEG poster. Old clients therefore see a still image; they never receive raw
+uploaded video or a public media URL. This is server-processed private media,
+not Matrix end-to-end encryption.
+
+All routes below are under `/api/social/`. Upload, status and playback handshake
+require the current authenticated user. Draft uploads are owner-only; published
+streams use the existing current audience, blocking and 24-hour expiry rules.
+
+| Route | Method and request | Result |
+| --- | --- | --- |
+| `moment-drafts/{draft}/videos/{video}/` | POST `{source_bytes}`; stable client UUID | Idempotent reservation; mismatch 409 |
+| Same route | GET | Confirmed byte offset and processing state |
+| `.../videos/{video}/chunks/{offset}/` | PUT `application/octet-stream`, Content-Length, sequential 2 MiB chunks (last may be smaller) | Confirmed offset; identical replay accepted, changed bytes 409 |
+| `.../videos/{video}/complete/` | POST `{}` | Queue only after all bytes are present |
+| `.../videos/{video}/retry/` | POST `{}` | Retry transient processing failure, at most three attempts |
+| `moment-videos/{video}/playback/` | POST `{}` | `url`, `cookie_name`, `cookie_value`, `cookie_path`, `expires_in`, `duration_ms` |
+| `moment-video-stream/{video}/{name}` | GET/HEAD, asset cookie or current JWT | HLS playlist/TS segment/poster; byte ranges 206 or invalid range 416 |
+
+States: `uploading → queued → processing → ready`, or `failed`. Publication is
+blocked until every selected video is ready. Source size is capped at 100 MiB;
+verified duration at 60 seconds, at most 4096×4096 / 9 million source pixels,
+one video track and at most four tracks. Accept MP4/MOV and Matroska/WebM that
+FFmpeg can decode. Five mixed items share the existing attachment limit. Existing
+limits of ten pending drafts per owner and seven-day staging expiry still apply.
+Status polling has its own 120/minute allowance; it does not consume the 60/hour
+draft-write budget. Chunks are bounded to 2 MiB and hash checked on retries.
+
+`process_moment_videos --watch` claims jobs with database leases. Encoding runs
+outside database/API transactions with fixed commands, input format/protocol
+allowlists, process timeouts, two CPU threads and temporary files. Output is SDR
+H.264/AAC, at most 30 fps, with two-second HLS segments. The ladder has long-edge
+bounds 640 and 1280 (approximately 360p/720p at 16:9), never upscales, and skips
+the larger rendition for small sources. Posters omit source metadata. Encoded
+files are committed only if the lease, draft and audience are still valid;
+original chunks are then deleted. Stale ten-minute leases are reclaimable.
+
+Playback credentials live for at most 120 seconds and never appear in URLs.
+Every playlist/segment request rechecks active user, current device session
+(where present), relationship membership, block status and expiry. Input chunks
+are not routable. Responses use `private, no-store`; a private object-store/CDN
+must not expose the underlying files. Expired playback after a long pause can
+be refreshed through the viewer's Retry action. Already buffered pixels cannot
+be remotely recalled. Legacy JWTs without device sessions retain their existing
+revocation limitation, bounded here by the short cookie lifetime.
+
+### Deployment order and storage
+
+1. Ship the backend image with FFmpeg/ffprobe and apply **social.0024_moment_video**.
+   It depends on **social.0023_home_couple_space** on `dev-core-architecture`.
+   QA rebased the original local-only `0022` video migration to this current graph.
+   No deployment or live application migration was performed during this task.
+2. Start `moment_video_worker` from Docker Compose alongside the web process.
+   It shares private storage and the database; its container is limited to two
+   CPUs and 2 GiB. Without a worker, uploads remain queued and the client offers
+   a retry instead of publishing an unplayable item.
+3. Keep the existing scheduled `cleanup_moments --sweep-orphans` job. Unpublished
+   drafts expire after seven days; published media retains the existing purge
+   policy (30 days after expiry). Deletion/expiry immediately denies new reads;
+   failed physical file deletion stays in the cleanup queue.
+4. Release the frontend after these APIs and worker are healthy. Old photo clients
+   remain compatible. A rollback must preserve the schema/assets until the newer
+   client is retired; do not drop video tables on a live deployment.
+
+This baseline deliberately serves authorized segments through Django instead of
+adding public CDN URLs. A signed CDN/origin deployment, load testing, worker
+capacity alerts and real cellular benchmarks are additional rollout work, not
+claims established by local simulator checks. No AV1, video trimming/recording,
+background OS upload service, or new public visibility rules were introduced.
+
+Exact PR source validation: 459 tests passed in the disposable PostgreSQL runner
+with zero skips; migration
+consistency, Django configuration and backend core fixture validation passed.
+Real KMP HTTP upload → FFmpeg worker → publish → partner playback credential
+checks also passed. Native ExoPlayer and AVPlayer consumed the protected HLS
+stream on synthetic Android/iOS simulators. See the frontend
+`docs/flows/moments.md#video-moments--24-november-2026` for exact scope, timing
+caveats, prior contract drift and remaining physical-device/deployment checks.
+
+PR branch: `codex/video-moments`, targeting `dev-core-architecture` from
+`9e2f5b8`. Companion frontend uses the same feature/integration branch names.
+PR descriptions record final commits and CI. Unrelated local work is excluded.

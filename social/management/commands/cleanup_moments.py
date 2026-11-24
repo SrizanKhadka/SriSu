@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
-from social.models import CoupleModel, CoupleMomentModel, CoupleMomentPhotoModel, MomentFileDeletion, MomentDraft, MomentDraftPhoto
+from social.models import CoupleModel, CoupleMomentModel, CoupleMomentPhotoModel, MomentFileDeletion, MomentDraft, MomentDraftPhoto, MomentVideoFile
 from social.services.moment_service import delete_file
 
 
@@ -49,7 +49,7 @@ class Command(BaseCommand):
                     return
                 for filename in files:
                     name = f"{prefix}/{filename}"
-                    if storage.get_modified_time(name) < grace and not CoupleMomentPhotoModel.objects.filter(image=name).exists() and not MomentDraftPhoto.objects.filter(image=name).exists() and not CoupleModel.objects.filter(cover_photo=name).exists():
+                    if storage.get_modified_time(name) < grace and not CoupleMomentPhotoModel.objects.filter(image=name).exists() and not MomentDraftPhoto.objects.filter(image=name).exists() and not CoupleModel.objects.filter(cover_photo=name).exists() and not MomentVideoFile.objects.filter(file=name).exists():
                         from social.services.moment_service import queue_file_deletion
                         queue_file_deletion(name)
                 for directory in directories:

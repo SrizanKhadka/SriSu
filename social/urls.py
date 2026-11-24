@@ -43,7 +43,15 @@ social_routers.register("couple-moments", CoupleMomentView, basename="couple_mom
 from social.api.couple_profile_views import (ProfileDetail, ProfileSection, ProfileCover,
     ProfileMemberPhoto, ProfileHistory, ProfileCoverChoices, ProfilePlans, ProfilePlanDetail, ProfileStoryInvite)
 
+from social.api.moment_videos import VideoUpload, VideoChunkUpload, VideoComplete, VideoRetry, VideoPlayback, VideoStream
+
 urlpatterns = [
+    path("moment-drafts/<uuid:draft_id>/videos/<uuid:video_id>/", VideoUpload.as_view()),
+    path("moment-drafts/<uuid:draft_id>/videos/<uuid:video_id>/chunks/<int:offset>/", VideoChunkUpload.as_view()),
+    path("moment-drafts/<uuid:draft_id>/videos/<uuid:video_id>/complete/", VideoComplete.as_view()),
+    path("moment-drafts/<uuid:draft_id>/videos/<uuid:video_id>/retry/", VideoRetry.as_view()),
+    path("moment-videos/<uuid:video_id>/playback/", VideoPlayback.as_view()),
+    path("moment-video-stream/<uuid:video_id>/<str:name>", VideoStream.as_view()),
     # All former dating list/detail/action paths return a non-mutating 410.
     # Personal preferences and phone-based couple invitations are preserved.
     re_path(r"^(?:connect-single|single-connection|user-suggestions|get-suggestion-profile)(?:/.*)?$", RetiredDatingView.as_view(), name="retired-dating"),
