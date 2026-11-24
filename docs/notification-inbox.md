@@ -88,3 +88,31 @@ scanable icon/text/metadata rows and [Carbon notification patterns](https://www.
 for persistent, revisitable activity rather than interrupting every interaction.
 Validation is recorded in the frontend's
 `docs/validation/notifications/inbox-20261124.md`.
+
+## Moment media wording — 24 November 2026
+
+The inbox and authenticated push-preview endpoint share `display_copy`. Publication
+and heart titles now identify photo-only, video-only, and mixed photo/video Moments;
+body fallback is respectively “Photo moment”, “Video moment”, or “Photo and video
+moment”. Classification counts actual `video_id` relations, not the JPEG poster or
+legacy `photos` relation name. Captions and legacy titles still take precedence in
+the body, and an empty legacy Moment has neutral copy. Classification happens only
+after current-resource authorization. FCM/public lock-screen fallbacks, event kinds,
+destinations, expiry, categories and notification capability/schema versions remain
+unchanged. This fixes refreshed existing inbox rows as well as new preview fetches;
+it does not resend old alerts or store private copies in the outbox.
+
+No migration or client production-code change is needed. Deploy/restart the backend
+web process to use this formatter; the matching frontend adds regression coverage
+for its existing shared preview reader and Android notification presentation. The
+paired real HTTP video test also checks that a captionless published video creates
+one correctly labeled partner inbox event even when publication is retried.
+
+Verification: 467 backend tests completed with zero failures (35 PostgreSQL-only
+skips), including media-type cases, captions/legacy titles, hearts, inbox agreement,
+provider privacy, blocks and expiry. The notification regressions reproduced the
+old photo fallback before the fix. Frontend: 54 notification tests passed, including
+Robolectric Android presentation; Android and iOS simulator Kotlin compilation
+passed. Real Ktor → isolated Django → FFmpeg → publication → partner inbox labeling
+and deduplication passed. These checks use synthetic accounts/media; no real FCM or
+APNs delivery was sent, and the other laptop has not been updated by this task.

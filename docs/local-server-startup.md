@@ -40,16 +40,23 @@ sequence without changing files, containers, or databases with `--dry-run`.
 
 ## What it starts
 
-The normal stack contains six Compose services:
+The normal stack contains seven Compose services:
 
 | Service | Responsibility | Host port |
 | --- | --- | --- |
 | `web` | Django/Daphne HTTP API | `8000` |
 | `matrix_reconciler` | Durable Matrix room provisioning/revocation | internal |
+| `moment_video_worker` | Encode queued video Moments with FFmpeg | internal |
 | `srisu_db` | Django PostgreSQL 17 | `5433` |
 | `redis` | Couple-feed cache | `6379` |
 | `synapse` | Private Matrix homeserver | `8008` |
 | `synapse_db` | Synapse PostgreSQL 17 | internal |
+
+`web`, `matrix_reconciler`, and `moment_video_worker` use the same
+`srisu-backend-app:local` image. Docker Desktop lists the video worker under
+**Containers**, inside the Compose project, as `srisu-moment_video_worker-1`
+for the default `srisu` project. There is no separate video-worker image.
+The worker starts by default with both launcher wrappers; no extra flag is needed.
 
 `notification_worker` is intentionally optional. Start it only with
 `--with-notifications` after setting `NOTIFICATIONS_ENABLED=true` and configuring
@@ -75,11 +82,13 @@ the expected Compose, Matrix configuration, Synapse startup, and guarded chat
 cutover source files. It then validates Compose, optionally refreshes external
 images, builds the shared Django image, and starts both databases plus Redis and
 Synapse. Before stopping application services or applying migrations, it runs
-the built image's Django checks, verifies both Matrix management commands, and
+the built image's Django checks, verifies both Matrix management commands,
+the video-processing command and FFmpeg/ffprobe executables, and
 confirms that the guarded `chat.0006` migration is present. This catches a stale
 image used with `--skip-build` while the existing application processes are
 still untouched. Finally, it quiesces application processes, applies ordinary
-pending migrations, starts `web` and `matrix_reconciler`, and verifies Django,
+pending migrations, starts `web`, `matrix_reconciler`, and `moment_video_worker`,
+checks that the video worker is running and passes Django's checks, and verifies Django,
 migrations, Matrix policy/readiness, and HTTP reachability.
 
 A genuinely new database still reaches the reviewed irreversible `chat.0006`
@@ -104,9 +113,9 @@ response. Do not point a physical device at its own `localhost`.
 
 The launcher does not require, select, or switch a particular Git branch. It
 prints the current branch and commit for diagnostics, preserves local changes,
-and validates capabilities instead: required source files, the six required
+and validates capabilities instead: required source files, the seven required
 Compose services, Django's checks, the guarded chat migration, both Matrix
-management commands, and Matrix health. A branch such as
+management commands, video Moments command/migration, FFmpeg/ffprobe, and Matrix health. A branch such as
 `dev-core-architecture`, `codex/home-couple-space`, or another feature branch
 can run when it contains those compatible backend facilities.
 
@@ -136,10 +145,19 @@ Inspect the current state and recent logs:
 
 ```sh
 docker compose ps
-docker compose logs --tail 100 web matrix_reconciler synapse
+docker compose logs --tail 100 web matrix_reconciler moment_video_worker synapse
 ```
 
 Common causes:
+
+- **Video uploads stay queued / no video worker container:** the launcher now
+  includes `moment_video_worker` in normal startup and in the migration
+  stop/restore sequence. On an already-running stack whose video migration is
+  applied and whose image has FFmpeg/ffprobe, start only the missing worker with
+  `docker compose up -d --no-deps moment_video_worker`. Check it with
+  `docker compose ps moment_video_worker` and
+  `docker compose top moment_video_worker`. If encoder binaries are missing,
+  rerun the normal launcher without `--skip-build` to build the current image.
 
 - **Retained Synapse state exists, but `.env` is missing stable Matrix values:**
   the local environment file is incomplete, while the Compose project's old
@@ -175,3 +193,59 @@ Stop containers without deleting data:
 ```sh
 docker compose stop
 ```
+
+## Video worker startup verification — 2026-11-24
+
+On backend `codex/video-moments` at `1ea9eacdca793dac97a1c5fab0ce95257554fe9d`,
+the Compose service existed but no worker container had been created. The launcher
+omitted it from its explicit application-service list. The launcher now includes
+it in startup, migration quiescing, and restoration of previously running services.
+
+The existing shared image already contained FFmpeg/ffprobe, and
+`social.0024_moment_video` was applied. Running
+`docker compose up -d --no-deps moment_video_worker` started only the missing
+worker. `docker compose ps moment_video_worker`, a read-only `/proc` process check,
+and `docker compose exec -T moment_video_worker python manage.py check` confirmed
+one `process_moment_videos --watch` process, a running container, zero restarts,
+and no Django configuration issues.
+
+`docker compose config --quiet` and
+`./start-local-server.ps1 --dry-run --skip-build --lan-ip 192.168.1.50` passed.
+The IP in that preview is only an example; dry-run does not update `.env`.
+The full launcher was not executed against the live stack, so other application
+services were not restarted and no migrations were applied during this fix.
+
+Startup tests ran in the existing Python 3.13.5 app image with networking disabled:
+
+```powershell
+docker run --rm --network none --mount 'type=bind,source=D:\Djangos\SriSu,target=/app,readonly' --workdir /app srisu-backend-app:local python -m unittest tools.test_start_local_server
+```
+
+All 23 startup tests pass with no skips, including worker startup ordering,
+migration failure restoration, leaving a previously stopped worker stopped after
+migration failure, dry-run output, and rejection of missing encoders.
+
+The initial run exposed two existing Matrix configuration failures, also
+reproduced against the original HEAD modules. Both are now fixed in
+`tools/configure_matrix_dev.py`: repeated managed settings collapse to one value,
+and a shared `.env` symlink remains intact while its target is replaced atomically
+using a temporary file in the target directory. Regression coverage verifies
+relative symlinks across directories, existing secrets and unrelated settings,
+idempotent reruns, restrictive file permissions, and cleanup after a failed
+replacement. Tests used temporary synthetic files; the live `.env` was not changed.
+
+Backend launcher/configuration helper/tests/docs and the frontend's shared project
+map were updated.
+No API, media-processing logic, dependencies, or schemas changed. Full Django,
+new video upload/transcode/playback, and native-device suites were not rerun for
+this startup-only change. Existing user changes and uploaded media were preserved;
+nothing was pushed.
+
+### Video worker readiness
+
+The combined launcher also runs `process_moment_videos --check` before stopping
+application services, verifying H.264/AAC encoders as well as FFmpeg/ffprobe.
+After startup it waits for `process_moment_videos --healthcheck`; Compose uses
+the same fresh-heartbeat check. The worker is required for uploads to leave
+the queued state. These checks do not change the shared-image, symlink-safe
+environment handling, migration guards or stopped-service restoration above.

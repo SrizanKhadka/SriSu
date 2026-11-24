@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fixture', type=Path, required=True)
     parser.add_argument('--port', type=int, required=True)
+    parser.add_argument('--moment-video', action='store_true', help='Seed synthetic video and run its isolated worker')
     args = parser.parse_args()
     # A test endpoint must never contact an external service.
     original_connect = socket.socket.connect
@@ -58,6 +59,41 @@ def main():
         'profile_target_id': profile_target.pk,
         'profile_target_access': create_session(profile_target)['access'],
     }
+    if args.moment_video:
+        import subprocess
+        import threading
+        import time
+        import uuid
+        from django.core.files.base import ContentFile
+        from django.db import close_old_connections
+        from social.services.moment_publication import create_draft, publish
+        from social.services.moment_video import begin_video, upload_chunk, finish_video, CHUNK_BYTES
+        from social.services.moment_video_processing import process_one
+        video_file = args.fixture.parent / 'synthetic-video.mp4'
+        subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=360x640:rate=30',
+            '-f', 'lavfi', '-i', 'sine=frequency=440', '-t', '8', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', str(video_file)], check=True)
+        draft_id, video_id = uuid.uuid4(), uuid.uuid4()
+        create_draft(first, draft_id, couple.pk)
+        begin_video(first, draft_id, video_id, video_file.stat().st_size)
+        with video_file.open('rb') as stream:
+            offset = 0
+            while data := stream.read(CHUNK_BYTES):
+                upload_chunk(first, draft_id, video_id, offset, ContentFile(data)); offset += len(data)
+        finish_video(first, draft_id, video_id)
+        process_one()
+        moment, _ = publish(first, draft_id, {'expected_revision': 2, 'photo_ids': [video_id],
+            'caption': 'Synthetic video verification', 'visibility': 'private'})
+        payload.update(video_path=str(video_file), video_id=str(video_id), moment_id=moment.pk)
+        def worker():
+            while True:
+                close_old_connections()
+                try:
+                    process_one()
+                except Exception:
+                    pass  # SQLite contention retries; this disposable helper has no external logging.
+                time.sleep(.25)
+        threading.Thread(target=worker, daemon=True).start()
     descriptor = os.open(args.fixture, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as file: json.dump(payload, file)
     from srisu.asgi import application

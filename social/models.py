@@ -404,6 +404,7 @@ class CoupleMomentPhotoModel(models.Model):
     )
 
     image = models.ImageField(upload_to="couples/moments/")
+    video = models.ForeignKey("MomentVideo", null=True, blank=True, on_delete=models.RESTRICT)
 
     order = models.PositiveSmallIntegerField(default=0)
     width = models.PositiveIntegerField(null=True, blank=True)
@@ -448,6 +449,7 @@ class MomentDraftPhoto(models.Model):
     id = models.UUIDField(primary_key=True, editable=False)
     draft = models.ForeignKey(MomentDraft, on_delete=models.CASCADE, related_name="photos")
     image = models.ImageField(upload_to="couples/moments/")
+    video = models.ForeignKey("MomentVideo", null=True, blank=True, on_delete=models.RESTRICT)
     digest = models.CharField(max_length=64)
     width = models.PositiveIntegerField()
     height = models.PositiveIntegerField()
@@ -675,3 +677,34 @@ class ChallengeOperation(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["challenge", "author", "request_id"], name="unique_challenge_operation")]
+
+
+class MomentVideo(models.Model):
+    """A private, resumable upload and its bounded asynchronous encoding job."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(UserModel, on_delete=models.CASCADE)
+    state = models.CharField(max_length=16, default="uploading")
+    source_bytes = models.PositiveBigIntegerField()
+    received_bytes = models.PositiveBigIntegerField(default=0)
+    duration_ms = models.PositiveIntegerField(default=0)
+    width = models.PositiveIntegerField(default=0)
+    height = models.PositiveIntegerField(default=0)
+    error_code = models.CharField(max_length=40, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    lease = models.UUIDField(null=True)
+    updated_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        indexes = [models.Index(fields=["state", "updated_at"], name="moment_video_queue")]
+
+
+class MomentVideoFile(models.Model):
+    video = models.ForeignKey(MomentVideo, on_delete=models.CASCADE, related_name="files")
+    name = models.CharField(max_length=64)
+    file = models.FileField(upload_to="couples/moments/videos/")
+    size = models.PositiveBigIntegerField()
+    digest = models.CharField(max_length=64)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["video", "name"], name="unique_moment_video_file")]

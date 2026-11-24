@@ -35,6 +35,8 @@ jobs:
           python -m pip check
       - name: Validate authoritative core contracts
         run: python tools/check_core_contracts.py
+      - name: Install video integration tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Check Django configuration
         run: python tools/workspace.py check
       - name: Check migration consistency

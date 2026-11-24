@@ -480,6 +480,56 @@
       "path": "/api/social/partner-profiles/{id}/",
       "query": [],
       "public": false
+    },
+    "moment-video-begin": {
+      "method": "POST",
+      "path": "/api/social/moment-drafts/{uuid}/videos/{uuid}/",
+      "query": [],
+      "public": false
+    },
+    "moment-video-status": {
+      "method": "GET",
+      "path": "/api/social/moment-drafts/{uuid}/videos/{uuid}/",
+      "query": [],
+      "public": false
+    },
+    "moment-video-chunk": {
+      "method": "PUT",
+      "path": "/api/social/moment-drafts/{uuid}/videos/{uuid}/chunks/{offset}/",
+      "query": [],
+      "public": false
+    },
+    "moment-video-complete": {
+      "method": "POST",
+      "path": "/api/social/moment-drafts/{uuid}/videos/{uuid}/complete/",
+      "query": [],
+      "public": false
+    },
+    "moment-video-retry": {
+      "method": "POST",
+      "path": "/api/social/moment-drafts/{uuid}/videos/{uuid}/retry/",
+      "query": [],
+      "public": false
+    },
+    "moment-video-playback": {
+      "method": "POST",
+      "path": "/api/social/moment-videos/{uuid}/playback/",
+      "query": [],
+      "public": false
+    },
+    "moment-video-stream": {
+      "method": "GET",
+      "path": "/api/social/moment-video-stream/{uuid}/{name}",
+      "query": [],
+      "public": false,
+      "client": "native-player"
+    },
+    "moment-video-stream-head": {
+      "method": "HEAD",
+      "path": "/api/social/moment-video-stream/{uuid}/{name}",
+      "query": [],
+      "public": false,
+      "client": "native-player"
     }
   },
   "retired_endpoints": {

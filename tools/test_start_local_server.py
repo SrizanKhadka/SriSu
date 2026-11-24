@@ -158,16 +158,27 @@ class LocalServerStartupTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "symlink creation requires elevated Windows privileges")
     def test_matrix_configuration_preserves_shared_environment_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            shared = root / "shared.env"
+            root = Path(directory) / "checkout"
+            root.mkdir()
+            shared_directory = Path(directory) / "shared"
+            shared_directory.mkdir()
+            shared = shared_directory / "local.env"
             link = root / ".env"
+            stable_secrets = {
+                "MATRIX_JWT_SECRET": "synthetic-stable-jwt",
+                "MATRIX_POSTGRES_PASSWORD": "synthetic-stable-password",
+                "MATRIX_MACAROON_SECRET": "synthetic-stable-macaroon",
+                "MATRIX_FORM_SECRET": "synthetic-stable-form",
+            }
             shared.write_text(
                 "DJANGO_DEBUG=true\n"
                 "MATRIX_HOMESERVER_URL=http://192.168.1.10:8008\n"
-                "MATRIX_SERVER_NAME=srisu.local\n",
+                "MATRIX_SERVER_NAME=shared.srisu.local\n"
+                "UNRELATED=keep-this-value\n"
+                + "".join(f"{key}={value}\n" for key, value in stable_secrets.items()),
                 encoding="utf-8",
             )
-            link.symlink_to(shared)
+            link.symlink_to(Path("..") / "shared" / "local.env")
             with mock.patch.object(configure_matrix, "ROOT", root), mock.patch.object(
                 configure_matrix, "ENV_PATH", link
             ), mock.patch.object(
@@ -178,26 +189,68 @@ class LocalServerStartupTests(unittest.TestCase):
                     "--public-base-url",
                     "http://192.168.1.50:8008",
                 ],
-            ):
+            ), mock.patch.object(configure_matrix.tempfile, "mkstemp", wraps=tempfile.mkstemp) as mkstemp:
                 self.assertEqual(configure_matrix.main(), 0)
+                first_result = shared.read_text(encoding="utf-8")
+                self.assertEqual(configure_matrix.main(), 0)
+                self.assertEqual(shared.read_text(encoding="utf-8"), first_result)
+                self.assertTrue(
+                    all(Path(call.kwargs["dir"]).resolve() == shared_directory.resolve() for call in mkstemp.call_args_list)
+                )
             self.assertTrue(link.is_symlink())
+            self.assertEqual(os.readlink(link), str(Path("..") / "shared" / "local.env"))
             updated = shared.read_text(encoding="utf-8")
             self.assertIn("MATRIX_HOMESERVER_URL=http://192.168.1.50:8008", updated)
-            self.assertIn("MATRIX_SERVER_NAME=srisu.local", updated)
+            self.assertIn("MATRIX_SERVER_NAME=shared.srisu.local", updated)
+            self.assertIn("UNRELATED=keep-this-value", updated)
+            values = configure_matrix._parse_env(updated.splitlines())
+            for key, value in stable_secrets.items():
+                self.assertEqual(values[key], value)
+            self.assertEqual(stat.S_IMODE(shared.stat().st_mode), 0o600)
+            self.assertEqual(list(shared_directory.glob(".env.matrix-*")), [])
 
     def test_matrix_configuration_canonicalizes_duplicate_keys(self) -> None:
         lines = [
             "MATRIX_HOMESERVER_URL=http://192.168.1.10:8008\n",
+            "# MATRIX_HOMESERVER_URL=example-only\n",
             "OTHER=value\n",
-            "MATRIX_HOMESERVER_URL=http://192.168.1.11:8008\n",
+            " MATRIX_HOMESERVER_URL = http://192.168.1.11:8008\n",
+            "MATRIX_HOMESERVER_URL=http://192.168.1.12:8008\n",
         ]
-        result = configure_matrix._replace(
-            lines, {"MATRIX_HOMESERVER_URL": "http://192.168.1.50:8008"}
-        )
+        updates = {
+            "MATRIX_HOMESERVER_URL": "http://192.168.1.50:8008",
+            "MATRIX_ENABLED": "true",
+        }
+        result = configure_matrix._replace(lines, updates)
         self.assertEqual(
             result.count("MATRIX_HOMESERVER_URL=http://192.168.1.50:8008\n"), 1
         )
         self.assertNotIn("192.168.1.11", "".join(result))
+        self.assertNotIn("192.168.1.12", "".join(result))
+        self.assertIn("# MATRIX_HOMESERVER_URL=example-only\n", result)
+        self.assertIn("OTHER=value\n", result)
+        self.assertEqual(result.count("MATRIX_ENABLED=true\n"), 1)
+        self.assertEqual(configure_matrix._replace(result, updates), result)
+
+    def test_matrix_configuration_failed_replace_preserves_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env_path = root / ".env"
+            original = "DJANGO_DEBUG=true\nMATRIX_HOMESERVER_URL=http://192.168.1.10:8008\n"
+            env_path.write_text(original, encoding="utf-8")
+            with mock.patch.object(configure_matrix, "ROOT", root), mock.patch.object(
+                configure_matrix, "ENV_PATH", env_path
+            ), mock.patch.object(
+                sys,
+                "argv",
+                ["configure_matrix_dev.py", "--public-base-url", "http://192.168.1.50:8008"],
+            ), mock.patch.object(
+                configure_matrix.os, "replace", side_effect=OSError("simulated replace failure")
+            ):
+                with self.assertRaisesRegex(OSError, "simulated replace failure"):
+                    configure_matrix.main()
+            self.assertEqual(env_path.read_text(encoding="utf-8"), original)
+            self.assertEqual(list(root.glob(".env.matrix-*")), [])
 
     def test_notification_worker_requires_enabled_flag_and_file(self) -> None:
         with self.assertRaises(startup.StartupError):
@@ -254,6 +307,11 @@ class LocalServerStartupTests(unittest.TestCase):
         self.assertIn("manage.py migrate --noinput", rendered)
         self.assertIn("matrix_status --require-ready", rendered)
         self.assertIn("--force-recreate synapse", rendered)
+        self.assertIn("stop web matrix_reconciler moment_video_worker", rendered)
+        self.assertIn("up -d --force-recreate web matrix_reconciler moment_video_worker", rendered)
+        self.assertIn("help process_moment_videos", rendered)
+        self.assertIn("moment_video_worker ffmpeg -version", rendered)
+        self.assertIn("moment_video_worker ffprobe -version", rendered)
 
     def test_repository_inspection_accepts_any_branch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -331,7 +389,7 @@ class LocalServerStartupTests(unittest.TestCase):
                 return_value=(False, {"DJANGO_SECRET_KEY": "x", "POSTGRES_PASSWORD": "y"}),
             ), mock.patch.object(startup, "run_command"), mock.patch.object(
                 startup, "compose", side_effect=fake_compose
-            ), mock.patch.object(startup, "wait_for_command"), mock.patch.object(
+            ), mock.patch.object(startup, "wait_for_command") as wait, mock.patch.object(
                 startup, "wait_for_http"
             ):
                 startup.start_server(self._startup_args())
@@ -342,9 +400,22 @@ class LocalServerStartupTests(unittest.TestCase):
             "run", "--rm", "--no-deps", "web", "python", "manage.py",
             "showmigrations", "chat", "--plan"
         )
-        self.assertLess(calls.index(preflight), calls.index(("stop", "web", "matrix_reconciler")))
-        self.assertLess(calls.index(("stop", "web", "matrix_reconciler")), calls.index(migration))
-        self.assertIn(("up", "-d", "--force-recreate", "web", "matrix_reconciler"), calls)
+        stop = ("stop", "web", "matrix_reconciler", "moment_video_worker")
+        self.assertLess(calls.index(preflight), calls.index(stop))
+        for binary in ("ffmpeg", "ffprobe"):
+            video_preflight = ("run", "--rm", "--no-deps", "moment_video_worker", binary, "-version")
+            self.assertLess(calls.index(video_preflight), calls.index(stop))
+        self.assertLess(calls.index(("run", "--rm", "--no-deps", "moment_video_worker", "python", "manage.py", "process_moment_videos", "--check")), calls.index(stop))
+        self.assertLess(calls.index(stop), calls.index(migration))
+        self.assertIn(("up", "-d", "--force-recreate", "web", "matrix_reconciler", "moment_video_worker"), calls)
+        wait.assert_any_call(
+            ["docker", "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "check"],
+            "Moment video worker", 30,
+        )
+        wait.assert_any_call(
+            ["docker", "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "process_moment_videos", "--healthcheck"],
+            "Moment video worker heartbeat", 30,
+        )
 
     def test_stale_web_image_is_rejected_before_services_stop_or_migrate(self) -> None:
         calls = []
@@ -378,10 +449,16 @@ class LocalServerStartupTests(unittest.TestCase):
                 with self.assertRaisesRegex(startup.StartupError, "does not contain"):
                     startup.start_server(self._startup_args())
 
-        self.assertNotIn(("stop", "web", "matrix_reconciler"), calls)
+        self.assertFalse(any(call[0] == "stop" for call in calls))
         self.assertFalse(any("migrate" in call for call in calls))
 
     def test_mocked_migration_failure_restores_previously_running_services(self) -> None:
+        self._assert_migration_failure_restores(startup.APPLICATION_SERVICES)
+
+    def test_migration_failure_does_not_start_previously_stopped_worker(self) -> None:
+        self._assert_migration_failure_restores(("web", "matrix_reconciler"))
+
+    def _assert_migration_failure_restores(self, running) -> None:
         calls = []
 
         def fake_compose(_docker, *arguments, capture=False):
@@ -389,7 +466,7 @@ class LocalServerStartupTests(unittest.TestCase):
             if arguments == ("config", "--services"):
                 return mock.Mock(stdout="\n".join(startup.CORE_SERVICES))
             if arguments == ("ps", "--status", "running", "--services"):
-                return mock.Mock(stdout="web\nmatrix_reconciler\n")
+                return mock.Mock(stdout="\n".join(running))
             if arguments == (
                 "run", "--rm", "--no-deps", "web", "python", "manage.py",
                 "showmigrations", "chat", "--plan"
@@ -424,7 +501,19 @@ class LocalServerStartupTests(unittest.TestCase):
                 with self.assertRaises(startup.StartupError):
                     startup.start_server(self._startup_args())
 
-        self.assertIn(("start", "web", "matrix_reconciler"), calls)
+        self.assertIn(("stop", *startup.APPLICATION_SERVICES), calls)
+        self.assertIn(("start", *running), calls)
+        self.assertFalse(any(call[0] == "up" and "moment_video_worker" in call for call in calls))
+
+    def test_missing_video_encoder_fails_runtime_preflight(self) -> None:
+        def fake_compose(_docker, *arguments, capture=False):
+            if arguments[-2:] == ("ffmpeg", "-version"):
+                raise startup.StartupError("ffmpeg is missing from the image")
+            return mock.Mock(stdout="[X] chat.0006_destroy_legacy_chat_transport\n")
+
+        with mock.patch.object(startup, "compose", side_effect=fake_compose):
+            with self.assertRaisesRegex(startup.StartupError, "ffmpeg is missing"):
+                startup.validate_runtime_capabilities("docker")
 
 
 if __name__ == "__main__":

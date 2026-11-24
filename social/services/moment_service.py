@@ -64,7 +64,7 @@ def hydrate_moments(queryset, user):
         second_user=Cast(KeyTextTransform("1", "moment__audience_user_ids"), BigIntegerField()),
     ).filter(Q(viewer=user) | Q(viewer_id=F("first_user")) | Q(viewer_id=F("second_user")))
     return (queryset.annotate(total_view_count=Count("views", distinct=True))
-      .select_related("created_by", "couple").prefetch_related("photos", Prefetch("views", queryset=views), "reactions", "couple__memberships",
+      .select_related("created_by", "couple").prefetch_related(Prefetch("photos", queryset=CoupleMomentPhotoModel.objects.select_related("video")), Prefetch("views", queryset=views), "reactions", "couple__memberships",
           Prefetch("notes", queryset=visible_notes(user, recipients_only=True)[:50], to_attr="appreciation_notes"))
       .order_by("-created_at", "-id"))
 
@@ -101,10 +101,11 @@ def may_modify(moment, user):
 
 
 def delete_file(name):
-    from social.models import MomentDraftPhoto
+    from social.models import MomentDraftPhoto, MomentVideoFile
     # Covers and staged/published photos can briefly share storage during publication.
     if (CoupleMomentPhotoModel.objects.filter(image=name).exists() or
             MomentDraftPhoto.objects.filter(image=name).exists() or
+            MomentVideoFile.objects.filter(file=name).exists() or
             CoupleModel.objects.filter(cover_photo=name).exists()):
         MomentFileDeletion.objects.filter(name=name).delete()
         return

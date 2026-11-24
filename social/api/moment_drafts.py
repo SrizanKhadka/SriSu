@@ -64,12 +64,14 @@ class DraftThrottle(UserRateThrottle):
 
 
 def draft_data(request, draft):
+    from social.services.moment_video import video_data
     return {"id": str(draft.pk), "couple": draft.couple_id, "revision": draft.revision,
         "created_at": draft.created_at, "published_at": draft.published_at,
         "moment_id": draft.moment_id, "server_time": timezone.now(),
         "photos": [{"id": str(p.pk), "width": p.width, "height": p.height,
+            "video": video_data(p.video) if p.video_id else None,
             "image": request.build_absolute_uri(f"/api/social/moment-drafts/{draft.pk}/photos/{p.pk}/")}
-            for p in draft.photos.order_by("created_at", "id")]}
+            for p in draft.photos.select_related("video").order_by("created_at", "id")]}
 
 
 class MomentDraftView(PrivateResponseMixin, viewsets.GenericViewSet):

@@ -1,6 +1,7 @@
 """Authorized, transient display copy. Private previews never enter FCM or the outbox."""
 import unicodedata
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from django.db.models import Count
 from django.utils.html import strip_tags
 from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import NotFound
@@ -114,7 +115,19 @@ def display_copy(event, user):
     elif kind in {"moment.published", "moment.hearted"}:
         from social.models import CoupleMomentModel
         moment = CoupleMomentModel.objects.get(pk=event.resource)
-        result.update(title=f"{actor} " + ("shared a moment" if kind == "moment.published" else "liked your moment"), body=moment.caption or moment.title or "Photo moment")
+        # Video attachments also have JPEG posters in `photos`. The actual video
+        # relation, not the thumbnail or filename, determines the media type.
+        counts = moment.photos.aggregate(total=Count("pk"), videos=Count("video_id"))
+        if not counts["total"]:
+            description, label = "moment", "Moment"
+        elif counts["videos"] == counts["total"]:
+            description, label = "video moment", "Video moment"
+        elif counts["videos"]:
+            description, label = "moment with photos and videos", "Photo and video moment"
+        else:
+            description, label = "photo moment", "Photo moment"
+        verb = f"shared a {description}" if kind == "moment.published" else f"liked your {description}"
+        result.update(title=f"{actor} {verb}", body=text(moment.caption) or text(moment.title) or label)
     elif kind in {"moment.appreciated", "moment.replied"}:
         from social.models import CoupleMomentNoteModel
         note = CoupleMomentNoteModel.objects.select_related("sender").get(pk=event.resource)

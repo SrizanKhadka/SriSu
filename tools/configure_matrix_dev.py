@@ -28,15 +28,18 @@ def _parse_env(lines: list[str]) -> dict[str, str]:
 
 
 def _replace(lines: list[str], updates: dict[str, str]) -> list[str]:
-    remaining = dict(updates)
+    seen: set[str] = set()
     result = []
     for line in lines:
         if "=" in line and not line.lstrip().startswith("#"):
             key = line.split("=", 1)[0].strip()
-            if key in remaining:
-                result.append(f"{key}={remaining.pop(key)}\n")
+            if key in updates:
+                if key not in seen:
+                    result.append(f"{key}={updates[key]}\n")
+                    seen.add(key)
                 continue
         result.append(line)
+    remaining = {key: value for key, value in updates.items() if key not in seen}
     if remaining:
         if result and result[-1].strip():
             result.append("\n")
@@ -121,14 +124,17 @@ def main() -> int:
         "MATRIX_FORM_SECRET": _secret(current.get("MATRIX_FORM_SECRET")),
     }
     updated = "".join(_replace(lines, updates))
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".env.matrix-", dir=ROOT)
+    # Worktrees can share an ignored .env through a relative or absolute symlink.
+    # Replace its target on the same filesystem, keeping the link itself intact.
+    destination = ENV_PATH.resolve() if ENV_PATH.is_symlink() else ENV_PATH
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".env.matrix-", dir=destination.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
             output.write(updated)
             output.flush()
             os.fsync(output.fileno())
         os.chmod(temporary_name, 0o600)
-        os.replace(temporary_name, ENV_PATH)
+        os.replace(temporary_name, destination)
     finally:
         if os.path.exists(temporary_name):
             os.unlink(temporary_name)

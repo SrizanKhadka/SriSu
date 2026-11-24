@@ -139,7 +139,7 @@ def upload_photo(user, draft_id, photo_id, upload):
             if existing:
                 if existing.draft_id != draft.id:
                     raise Http404
-                if existing.digest != digest:
+                if existing.video_id or existing.digest != digest:
                     raise MomentConflict()
             else:
                 if draft.photos.count() >= 5:
@@ -184,12 +184,16 @@ def replay(user, draft, fingerprint):
 def publication_photos(draft, data):
     if data["expected_revision"] != draft.revision:
         raise MomentConflict()
-    photos = {p.id: p for p in draft.photos.all()}
+    photos = {p.id: p for p in draft.photos.select_related("video").all()}
     order = data["photo_ids"]
     if not 1 <= len(order) <= 5 or len(set(order)) != len(order) or set(order) != set(photos):
         raise ValidationError({"photo_ids": "Choose the one to five photos uploaded to this draft."})
     if not set(data.get("crops", {})).issubset({str(pk) for pk in photos}):
         raise ValidationError({"crops": "Choose photos uploaded to this draft."})
+    if any(p.video_id and p.video.state != "ready" for p in photos.values()):
+        raise ValidationError({"video": "Wait for your videos to finish processing before sharing."})
+    if any(str(p.id) in data.get("crops", {}) and p.video_id for p in photos.values()):
+        raise ValidationError({"crops": "Video cropping is not supported. Photos can still be cropped."})
     return photos
 
 
@@ -281,7 +285,7 @@ def commit_publication(user, draft, data, fingerprint, photos, prepared):
     rows = []
     for i, pk in enumerate(data["photo_ids"]):
         name, width, height = prepared.get(pk, (photos[pk].image.name, photos[pk].width, photos[pk].height))
-        rows.append(CoupleMomentPhotoModel(moment=moment, image=name, order=i, width=width, height=height))
+        rows.append(CoupleMomentPhotoModel(moment=moment, image=name, order=i, width=width, height=height, video_id=photos[pk].video_id))
     CoupleMomentPhotoModel.objects.bulk_create(rows)
     draft.published_at = moment.created_at
     draft.moment = moment
