@@ -385,6 +385,10 @@ revocation limitation, bounded here by the short cookie lifetime.
    QA rebased the original local-only `0022` video migration to this current graph.
    No deployment or live application migration was performed during this task.
 2. Start `moment_video_worker` from Docker Compose alongside the web process.
+   Both local startup wrappers now start it automatically, validate FFmpeg/ffprobe,
+   and include it in the migration stop/restore sequence. It uses the shared
+   `srisu-backend-app:local` image; look for its container rather than a separate
+   image. See [local startup](local-server-startup.md).
    It shares private storage and the database; its container is limited to two
    CPUs and 2 GiB. Without a worker, uploads remain queued and the client offers
    a retry instead of publishing an unplayable item.

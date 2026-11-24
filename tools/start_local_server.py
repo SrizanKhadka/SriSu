@@ -32,14 +32,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT / ".env"
 ENV_EXAMPLE_PATH = ROOT / ".env.example"
 INFRASTRUCTURE_SERVICES = ("srisu_db", "redis", "synapse_db", "synapse")
-CORE_SERVICES = (
-    "web",
-    "matrix_reconciler",
-    "srisu_db",
-    "redis",
-    "synapse_db",
-    "synapse",
-)
+APPLICATION_SERVICES = ("web", "matrix_reconciler", "moment_video_worker")
+CORE_SERVICES = (*APPLICATION_SERVICES, *INFRASTRUCTURE_SERVICES)
 REQUIRED_SOURCE_FILES = (
     "manage.py",
     "docker-compose.yaml",
@@ -48,6 +42,8 @@ REQUIRED_SOURCE_FILES = (
     "deploy/synapse/start-dev.sh",
     "chat/migrations/0005a_durable_matrix_revocation.py",
     "chat/migrations/0006_destroy_legacy_chat_transport.py",
+    "social/management/commands/process_moment_videos.py",
+    "social/migrations/0024_moment_video.py",
 )
 REQUIRED_CHAT_MIGRATION = "chat.0006_destroy_legacy_chat_transport"
 PLACEHOLDER_PREFIXES = ("replace-", "change-me", "changeme")
@@ -348,10 +344,10 @@ def inspect_repository() -> SourceCheckout:
     missing = [relative for relative in REQUIRED_SOURCE_FILES if not (ROOT / relative).is_file()]
     if missing:
         raise StartupError(
-            "This checkout is not compatible with the SriSu Matrix/chat launcher. "
+            "This checkout is not compatible with the SriSu local backend launcher. "
             "Missing required source file(s): "
             + ", ".join(missing)
-            + ". Select a backend branch containing the current Docker, Matrix, and "
+            + ". Select a backend branch containing the current Docker, Matrix, video Moments, and "
             "legacy-chat cutover implementation. The branch name itself is not restricted."
         )
     branch = capture_command(["git", "branch", "--show-current"])
@@ -608,7 +604,7 @@ def validate_notification_environment(values: dict[str, str]) -> None:
 
 
 def validate_runtime_capabilities(docker: str) -> None:
-    """Verify the built image exposes the chat commands before schema changes."""
+    """Verify chat/video commands and encoders before stopping apps or migrating."""
     compose(docker, "run", "--rm", "--no-deps", "web", "python", "manage.py", "check")
     compose(
         docker,
@@ -652,6 +648,15 @@ def validate_runtime_capabilities(docker: str) -> None:
             "--skip-build; "
             "no application services were stopped and no migrations were run."
         )
+    compose(
+        docker, "run", "--rm", "--no-deps", "moment_video_worker",
+        "python", "manage.py", "help", "process_moment_videos",
+    )
+    for binary in ("ffmpeg", "ffprobe"):
+        compose(
+            docker, "run", "--rm", "--no-deps", "moment_video_worker",
+            binary, "-version", capture=True,
+        )
 
 
 def dry_run_plan(lan_ip: str, *, pull: bool, skip_build: bool, with_notifications: bool) -> None:
@@ -673,9 +678,13 @@ def dry_run_plan(lan_ip: str, *, pull: bool, skip_build: bool, with_notification
             ["docker", "compose", "run", "--rm", "--no-deps", "web", "python", "manage.py", "help", "matrix_status"],
             ["docker", "compose", "run", "--rm", "--no-deps", "web", "python", "manage.py", "help", "reconcile_matrix_rooms"],
             ["docker", "compose", "run", "--rm", "--no-deps", "web", "python", "manage.py", "showmigrations", "chat", "--plan"],
-            ["docker", "compose", "stop", "web", "matrix_reconciler"],
+            ["docker", "compose", "run", "--rm", "--no-deps", "moment_video_worker", "python", "manage.py", "help", "process_moment_videos"],
+            ["docker", "compose", "run", "--rm", "--no-deps", "moment_video_worker", "ffmpeg", "-version"],
+            ["docker", "compose", "run", "--rm", "--no-deps", "moment_video_worker", "ffprobe", "-version"],
+            ["docker", "compose", "stop", *APPLICATION_SERVICES],
             ["docker", "compose", "run", "--rm", "web", "python", "manage.py", "migrate", "--noinput"],
-            ["docker", "compose", "up", "-d", "--force-recreate", "web", "matrix_reconciler"],
+            ["docker", "compose", "up", "-d", "--force-recreate", *APPLICATION_SERVICES],
+            ["docker", "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "check"],
         ]
     )
     if with_notifications:
@@ -820,7 +829,7 @@ def start_server(args: argparse.Namespace) -> None:
 
     # Quiesce the application processes before changing database schema. This is
     # idempotent and does not remove containers, data, or named volumes.
-    compose(docker, "stop", "web", "matrix_reconciler")
+    compose(docker, "stop", *APPLICATION_SERVICES)
     if args.with_notifications:
         compose(docker, "--profile", "notifications", "stop", "notification_worker")
 
@@ -838,7 +847,7 @@ def start_server(args: argparse.Namespace) -> None:
     except StartupError as error:
         restore = [
             service
-            for service in ("web", "matrix_reconciler")
+            for service in APPLICATION_SERVICES
             if service in running_services
         ]
         if restore:
@@ -856,7 +865,12 @@ def start_server(args: argparse.Namespace) -> None:
             "readiness and backup sequence in docs/chat-v2.md, then rerun this launcher."
         ) from error
 
-    compose(docker, "up", "-d", "--force-recreate", "web", "matrix_reconciler")
+    compose(docker, "up", "-d", "--force-recreate", *APPLICATION_SERVICES)
+    wait_for_command(
+        [docker, "compose", "exec", "-T", "moment_video_worker", "python", "manage.py", "check"],
+        "Moment video worker",
+        args.wait_seconds,
+    )
     if args.with_notifications:
         compose(
             docker,
@@ -972,7 +986,7 @@ def main() -> int:
     except StartupError as error:
         print(f"\nERROR: {error}", file=sys.stderr)
         print(
-            "Inspect with: docker compose logs --tail 100 web matrix_reconciler synapse",
+            "Inspect with: docker compose logs --tail 100 web matrix_reconciler moment_video_worker synapse",
             file=sys.stderr,
         )
         return 1
