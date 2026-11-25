@@ -103,13 +103,16 @@ def inbox_destination(event, user):
 
 
 def presentation(event, user):
+    from .inbox_presentation import visuals
     route = None
+    visual = {"actor_name": None, "avatar": False, "thumbnail": False, "segments": []}
     try:
         route = inbox_destination(event, user)
         copy = display_copy(event, user)
         # Historical first-answer copy must not claim it is still the reader's turn.
         if event.kind == "spark.submitted":
             copy["title"] = copy["title"].replace("answered — your turn", "answered your question")
+        visual = visuals(event, user, copy)
     except (NotFound, Http404, ObjectDoesNotExist, SparkConflict):
         title, _ = FALLBACKS[event.kind]
         copy = {"title": title, "body": "This update is no longer available."}
@@ -117,7 +120,7 @@ def presentation(event, user):
     return {"id": str(event.pk), "kind": event.kind, "category": POLICIES[event.kind].category,
         "title": text(copy["title"], 120), "body": text(copy["body"]),
         "created_at": event.created_at, "read_at": event.inbox_read_at,
-        "available": route is not None}, route
+        "available": route is not None, **visual}, route
 
 
 def encode(user, purpose, **values):

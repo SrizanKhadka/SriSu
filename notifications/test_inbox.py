@@ -13,6 +13,104 @@ ROOT = '/api/notifications/v1/inbox/'
 
 @override_settings(**SETTINGS)
 class InboxTests(MatrixFixtures, APITestCase):
+    def image_file(self, label="synthetic.jpg"):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        output = BytesIO()
+        Image.new("RGB", (800, 600), "purple").save(output, "JPEG")
+        return SimpleUploadedFile(label, output.getvalue(), content_type="image/jpeg")
+
+    def test_visuals_and_bounded_media_reauthorize_without_marking_read(self):
+        from io import BytesIO
+        from PIL import Image
+        from social.models import CoupleMomentPhotoModel
+        self.first.profile_photo = self.image_file()
+        self.first.save(update_fields=["profile_photo"])
+        self.first_client.post('/api/social/couple-moments/', {'couple':self.couple.pk,
+            'caption':'Synthetic moment', 'visibility':'private'}, format='json')
+        moment = CoupleMomentModel.objects.get()
+        CoupleMomentPhotoModel.objects.create(moment=moment, image=self.image_file('moment.jpg'))
+        event = Event.objects.get(kind='moment.published')
+        item = self.listing()['items'][0]
+        self.assertTrue(item['avatar']); self.assertTrue(item['thumbnail'])
+        self.assertEqual(item['segments'][0], {'text':self.first.full_name,'bold':True})
+        for slot in ('avatar','thumbnail'):
+            url = ROOT + f'{event.pk}/media/{slot}/'
+            response = self.second_client.get(url)
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(response['Cache-Control'],'private, no-store')
+            self.assertEqual(response['Content-Type'],'image/jpeg')
+            self.assertLess(len(response.content),256*1024)
+            image = Image.open(BytesIO(response.content))
+            self.assertLessEqual(max(image.size),160)
+            self.assertEqual(self.third_client.get(url).status_code,404)
+        event.refresh_from_db();self.assertIsNone(event.inbox_read_at)
+        moment.expires_at=timezone.now()-timedelta(seconds=1);moment.save()
+        for slot in ('avatar','thumbnail'):
+            self.assertEqual(self.second_client.get(ROOT+f'{event.pk}/media/{slot}/').status_code,404)
+        item = self.listing()['items'][0]
+        self.assertFalse(item['avatar']);self.assertFalse(item['thumbnail'])
+        self.assertIsNone(item['actor_name']);self.assertEqual(item['segments'],[])
+
+    def test_spark_copy_only_requests_an_answer_while_it_is_really_needed(self):
+        spark,_=sparks.start(self.first,uuid4(),self.couple.pk,'deep-1-v1')
+        envelope={'algorithm':'m.megolm.v1.aes-sha2','ciphertext':'A'*256,'session_id':'B'*43}
+        sparks.submit(self.first,spark.pk,envelope)
+        def sentence():
+            row=next(r for r in self.listing()['items'] if r['kind']=='spark.submitted')
+            return ''.join(s['text'] for s in row['segments'])
+        self.assertIn('Answer to see theirs.',sentence())
+        sparks.submit(self.second,spark.pk,envelope)
+        self.assertNotIn('Answer to see theirs.',sentence())
+        self.assertIn('ready to reveal',sentence())
+
+    def test_media_rechecks_block_membership_and_device_session(self):
+        from authentication.models import DeviceSession
+        self.first.profile_photo = self.image_file()
+        self.first.save(update_fields=['profile_photo'])
+        self.plan()
+        event = Event.objects.get(kind='plan.created')
+        url = ROOT + f'{event.pk}/media/avatar/'
+        self.assertEqual(self.second_client.get(url).status_code, 200)
+        block = SingleConnectionModel.objects.create(sender_number=self.first.phone_number,
+            receiver_number=self.second.phone_number, connection_status='BLOCKED')
+        self.assertEqual(self.second_client.get(url).status_code, 404)
+        block.delete()
+        Event.objects.filter(pk=event.pk).update(audience_membership_ids=[90001,90002])
+        self.assertEqual(self.second_client.get(url).status_code, 404)
+        DeviceSession.objects.filter(pk=self.second_sid).update(revoked_at=timezone.now())
+        self.assertIn(self.second_client.get(url).status_code, [401,403])
+        self.assertIn(self.client.get(url).status_code, [401,403])
+
+    def test_invitation_avatar_belongs_to_sender_not_current_partner(self):
+        from social.models import CoupleConnectionModel
+        from .services import emit
+        self.third.profile_photo = self.image_file('sender.jpg')
+        self.third.save(update_fields=['profile_photo'])
+        invite = CoupleConnectionModel.objects.create(sender_number=self.third.phone_number,
+            receiver_number=self.second.phone_number, connection_status='PENDING')
+        event = emit('invite.received', self.second, str(uuid4()), invite.pk)
+        row = self.listing()['items'][0]
+        self.assertTrue(row['avatar']);self.assertFalse(row['thumbnail'])
+        self.assertEqual(row['actor_name'], self.third.full_name)
+        self.assertEqual(self.second_client.get(ROOT+f'{event.pk}/media/avatar/').status_code,200)
+        invite.connection_status='REJECTED';invite.save(update_fields=['connection_status'])
+        self.assertEqual(self.second_client.get(ROOT+f'{event.pk}/media/avatar/').status_code,404)
+
+    def test_missing_or_invalid_media_is_a_safe_not_found_not_a_broken_inbox(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.first.profile_photo=SimpleUploadedFile('broken.jpg', b'not an image', content_type='image/jpeg')
+        self.first.save(update_fields=['profile_photo'])
+        self.plan();event=Event.objects.get(kind='plan.created')
+        self.assertTrue(self.listing()['items'][0]['available'])
+        for slot in ['avatar','thumbnail','unsupported']:
+            response=self.second_client.get(ROOT+f'{event.pk}/media/{slot}/')
+            self.assertEqual(response.status_code,404)
+            self.assertEqual(response['Cache-Control'],'private, no-store')
+        self.first.profile_photo.delete(save=True)
+        self.assertFalse(self.listing()['items'][0]['avatar'])
+
     def listing(self, client=None, **query):
         response = (client or self.second_client).get(ROOT, query)
         self.assertEqual(response.status_code, 200, response.data)

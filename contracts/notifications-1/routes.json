@@ -42,5 +42,13 @@
   {
     "method": "POST",
     "path": "api/notifications/v1/inbox/{event_id}/open/"
+  },
+  {
+    "method": "GET",
+    "path": "api/notifications/v1/inbox/{event_id}/media/avatar/"
+  },
+  {
+    "method": "GET",
+    "path": "api/notifications/v1/inbox/{event_id}/media/thumbnail/"
   }
 ]
