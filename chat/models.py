@@ -1,20 +1,11 @@
-from django.core.exceptions import ValidationError
-from django.db import models
-from authentication.models import UserModel
-from social.models import CoupleModel, SingleConnectionModel
-from utils.choices import *
 import uuid
 
+from django.core.exceptions import ValidationError
+from django.db import models
+from django.utils import timezone
 
-class MediaModel(models.Model):
-    file = models.FileField(upload_to="chats/media/")
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-uploaded_at"]
-
-    def __str__(self):
-        return f"Media {self.pk}"
+from authentication.models import UserModel
+from social.models import CoupleModel
 
 
 class ChatRoom(models.Model):
@@ -35,12 +26,6 @@ class ChatRoom(models.Model):
         blank=True,
     )
 
-    chat_type = models.CharField(
-        max_length=10,
-        choices=ChatTypeChoices,
-        default="single",
-    )
-
     couple = models.ForeignKey(
         CoupleModel,
         on_delete=models.CASCADE,
@@ -48,52 +33,23 @@ class ChatRoom(models.Model):
         null=True,
         blank=True,
     )
-    singles = models.ForeignKey(
-        SingleConnectionModel,
-        on_delete=models.CASCADE,
-        related_name="chat_rooms",
-        null=True,
-        blank=True,
-    )
-
-    last_message = models.ForeignKey(
-        "MessageModel",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="last_message_for_rooms",
-    )
-
-    unread_count = models.JSONField(default=dict, blank=True)
-    is_typing = models.JSONField(default=dict, blank=True)
-    settings = models.JSONField(default=dict, blank=True)
-
-    pinned_messages = models.ManyToManyField(
-        "MessageModel",
-        blank=True,
-        related_name="pinned_in_rooms",
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # Default ordering for queries:"-timestamp" ensures newest messages appear first (chat UX requirement)
         ordering = ["-updated_at"]
         verbose_name = "Chat Room"
         verbose_name_plural = "Chat Rooms"
-        constraints = [ # Prevent duplicate chat rooms between the same pair of users. Combined with user swapping in save(), ensures (A,B) and (B,A) are treated the same.
+        constraints = [
             models.UniqueConstraint(
-                fields=["user_one", "user_two"],
-                name="unique_chatroom_users",
+                fields=["couple"],
+                condition=models.Q(couple__isnull=False),
+                name="unique_chatroom_couple",
             )
         ]
-        # Indexes to optimize chat room listing and filtering:
-        # - updated_at: used for sorting chats by recent activity
-        # - chat_type: quick filtering between single/couple chats
         indexes = [
             models.Index(fields=["updated_at"]),
-            models.Index(fields=["chat_type"]),
+            models.Index(fields=["user_one", "user_two"], name="chat_room_pair_idx"),
         ]
 
     def clean(self):
@@ -116,167 +72,101 @@ class ChatRoom(models.Model):
         return f"ChatRoom {self.id} - {user_one_name} and {user_two_name}"
 
 
-class MessageModel(models.Model):
-    chat_room = models.ForeignKey(
+class MatrixUserMapping(models.Model):
+    """Stable Django-account to private-Matrix identity mapping."""
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACTIVE = "active", "Active"
+        FAILED = "failed", "Failed"
+
+    user = models.OneToOneField(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="matrix_identity",
+    )
+    matrix_localpart = models.CharField(max_length=64, unique=True, editable=False)
+    matrix_user_id = models.CharField(
+        max_length=255,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    state = models.CharField(max_length=12, choices=State.choices, default=State.PENDING)
+    last_error_code = models.CharField(max_length=40, blank=True, editable=False)
+    provisioned_at = models.DateTimeField(null=True, blank=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class MatrixRoomMapping(models.Model):
+    """Relationship-room provisioning state; contains no message content."""
+
+    class State(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROVISIONING = "provisioning", "Provisioning"
+        ACTIVE = "active", "Active"
+        REVOKE_PENDING = "revoke_pending", "Revoke pending"
+        REVOKING = "revoking", "Revoking"
+        REVOKED = "revoked", "Revoked"
+        FAILED = "failed", "Failed"
+
+    chat_room = models.OneToOneField(
         ChatRoom,
-        on_delete=models.CASCADE,
-        related_name="messages",
-        db_index=True,
-    )
-
-    couple = models.ForeignKey(
-        CoupleModel,
-        on_delete=models.CASCADE,
-        related_name="messages",
-        null=True,
-        blank=True,
-    )
-    singles = models.ForeignKey(
-        SingleConnectionModel,
-        on_delete=models.CASCADE,
-        related_name="messages",
-        null=True,
-        blank=True,
-    )
-
-    sender = models.ForeignKey(
-        UserModel,
-        on_delete=models.CASCADE,
-        related_name="sent_messages",
-    )
-    receiver = models.ForeignKey(
-        UserModel,
-        on_delete=models.CASCADE,
-        related_name="received_messages",
-        null=True,
-        blank=True,
-    )
-
-    message_type = models.CharField(
-        max_length=20,
-        choices=MessageType,
-        default=MessageType.TEXT,
-    )
-    text = models.TextField(null=True, blank=True)
-
-    media = models.FileField(
-        upload_to="messages/media/",
-        null=True,
-        blank=True,
-    )
-    media_url = models.URLField(max_length=500, null=True, blank=True)
-    sticker_url = models.URLField(max_length=500, null=True, blank=True)
-    medias = models.ManyToManyField(
-        MediaModel,
-        related_name="messages",
-        blank=True,
-    )
-
-    reply_to = models.ForeignKey(
-        "self",
-        null=True,
-        blank=True,
         on_delete=models.SET_NULL,
-        related_name="replies",
+        related_name="matrix_mapping",
+        null=True,
     )
-
-    is_deleted = models.BooleanField(default=False)
-    is_read = models.BooleanField(default=False, db_index=True)
-    is_delivered = models.BooleanField(default=False, db_index=True)
-    is_sent = models.BooleanField(default=False)
-    is_edited = models.BooleanField(default=False)
-
-    deleted_message = models.CharField(max_length=100, null=True, blank=True)
-    delete_option = models.CharField(
-        max_length=20,
-        choices=DeleteOption.choices,
-        default=DeleteOption.NOT_DELETED,
+    member_matrix_localparts = models.JSONField(default=list, editable=False)
+    pending_remote_revocations = models.JSONField(default=list, editable=False)
+    replacement_pending = models.BooleanField(default=False, editable=False)
+    membership_epoch = models.PositiveBigIntegerField(default=1, editable=False)
+    room_alias_localpart = models.CharField(max_length=128, unique=True, editable=False)
+    matrix_room_alias = models.CharField(
+        max_length=255,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
     )
-
-    # Keep temporarily for backward compatibility
-    message_deletion_dict = models.JSONField(null=True, blank=True,default=dict)
-    delete_for = models.JSONField(null=True, blank=True,default=dict)
-    reactions = models.JSONField(null=True, blank=True,default=dict)
-
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-timestamp"]
-        # Database indexes to optimize high-frequency chat queries:
-        # - (chat_room, -timestamp): fast message pagination per room
-        # - (sender, -timestamp): fast lookup of messages sent by user
-        # - (reply_to): efficient reply-thread resolution
-        indexes = [
-            models.Index(fields=["chat_room", "-timestamp"]),
-            models.Index(fields=["sender", "-timestamp"]),
-            models.Index(fields=["reply_to"]),
-        ]
-
-    def __str__(self):
-        return f"Message {self.pk} in room {self.chat_room_id}"
-
-
-class MessageDeletion(models.Model):
-    message = models.ForeignKey(
-        MessageModel,
-        on_delete=models.CASCADE,
-        related_name="deletions",
+    matrix_room_id = models.CharField(
+        max_length=255,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
     )
-    user = models.ForeignKey(
-        UserModel,
-        on_delete=models.CASCADE,
-        related_name="message_deletions",
-        default=None,
-    )
-    delete_option = models.CharField(
-        max_length=20,
-        choices=DeleteOption.choices,
-    )
+    state = models.CharField(max_length=20, choices=State.choices, default=State.PENDING)
+    attempts = models.PositiveIntegerField(default=0, editable=False)
+    available_at = models.DateTimeField(default=timezone.now, editable=False)
+    locked_at = models.DateTimeField(null=True, blank=True, editable=False)
+    last_error_code = models.CharField(max_length=40, blank=True, editable=False)
+    provisioned_at = models.DateTimeField(null=True, blank=True, editable=False)
+    revoked_at = models.DateTimeField(null=True, blank=True, editable=False)
+    remote_verified_at = models.DateTimeField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["message", "user", "delete_option"],
-                name="unique_message_user_delete_option",
+        indexes = [
+            models.Index(
+                fields=["state", "available_at", "id"],
+                name="matrix_room_retry_idx",
             )
         ]
-        indexes = [
-            models.Index(fields=["message", "user"]),
-        ]
-
-    def __str__(self):
-        return f"Deletion for message {self.message_id} by user {self.user_id}"
 
 
-class MessageReaction(models.Model):
-    message = models.ForeignKey(
-        MessageModel,
-        on_delete=models.CASCADE,
-        related_name="reaction_records",
-    )
-    user = models.ForeignKey(
-        UserModel,
-        on_delete=models.CASCADE,
-        related_name="message_reactions",
-    )
-    reaction = models.CharField(
-        max_length=20,
-        choices=MessageReaction,
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
+class MatrixCutoverAttestation(models.Model):
+    """Short-lived proof that every eligible room was verified remotely."""
+
+    scope = models.CharField(max_length=40, primary_key=True, editable=False)
+    configuration_digest = models.CharField(max_length=64, editable=False)
+    state_digest = models.CharField(max_length=64, editable=False)
+    eligible_room_count = models.PositiveIntegerField(editable=False)
+    active_room_count = models.PositiveIntegerField(editable=False)
+    verified_at = models.DateTimeField(editable=False)
+    expires_at = models.DateTimeField(editable=False)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["message", "user"],
-                name="unique_message_user_reaction",
-            )
-        ]
-        indexes = [
-            models.Index(fields=["message"]),
-            models.Index(fields=["user"]),
-        ]
-
-    def __str__(self):
-        return f"Reaction on message {self.message_id} by user {self.user_id}"
+        verbose_name = "Matrix cutover attestation"

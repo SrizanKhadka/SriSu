@@ -1,0 +1,629 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://srisu.example/contracts/notifications-1",
+  "$defs": {
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "proof": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43,128}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "platform": {
+          "enum": [
+            "android",
+            "ios"
+          ]
+        },
+        "target_kind": {
+          "enum": [
+            "fid",
+            "token"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 4096
+        },
+        "permitted": {
+          "type": "boolean"
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "matrix-chat-push-1",
+              "notification-catalogue-2",
+              "notification-previews-1"
+            ]
+          }
+        }
+      },
+      "required": [
+        "installation_id",
+        "proof",
+        "version",
+        "platform",
+        "target_kind",
+        "target",
+        "permitted"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "installation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "installation_id",
+        "version"
+      ]
+    },
+    "preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "const": "notifications-1"
+        },
+        "push": {
+          "type": "boolean"
+        },
+        "chat": {
+          "type": "boolean"
+        },
+        "activity": {
+          "type": "boolean"
+        },
+        "mute_until": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "mute_forever": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "notification-plan-1",
+              "activity-notifications-1",
+              "spark-notifications-1",
+              "matrix-chat-push-1",
+              "notification-catalogue-2",
+              "notification-previews-1"
+            ]
+          }
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requests": {
+              "type": "boolean"
+            },
+            "plans": {
+              "type": "boolean"
+            },
+            "questions": {
+              "type": "boolean"
+            },
+            "challenges": {
+              "type": "boolean"
+            },
+            "moments": {
+              "type": "boolean"
+            },
+            "moment_replies": {
+              "type": "boolean"
+            },
+            "appreciations": {
+              "type": "boolean"
+            },
+            "moment_reactions": {
+              "type": "boolean"
+            },
+            "status": {
+              "type": "boolean"
+            },
+            "ideas": {
+              "type": "boolean"
+            },
+            "spark_progress": {
+              "type": "boolean"
+            },
+            "challenge_progress": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "contract",
+        "push",
+        "chat",
+        "activity",
+        "mute_until",
+        "mute_forever",
+        "revision",
+        "capabilities"
+      ]
+    },
+    "preference_write": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "push": {
+          "type": "boolean"
+        },
+        "chat": {
+          "type": "boolean"
+        },
+        "activity": {
+          "type": "boolean"
+        },
+        "mute": {
+          "enum": [
+            "unchanged",
+            "off",
+            "1h",
+            "8h",
+            "forever"
+          ]
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requests": {
+              "type": "boolean"
+            },
+            "plans": {
+              "type": "boolean"
+            },
+            "questions": {
+              "type": "boolean"
+            },
+            "challenges": {
+              "type": "boolean"
+            },
+            "moments": {
+              "type": "boolean"
+            },
+            "moment_replies": {
+              "type": "boolean"
+            },
+            "appreciations": {
+              "type": "boolean"
+            },
+            "moment_reactions": {
+              "type": "boolean"
+            },
+            "status": {
+              "type": "boolean"
+            },
+            "ideas": {
+              "type": "boolean"
+            },
+            "spark_progress": {
+              "type": "boolean"
+            },
+            "challenge_progress": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "expected_revision",
+        "push",
+        "chat",
+        "activity",
+        "mute"
+      ]
+    },
+    "destination": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "conversation"
+            },
+            "room_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "message_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "room_id",
+            "message_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "invitations"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "couple",
+                "sharing"
+              ]
+            },
+            "couple_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "couple_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "plan"
+            },
+            "couple_id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "plan_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "couple_id",
+            "plan_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "spark"
+            },
+            "spark_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "spark_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "matrix_conversation"
+            },
+            "room_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "room_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "challenge"
+            },
+            "challenge_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "challenge_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "moment"
+            },
+            "moment_id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "couple_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "moment_id",
+            "couple_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "moment_note"
+            },
+            "note_id": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "note_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "idea"
+            },
+            "idea_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "idea_id"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "home"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "push_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "1"
+        },
+        "delivery_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expires_at": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
+      },
+      "required": [
+        "schema",
+        "delivery_id",
+        "expires_at"
+      ]
+    },
+    "card_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "plan",
+            "challenge",
+            "spark"
+          ]
+        },
+        "resource": {
+          "type": "string",
+          "maxLength": 36
+        }
+      },
+      "required": [
+        "kind",
+        "resource"
+      ]
+    },
+    "card_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "key"
+      ]
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event_kind": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "room_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "matrix_event_id": {
+          "type": "string",
+          "pattern": "^\\$.{1,254}$"
+        },
+        "actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "actor_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        },
+        "actor_real_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        }
+      },
+      "required": [
+        "event_kind",
+        "title",
+        "body"
+      ]
+    },
+    "push_data_v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "2"
+        },
+        "delivery_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expires_at": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "installation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "binding_version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "group": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z]+\\.[a-z_]+$",
+          "maxLength": 32
+        },
+        "audible": {
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "schema",
+        "delivery_id",
+        "expires_at",
+        "installation_id",
+        "binding_version",
+        "created_at",
+        "group",
+        "kind",
+        "audible",
+        "title",
+        "body"
+      ]
+    }
+  }
+}

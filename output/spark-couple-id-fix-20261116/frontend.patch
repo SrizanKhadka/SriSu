@@ -1,0 +1,369 @@
+diff --git a/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/MatrixSession.kt b/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/MatrixSession.kt
+index ccb5dfd..4b3196c 100644
+--- a/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/MatrixSession.kt
++++ b/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/MatrixSession.kt
+@@ -34,6 +34,8 @@ data class MatrixSessionDto(
+     @SerialName("login_token_one_time") val loginTokenOneTime: Boolean,
+     @SerialName("refresh_token_enabled") val refreshTokenEnabled: Boolean,
+     @SerialName("access_token_expires_in_seconds") val accessTokenExpiresInSeconds: Long? = null,
++    // Optional only for older servers: never substitute the connection ID.
++    @SerialName("couple_id") val coupleId: Long? = null,
+ ) {
+     fun validated(expectedAccountId: Long, allowInsecureHomeserver: Boolean = false): MatrixSessionDto {
+         require(protocolId == MATRIX_PROTOCOL_ID) { "Unsupported secure-chat protocol." }
+@@ -47,6 +49,7 @@ data class MatrixSessionDto(
+         require(loginTokenExpiresAt.isNotBlank()) { "Matrix login expiry is missing." }
+         require(selfUserId == expectedAccountId) { "Matrix session belongs to another account." }
+         require(selfUserId != partnerUserId && relationshipId > 0 && membershipEpoch > 0)
++        require(coupleId == null || coupleId > 0) { "Invalid couple identity." }
+         require(initiatorUserId == selfUserId || initiatorUserId == partnerUserId)
+         require(selfMatrixUserId.isMatrixUserId() && partnerMatrixUserId.isMatrixUserId())
+         require(roomId.startsWith("!") && ':' in roomId && roomId.length <= 512) { "Invalid Matrix room." }
+diff --git a/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/TrixnityMatrixChatRepository.kt b/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/TrixnityMatrixChatRepository.kt
+index 9228620..ae0aa85 100644
+--- a/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/TrixnityMatrixChatRepository.kt
++++ b/composeApp/src/commonMain/kotlin/com/srisu/srisu/features/chat/matrix/TrixnityMatrixChatRepository.kt
+@@ -398,7 +398,7 @@ class TrixnityMatrixChatRepository(
+     private suspend fun sparkRoom(session: com.srisu.srisu.features.sparks.data.SparkSession): Pair<MatrixClient, ActiveRoom> {
+         val pair = richRoom(session.roomId)
+         val active = pair.second
+-        require(active.relationshipId == session.couple && active.membershipEpoch == session.epoch &&
++        require(active.coupleId == session.couple && active.membershipEpoch == session.epoch &&
+             active.matrixRoomId.full == session.matrixRoomId) { "This Spark belongs to an unavailable conversation." }
+         return pair
+     }
+@@ -502,7 +502,7 @@ class TrixnityMatrixChatRepository(
+ 
+     override suspend fun publishPlanCard(session: com.srisu.srisu.features.plans.data.Plan): Result<String> = sparkOperation {
+         val (current, active) = richRoom(requireNotNull(session.roomId))
+-        require(active.relationshipId == session.couple && active.membershipEpoch == session.epoch &&
++        require(active.coupleId == session.couple && active.membershipEpoch == session.epoch &&
+             active.matrixRoomId.full == session.matrixRoomId && session.creator == active.stamp.accountId)
+         val eventId = sendPlanCard(current, session)
+         ensureRichRoomCurrent(current, active)
+@@ -511,7 +511,7 @@ class TrixnityMatrixChatRepository(
+ 
+     override suspend fun publishChallengeCard(session: com.srisu.srisu.features.challenges.data.ChallengeSession): Result<String> = sparkOperation {
+         val (current, active) = richRoom(requireNotNull(session.roomId))
+-        require(active.relationshipId == session.couple && active.membershipEpoch == session.epoch &&
++        require(active.coupleId == session.couple && active.membershipEpoch == session.epoch &&
+             active.matrixRoomId.full == session.matrixRoomId && session.creator == active.stamp.accountId)
+         val eventId = sendChallengeCard(current, session)
+         ensureRichRoomCurrent(current, active)
+@@ -544,7 +544,7 @@ class TrixnityMatrixChatRepository(
+ 
+     override suspend fun sendMomentReply(roomId: String, text: String, reference: com.srisu.srisu.features.moments.data.MomentReference): Result<String> = runCatching {
+         val (current, active) = richRoom(roomId)
+-        require(reference.id > 0 && reference.couple == active.relationshipId)
++        require(reference.id > 0 && reference.couple == active.coupleId)
+         require(text.isNotBlank() && text.encodeToByteArray().size <= MATRIX_TEXT_MAX_PLAINTEXT_BYTES)
+         ensureRichRoomCurrent(current, active)
+         // The optional external URL lives inside the encrypted Matrix event. It contains only IDs.
+@@ -750,6 +750,7 @@ class TrixnityMatrixChatRepository(
+                 partnerMatrixId = bootstrap.partnerMatrixUserId,
+                 stamp = bootstrapStamp,
+                 relationshipId = bootstrap.relationshipId,
++                coupleId = bootstrap.coupleId,
+                 membershipEpoch = bootstrap.membershipEpoch,
+                 operation = operation,
+             )
+@@ -1283,7 +1284,8 @@ class TrixnityMatrixChatRepository(
+                 discardStaleClient(currentClient, operation)
+                 return
+             }
+-            val refreshed = expected.copy(stamp = freshStamp, operation = operation)
++            val refreshed = expected.copy(stamp = freshStamp, operation = operation,
++                coupleId = validated.coupleId ?: expected.coupleId)
+             validatedRoom = refreshed
+             if (wasOpen) {
+                 activeRoom = refreshed
+@@ -1465,6 +1467,8 @@ class TrixnityMatrixChatRepository(
+             selfMatrixUserId == active.ownMatrixId &&
+             partnerMatrixUserId == active.partnerMatrixId &&
+             relationshipId == active.relationshipId &&
++            // A rolling server upgrade may add this binding without changing keys.
++            (coupleId == null || active.coupleId == null || coupleId == active.coupleId) &&
+             membershipEpoch == active.membershipEpoch
+ 
+     private fun ActiveRoom.sameConversation(other: ActiveRoom): Boolean =
+@@ -1473,6 +1477,7 @@ class TrixnityMatrixChatRepository(
+             ownMatrixId == other.ownMatrixId &&
+             partnerMatrixId == other.partnerMatrixId &&
+             relationshipId == other.relationshipId &&
++            coupleId == other.coupleId &&
+             membershipEpoch == other.membershipEpoch
+ 
+     private fun observeLoginState(matrixClient: MatrixClient, stamp: SessionStamp) {
+@@ -1741,6 +1746,7 @@ class TrixnityMatrixChatRepository(
+         val partnerMatrixId: String,
+         val stamp: SessionStamp,
+         val relationshipId: Long,
++        val coupleId: Long?,
+         val membershipEpoch: Long,
+         val operation: Long,
+     )
+diff --git a/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractFixtures.kt b/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractFixtures.kt
+index f2e65de..5fad0a6 100644
+--- a/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractFixtures.kt
++++ b/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractFixtures.kt
+@@ -11,9 +11,9 @@ object CoreContractFixtures {
+     const val COUPLE_PROFILE_MEMBER = "{\"message\":\"Profile fetched.\",\"data\":{\"id\":1,\"viewer\":\"member\",\"can_edit\":true,\"can_fave\":false,\"can_view_moments\":true,\"is_faved\":false,\"published_sections\":[],\"visible_moment_count\":0,\"members\":[{\"id\":1,\"name\":\"Synthetic One\",\"photo_url\":null},{\"id\":2,\"name\":\"Synthetic Two\",\"photo_url\":null}],\"story\":[],\"song\":null,\"interests\":{\"shared\":[],\"mine\":[],\"partner\":[]},\"cover\":{\"url\":null,\"focal_y\":0.5},\"anniversary_date\":null,\"days_together\":0,\"plan_count\":0,\"revisions\":{\"story\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"song\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"interests\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"cover\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"date\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"sharing\":\"0000000000000000000000000000000000000000000000000000000000000000\"},\"sharing\":{\"proposal\":[],\"proposal_version\":0,\"approved_by\":[],\"valid_proposal\":false}}}"
+     const val COUPLE_PROFILE_VISITOR = "{\"message\":\"Profile fetched.\",\"data\":{\"id\":1,\"viewer\":\"visitor\",\"can_edit\":false,\"can_fave\":true,\"can_view_moments\":true,\"is_faved\":false,\"published_sections\":[],\"visible_moment_count\":0}}"
+     const val COUPLE_PLAN = "{\"message\":\"Plan saved.\",\"data\":{\"id\":1,\"created_by\":1,\"title\":\"A walk\",\"starts_at\":\"2030-01-01T15:00:00Z\",\"response\":\"pending\",\"response_note\":\"\",\"completed\":false,\"revision\":1}}"
+-    const val MATRIX_SESSION = "{\"data\":{\"protocol_id\":\"matrix-e2ee-v1\",\"homeserver_url\":\"https://matrix.example.test\",\"room_id\":\"!synthetic-room:srisu.test\",\"room_alias\":\"#srisu_chat_00000000000000000000000000000001_e1:srisu.test\",\"membership_epoch\":1,\"relationship_id\":1,\"self_user_id\":1,\"self_matrix_user_id\":\"@srisu_user_1:srisu.test\",\"partner_user_id\":2,\"partner_matrix_user_id\":\"@srisu_user_2:srisu.test\",\"initiator_user_id\":1,\"login_type\":\"org.matrix.login.jwt\",\"login_token\":\"synthetic.header.payload.signature\",\"login_token_expires_at\":\"2030-01-01T00:02:00Z\",\"login_token_one_time\":false,\"refresh_token_enabled\":false,\"access_token_expires_in_seconds\":300}}"
++    const val MATRIX_SESSION = "{\"data\":{\"protocol_id\":\"matrix-e2ee-v1\",\"homeserver_url\":\"https://matrix.example.test\",\"room_id\":\"!synthetic-room:srisu.test\",\"room_alias\":\"#srisu_chat_00000000000000000000000000000001_e1:srisu.test\",\"membership_epoch\":1,\"relationship_id\":1,\"couple_id\":3,\"self_user_id\":1,\"self_matrix_user_id\":\"@srisu_user_1:srisu.test\",\"partner_user_id\":2,\"partner_matrix_user_id\":\"@srisu_user_2:srisu.test\",\"initiator_user_id\":1,\"login_type\":\"org.matrix.login.jwt\",\"login_token\":\"synthetic.header.payload.signature\",\"login_token_expires_at\":\"2030-01-01T00:02:00Z\",\"login_token_one_time\":false,\"refresh_token_enabled\":false,\"access_token_expires_in_seconds\":300}}"
+     const val MOMENT_PRIVATE = "{\"id\":7,\"couple\":3,\"created_by\":1,\"creator\":{\"id\":1,\"name\":\"Alex\",\"photo_url\":null},\"caption\":\"Our quiet morning\",\"visibility\":\"private\",\"photos\":[{\"id\":21,\"image\":\"https://api.example.invalid/api/social/couple-moments/7/photos/21/\",\"order\":0,\"width\":960,\"height\":640}],\"revision\":1,\"published_at\":\"2026-10-22T06:00:00Z\",\"expires_at\":\"2026-10-23T06:00:00Z\",\"server_time\":\"2026-10-22T06:00:00Z\",\"has_opened\":false,\"can_edit\":true,\"can_delete\":true,\"can_reply\":false,\"partner_seen_at\":null,\"reacted\":false,\"partner_reacted\":false}"
+     const val MOMENT_HOME = "{\"data\":{\"user\":{\"id\":1,\"name\":\"Alex\",\"photo_url\":null},\"couple\":{\"id\":3,\"anniversary_date\":null,\"members\":[{\"id\":1,\"name\":\"Alex\",\"photo_url\":null,\"active_count\":1,\"unseen_count\":0,\"next_expiry\":\"2026-10-23T06:00:00Z\"},{\"id\":2,\"name\":\"Sam\",\"photo_url\":null,\"active_count\":0,\"unseen_count\":0,\"next_expiry\":null}]},\"server_time\":\"2026-10-22T06:00:00Z\"}}"
+     const val MOMENT_DRAFT = "{\"data\":{\"id\":\"12345678-1234-4234-a234-123456789abc\",\"couple\":3,\"revision\":2,\"created_at\":\"2026-10-22T06:00:00Z\",\"published_at\":null,\"moment_id\":null,\"server_time\":\"2026-10-22T06:00:00Z\",\"photos\":[{\"id\":\"12345678-1234-4234-a234-123456789abc\",\"image\":\"https://api.example.invalid/api/social/moment-drafts/12345678-1234-4234-a234-123456789abc/photos/12345678-1234-4234-a234-123456789abc/\",\"width\":960,\"height\":640}]}}"
+-    const val HTTP_ROUTES = "{\"send-otp\":{\"method\":\"POST\",\"path\":\"/api/auth/send-otp/\",\"query\":[],\"public\":true},\"verify-otp\":{\"method\":\"POST\",\"path\":\"/api/auth/verify-otp/\",\"query\":[],\"public\":true},\"refresh\":{\"method\":\"POST\",\"path\":\"/api/auth/refresh/\",\"query\":[],\"public\":true},\"logout\":{\"method\":\"POST\",\"path\":\"/api/auth/logout/\",\"query\":[],\"public\":true},\"profile-get\":{\"method\":\"GET\",\"path\":\"/api/auth/setup-profile/\",\"query\":[],\"public\":false},\"profile-patch\":{\"method\":\"PATCH\",\"path\":\"/api/auth/setup-profile/\",\"query\":[],\"public\":false},\"profile-put\":{\"method\":\"PUT\",\"path\":\"/api/auth/setup-profile/\",\"query\":[],\"public\":false},\"interests\":{\"method\":\"GET\",\"path\":\"/api/auth/interests/\",\"query\":[],\"public\":true},\"matrix-session\":{\"method\":\"POST\",\"path\":\"/api/chat/v2/rooms/{uuid}/matrix/session/\",\"query\":[],\"public\":false},\"couple-post\":{\"method\":\"POST\",\"path\":\"/api/social/connect-couple/\",\"query\":[],\"public\":false},\"couple-put\":{\"method\":\"PUT\",\"path\":\"/api/social/connect-couple/{id}/\",\"query\":[],\"public\":false},\"couple-sent\":{\"method\":\"GET\",\"path\":\"/api/social/couple-connection/sent-requests/\",\"query\":[\"page\",\"page_size\"],\"public\":false},\"couple-received\":{\"method\":\"GET\",\"path\":\"/api/social/couple-connection/received-requests/\",\"query\":[\"page\",\"page_size\"],\"public\":false},\"find-partner\":{\"method\":\"GET\",\"path\":\"/api/social/find-partner/\",\"query\":[\"phone_number\"],\"public\":false},\"connection-requested\":{\"method\":\"GET\",\"path\":\"/api/social/have-couple-connection-requested/\",\"query\":[],\"public\":false},\"couple-profile-self\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/me/\",\"query\":[],\"public\":false},\"couple-profile-detail\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/\",\"query\":[],\"public\":false},\"couple-profile-story\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/story/\",\"query\":[],\"public\":false},\"couple-profile-song\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/song/\",\"query\":[],\"public\":false},\"couple-profile-interests\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/interests/\",\"query\":[],\"public\":false},\"couple-profile-date\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/date/\",\"query\":[],\"public\":false},\"couple-profile-sharing\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/sharing/\",\"query\":[],\"public\":false},\"couple-profile-cover-save\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/cover/\",\"query\":[],\"public\":false},\"couple-profile-cover-read\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/cover/\",\"query\":[],\"public\":false},\"couple-profile-member-photo\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/members/{id}/photo/\",\"query\":[],\"public\":false},\"couple-profile-history\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/history/\",\"query\":[\"before\"],\"public\":false},\"couple-profile-cover-choices\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/cover-choices/\",\"query\":[\"before\"],\"public\":false},\"couple-profile-plans\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/plans/\",\"query\":[\"mode\",\"before\"],\"public\":false},\"couple-profile-plan-create\":{\"method\":\"POST\",\"path\":\"/api/social/profiles/{id}/plans/\",\"query\":[],\"public\":false},\"couple-profile-plan\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/plans/{id}/\",\"query\":[],\"public\":false},\"couple-profile-plan-respond\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/plans/{id}/\",\"query\":[],\"public\":false},\"couple-profile-invite\":{\"method\":\"POST\",\"path\":\"/api/social/profiles/{id}/story-invites/\",\"query\":[],\"public\":false},\"couple-fave-add\":{\"method\":\"PUT\",\"path\":\"/api/social/couple-faves/{id}/\",\"query\":[],\"public\":false},\"couple-fave-remove\":{\"method\":\"DELETE\",\"path\":\"/api/social/couple-faves/{id}/\",\"query\":[],\"public\":false},\"couple-profile-discovery\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/\",\"query\":[\"section\",\"page_size\",\"cursor\"],\"public\":false},\"moment-home\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/home/\",\"query\":[],\"public\":false},\"moment-get\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/{id}/\",\"query\":[\"record_view\"],\"public\":false},\"moment-sequence\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/sequence/\",\"query\":[\"couple\",\"mode\",\"page_size\",\"creator\"],\"public\":false},\"moment-feed\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/\",\"query\":[\"section\",\"page_size\"],\"public\":false},\"moment-viewed\":{\"method\":\"POST\",\"path\":\"/api/social/couple-moments/{id}/viewed/\",\"query\":[],\"public\":false},\"moment-react\":{\"method\":\"PUT\",\"path\":\"/api/social/couple-moments/{id}/reaction/\",\"query\":[],\"public\":false},\"moment-caption\":{\"method\":\"PATCH\",\"path\":\"/api/social/couple-moments/{id}/caption/\",\"query\":[],\"public\":false},\"moment-delete\":{\"method\":\"DELETE\",\"path\":\"/api/social/couple-moments/{id}/\",\"query\":[],\"public\":false},\"moment-note\":{\"method\":\"POST\",\"path\":\"/api/social/couple-moments/{id}/notes/\",\"query\":[],\"public\":false},\"moment-notes\":{\"method\":\"GET\",\"path\":\"/api/social/moment-notes/\",\"query\":[\"moment\",\"page\",\"page_size\"],\"public\":false},\"moment-note-reply\":{\"method\":\"POST\",\"path\":\"/api/social/moment-notes/{id}/replies/\",\"query\":[],\"public\":false},\"moment-draft-create\":{\"method\":\"POST\",\"path\":\"/api/social/moment-drafts/\",\"query\":[],\"public\":false},\"moment-draft-get\":{\"method\":\"GET\",\"path\":\"/api/social/moment-drafts/{uuid}/\",\"query\":[],\"public\":false},\"moment-draft-delete\":{\"method\":\"DELETE\",\"path\":\"/api/social/moment-drafts/{uuid}/\",\"query\":[],\"public\":false},\"moment-upload\":{\"method\":\"PUT\",\"path\":\"/api/social/moment-drafts/{uuid}/photos/{uuid}/\",\"query\":[],\"public\":false},\"moment-upload-remove\":{\"method\":\"DELETE\",\"path\":\"/api/social/moment-drafts/{uuid}/photos/{uuid}/\",\"query\":[],\"public\":false},\"moment-publish\":{\"method\":\"POST\",\"path\":\"/api/social/moment-drafts/{uuid}/publish/\",\"query\":[],\"public\":false},\"moment-photo\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/{id}/photos/{id}/\",\"query\":[],\"public\":false},\"moment-creator-photo\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/{id}/creator-photo/\",\"query\":[],\"public\":false},\"moment-staged-photo\":{\"method\":\"GET\",\"path\":\"/api/social/moment-drafts/{uuid}/photos/{uuid}/\",\"query\":[],\"public\":false},\"explore-feed\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/\",\"query\":[\"section\",\"scope\",\"page_size\"],\"public\":false},\"explore-visible\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/visible/\",\"query\":[\"couples\",\"section\"],\"public\":false},\"fave-library\":{\"method\":\"GET\",\"path\":\"/api/social/couple-faves/\",\"query\":[\"page_size\"],\"public\":false},\"fave-state\":{\"method\":\"GET\",\"path\":\"/api/social/couple-faves/{id}/\",\"query\":[],\"public\":false},\"notification-register\":{\"method\":\"PUT\",\"path\":\"/api/notifications/v1/installations/\",\"query\":[],\"public\":false},\"notification-preferences\":{\"method\":\"GET\",\"path\":\"/api/notifications/v1/preferences/\",\"query\":[],\"public\":false},\"notification-preferences-save\":{\"method\":\"PUT\",\"path\":\"/api/notifications/v1/preferences/\",\"query\":[],\"public\":false},\"notification-resolve\":{\"method\":\"GET\",\"path\":\"/api/notifications/v1/deliveries/{uuid}/\",\"query\":[],\"public\":false}}"
++    const val HTTP_ROUTES = "{\"send-otp\":{\"method\":\"POST\",\"path\":\"/api/auth/send-otp/\",\"query\":[],\"public\":true},\"verify-otp\":{\"method\":\"POST\",\"path\":\"/api/auth/verify-otp/\",\"query\":[],\"public\":true},\"refresh\":{\"method\":\"POST\",\"path\":\"/api/auth/refresh/\",\"query\":[],\"public\":true},\"logout\":{\"method\":\"POST\",\"path\":\"/api/auth/logout/\",\"query\":[],\"public\":true},\"profile-get\":{\"method\":\"GET\",\"path\":\"/api/auth/setup-profile/\",\"query\":[],\"public\":false},\"profile-patch\":{\"method\":\"PATCH\",\"path\":\"/api/auth/setup-profile/\",\"query\":[],\"public\":false},\"profile-put\":{\"method\":\"PUT\",\"path\":\"/api/auth/setup-profile/\",\"query\":[],\"public\":false},\"interests\":{\"method\":\"GET\",\"path\":\"/api/auth/interests/\",\"query\":[],\"public\":true},\"matrix-session\":{\"method\":\"POST\",\"path\":\"/api/chat/v2/rooms/{uuid}/matrix/session/\",\"query\":[],\"public\":false},\"couple-post\":{\"method\":\"POST\",\"path\":\"/api/social/connect-couple/\",\"query\":[],\"public\":false},\"couple-put\":{\"method\":\"PUT\",\"path\":\"/api/social/connect-couple/{id}/\",\"query\":[],\"public\":false},\"couple-sent\":{\"method\":\"GET\",\"path\":\"/api/social/couple-connection/sent-requests/\",\"query\":[\"page\",\"page_size\"],\"public\":false},\"couple-received\":{\"method\":\"GET\",\"path\":\"/api/social/couple-connection/received-requests/\",\"query\":[\"page\",\"page_size\"],\"public\":false},\"find-partner\":{\"method\":\"GET\",\"path\":\"/api/social/find-partner/\",\"query\":[\"phone_number\"],\"public\":false},\"connection-requested\":{\"method\":\"GET\",\"path\":\"/api/social/have-couple-connection-requested/\",\"query\":[],\"public\":false},\"couple-profile-self\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/me/\",\"query\":[],\"public\":false},\"couple-profile-detail\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/\",\"query\":[],\"public\":false},\"couple-profile-story\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/story/\",\"query\":[],\"public\":false},\"couple-profile-song\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/song/\",\"query\":[],\"public\":false},\"couple-profile-interests\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/interests/\",\"query\":[],\"public\":false},\"couple-profile-date\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/date/\",\"query\":[],\"public\":false},\"couple-profile-sharing\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/sections/sharing/\",\"query\":[],\"public\":false},\"couple-profile-cover-save\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/cover/\",\"query\":[],\"public\":false},\"couple-profile-cover-read\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/cover/\",\"query\":[],\"public\":false},\"couple-profile-member-photo\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/members/{id}/photo/\",\"query\":[],\"public\":false},\"couple-profile-history\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/history/\",\"query\":[\"before\"],\"public\":false},\"couple-profile-cover-choices\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/cover-choices/\",\"query\":[\"before\"],\"public\":false},\"couple-profile-plans\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/plans/\",\"query\":[\"mode\",\"before\"],\"public\":false},\"couple-profile-plan-create\":{\"method\":\"POST\",\"path\":\"/api/social/profiles/{id}/plans/\",\"query\":[],\"public\":false},\"couple-profile-plan\":{\"method\":\"GET\",\"path\":\"/api/social/profiles/{id}/plans/{id}/\",\"query\":[],\"public\":false},\"couple-profile-plan-respond\":{\"method\":\"PATCH\",\"path\":\"/api/social/profiles/{id}/plans/{id}/\",\"query\":[],\"public\":false},\"couple-profile-invite\":{\"method\":\"POST\",\"path\":\"/api/social/profiles/{id}/story-invites/\",\"query\":[],\"public\":false},\"couple-fave-add\":{\"method\":\"PUT\",\"path\":\"/api/social/couple-faves/{id}/\",\"query\":[],\"public\":false},\"couple-fave-remove\":{\"method\":\"DELETE\",\"path\":\"/api/social/couple-faves/{id}/\",\"query\":[],\"public\":false},\"couple-profile-discovery\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/\",\"query\":[\"section\",\"page_size\",\"cursor\"],\"public\":false},\"moment-home\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/home/\",\"query\":[],\"public\":false},\"moment-get\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/{id}/\",\"query\":[\"record_view\"],\"public\":false},\"moment-sequence\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/sequence/\",\"query\":[\"couple\",\"mode\",\"page_size\",\"creator\"],\"public\":false},\"moment-feed\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/\",\"query\":[\"section\",\"page_size\"],\"public\":false},\"moment-viewed\":{\"method\":\"POST\",\"path\":\"/api/social/couple-moments/{id}/viewed/\",\"query\":[],\"public\":false},\"moment-react\":{\"method\":\"PUT\",\"path\":\"/api/social/couple-moments/{id}/reaction/\",\"query\":[],\"public\":false},\"moment-caption\":{\"method\":\"PATCH\",\"path\":\"/api/social/couple-moments/{id}/caption/\",\"query\":[],\"public\":false},\"moment-delete\":{\"method\":\"DELETE\",\"path\":\"/api/social/couple-moments/{id}/\",\"query\":[],\"public\":false},\"moment-note\":{\"method\":\"POST\",\"path\":\"/api/social/couple-moments/{id}/notes/\",\"query\":[],\"public\":false},\"moment-notes\":{\"method\":\"GET\",\"path\":\"/api/social/moment-notes/\",\"query\":[\"moment\",\"page\",\"page_size\"],\"public\":false},\"moment-note-reply\":{\"method\":\"POST\",\"path\":\"/api/social/moment-notes/{id}/replies/\",\"query\":[],\"public\":false},\"moment-draft-create\":{\"method\":\"POST\",\"path\":\"/api/social/moment-drafts/\",\"query\":[],\"public\":false},\"moment-draft-get\":{\"method\":\"GET\",\"path\":\"/api/social/moment-drafts/{uuid}/\",\"query\":[],\"public\":false},\"moment-draft-delete\":{\"method\":\"DELETE\",\"path\":\"/api/social/moment-drafts/{uuid}/\",\"query\":[],\"public\":false},\"moment-upload\":{\"method\":\"PUT\",\"path\":\"/api/social/moment-drafts/{uuid}/photos/{uuid}/\",\"query\":[],\"public\":false},\"moment-upload-remove\":{\"method\":\"DELETE\",\"path\":\"/api/social/moment-drafts/{uuid}/photos/{uuid}/\",\"query\":[],\"public\":false},\"moment-publish\":{\"method\":\"POST\",\"path\":\"/api/social/moment-drafts/{uuid}/publish/\",\"query\":[],\"public\":false},\"moment-photo\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/{id}/photos/{id}/\",\"query\":[],\"public\":false},\"moment-creator-photo\":{\"method\":\"GET\",\"path\":\"/api/social/couple-moments/{id}/creator-photo/\",\"query\":[],\"public\":false},\"moment-staged-photo\":{\"method\":\"GET\",\"path\":\"/api/social/moment-drafts/{uuid}/photos/{uuid}/\",\"query\":[],\"public\":false},\"explore-feed\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/\",\"query\":[\"section\",\"scope\",\"page_size\"],\"public\":false},\"explore-visible\":{\"method\":\"GET\",\"path\":\"/api/social/couple-feed/visible/\",\"query\":[\"couples\",\"section\"],\"public\":false},\"fave-library\":{\"method\":\"GET\",\"path\":\"/api/social/couple-faves/\",\"query\":[\"page_size\"],\"public\":false},\"fave-state\":{\"method\":\"GET\",\"path\":\"/api/social/couple-faves/{id}/\",\"query\":[],\"public\":false},\"notification-register\":{\"method\":\"PUT\",\"path\":\"/api/notifications/v1/installations/\",\"query\":[],\"public\":false},\"notification-preferences\":{\"method\":\"GET\",\"path\":\"/api/notifications/v1/preferences/\",\"query\":[],\"public\":false},\"notification-preferences-save\":{\"method\":\"PUT\",\"path\":\"/api/notifications/v1/preferences/\",\"query\":[],\"public\":false},\"notification-resolve\":{\"method\":\"GET\",\"path\":\"/api/notifications/v1/deliveries/{uuid}/\",\"query\":[],\"public\":false},\"home-daily-question\":{\"method\":\"POST\",\"path\":\"/api/social/sparks/daily/\",\"query\":[],\"public\":false},\"home-statuses\":{\"method\":\"GET\",\"path\":\"/api/social/couple-status/\",\"query\":[\"couple\"],\"public\":false},\"home-status-save\":{\"method\":\"PUT\",\"path\":\"/api/social/couple-status/mine/\",\"query\":[],\"public\":false},\"home-ideas\":{\"method\":\"GET\",\"path\":\"/api/social/date-ideas/\",\"query\":[\"couple\"],\"public\":false},\"home-idea-create\":{\"method\":\"POST\",\"path\":\"/api/social/date-ideas/\",\"query\":[],\"public\":false},\"home-idea\":{\"method\":\"GET\",\"path\":\"/api/social/date-ideas/{uuid}/\",\"query\":[],\"public\":false},\"home-idea-action\":{\"method\":\"POST\",\"path\":\"/api/social/date-ideas/{uuid}/actions/\",\"query\":[],\"public\":false},\"plans-home\":{\"method\":\"GET\",\"path\":\"/api/social/plans/home/\",\"query\":[\"time_zone\"],\"public\":false}}"
+ }
+diff --git a/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractTest.kt b/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractTest.kt
+index 602fb83..6652666 100644
+--- a/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractTest.kt
++++ b/composeApp/src/commonTest/kotlin/com/srisu/srisu/core/CoreContractTest.kt
+@@ -8,6 +8,7 @@ import io.ktor.client.request.url
+ import kotlinx.coroutines.test.runTest
+ import kotlinx.serialization.json.decodeFromJsonElement
+ import kotlinx.serialization.json.jsonObject
++import kotlinx.serialization.json.JsonObject
+ import kotlin.test.*
+ 
+ /** These strings are generated from the pinned backend-owned fixtures, never hand-maintained. */
+@@ -25,6 +26,15 @@ class CoreContractTest {
+         )
+         assertEquals("matrix-e2ee-v1", matrix.protocolId)
+         assertEquals("org.matrix.login.jwt", matrix.loginType)
++        assertEquals(1L, matrix.relationshipId)
++        assertEquals(3L, matrix.coupleId)
++        assertNotEquals(matrix.relationshipId, matrix.coupleId)
++        val legacy = ApiJson.decodeFromJsonElement<MatrixSessionDto>(JsonObject(
++            ApiJson.parseToJsonElement(CoreContractFixtures.MATRIX_SESSION).jsonObject
++                .getValue("data").jsonObject - "couple_id",
++        )).validated(expectedAccountId = 1)
++        assertNull(legacy.coupleId)
++        assertEquals(matrix.relationshipId, legacy.relationshipId)
+         client.close()
+     }
+ }
+diff --git a/composeApp/src/commonTest/kotlin/com/srisu/srisu/features/chat/MatrixSessionTest.kt b/composeApp/src/commonTest/kotlin/com/srisu/srisu/features/chat/MatrixSessionTest.kt
+index 5afd701..32a2067 100644
+--- a/composeApp/src/commonTest/kotlin/com/srisu/srisu/features/chat/MatrixSessionTest.kt
++++ b/composeApp/src/commonTest/kotlin/com/srisu/srisu/features/chat/MatrixSessionTest.kt
+@@ -24,6 +24,24 @@ class MatrixSessionTest {
+         assertEquals(SELF_ID, validSession().validated(SELF_ID).selfUserId)
+     }
+ 
++    @Test
++    fun coupleIdentityIsSeparateAndLegacyBootstrapDoesNotInventIt() {
++        val legacy = validSession().validated(SELF_ID)
++        assertEquals(null, legacy.coupleId)
++        val updated = legacy.copy(coupleId = 31).validated(SELF_ID)
++        assertEquals(9L, updated.relationshipId)
++        assertEquals(31L, updated.coupleId)
++        for (invalid in listOf(0L, -1L)) {
++            assertFailsWith<IllegalArgumentException> { legacy.copy(coupleId = invalid).validated(SELF_ID) }
++        }
++        // Adding the couple binding must not rotate the device's crypto namespace.
++        fun storage(session: MatrixSessionDto) = MatrixStorageScope.create(
++            SELF_ID, "https://api.example.test/", session.homeserverUrl,
++            session.relationshipId, session.membershipEpoch, session.roomId,
++        )
++        assertEquals(storage(legacy), storage(updated))
++    }
++
+     @Test
+     fun rejectsWrongAccountOrUnsafeHomeserver() {
+         assertFailsWith<IllegalArgumentException> { validSession().validated(PARTNER_ID) }
+diff --git a/contracts/core-1/fixtures.json b/contracts/core-1/fixtures.json
+index f39c5b7..703dde6 100644
+--- a/contracts/core-1/fixtures.json
++++ b/contracts/core-1/fixtures.json
+@@ -157,6 +157,7 @@
+       "room_alias": "#srisu_chat_00000000000000000000000000000001_e1:srisu.test",
+       "membership_epoch": 1,
+       "relationship_id": 1,
++      "couple_id": 3,
+       "self_user_id": 1,
+       "self_matrix_user_id": "@srisu_user_1:srisu.test",
+       "partner_user_id": 2,
+diff --git a/contracts/core-1/manifest.json b/contracts/core-1/manifest.json
+index 55b88c5..6c6ed0d 100644
+--- a/contracts/core-1/manifest.json
++++ b/contracts/core-1/manifest.json
+@@ -35,6 +35,7 @@
+     "route_inventory": "routes.json"
+   },
+   "matrix": {
++    "identity": "relationship_id is the connection ID and remains the Matrix storage identity; couple_id is the distinct CoupleModel ID used by Sparks, Plans, Challenges and Moment references. Deploy the additive couple_id response before the updated client. No migration or key rotation is required.",
+     "version": "matrix-e2ee-v1",
+     "authorization": "Current accepted couple membership, no either-direction SingleConnection BLOCKED edge, and a current Django device-session sid; former, blocked, and unrelated users receive concealed 404. Both relationship and session are rechecked after remote work immediately before the response.",
+     "login": "Short-lived replayable org.matrix.login.jwt credential; client supplies and verifies its stable device_id, requests no refresh token, and validates the returned MXID/device.",
+diff --git a/contracts/core-1/routes.json b/contracts/core-1/routes.json
+index 87f1963..b0420b4 100644
+--- a/contracts/core-1/routes.json
++++ b/contracts/core-1/routes.json
+@@ -420,6 +420,60 @@
+       "path": "/api/notifications/v1/deliveries/{uuid}/",
+       "query": [],
+       "public": false
++    },
++    "home-daily-question": {
++      "method": "POST",
++      "path": "/api/social/sparks/daily/",
++      "query": [],
++      "public": false
++    },
++    "home-statuses": {
++      "method": "GET",
++      "path": "/api/social/couple-status/",
++      "query": [
++        "couple"
++      ],
++      "public": false
++    },
++    "home-status-save": {
++      "method": "PUT",
++      "path": "/api/social/couple-status/mine/",
++      "query": [],
++      "public": false
++    },
++    "home-ideas": {
++      "method": "GET",
++      "path": "/api/social/date-ideas/",
++      "query": [
++        "couple"
++      ],
++      "public": false
++    },
++    "home-idea-create": {
++      "method": "POST",
++      "path": "/api/social/date-ideas/",
++      "query": [],
++      "public": false
++    },
++    "home-idea": {
++      "method": "GET",
++      "path": "/api/social/date-ideas/{uuid}/",
++      "query": [],
++      "public": false
++    },
++    "home-idea-action": {
++      "method": "POST",
++      "path": "/api/social/date-ideas/{uuid}/actions/",
++      "query": [],
++      "public": false
++    },
++    "plans-home": {
++      "method": "GET",
++      "path": "/api/social/plans/home/",
++      "query": [
++        "time_zone"
++      ],
++      "public": false
+     }
+   },
+   "retired_endpoints": {
+diff --git a/contracts/core-1/schema.json b/contracts/core-1/schema.json
+index da15402..4094257 100644
+--- a/contracts/core-1/schema.json
++++ b/contracts/core-1/schema.json
+@@ -808,6 +808,10 @@
+           "type": "integer",
+           "minimum": 1
+         },
++        "couple_id": {
++          "type": "integer",
++          "minimum": 1
++        },
+         "self_user_id": {
+           "type": "integer",
+           "minimum": 1
+@@ -858,6 +862,7 @@
+         "room_alias",
+         "membership_epoch",
+         "relationship_id",
++        "couple_id",
+         "self_user_id",
+         "self_matrix_user_id",
+         "partner_user_id",
+diff --git a/docs/flows/sparks.md b/docs/flows/sparks.md
+index f11f684..2bcac6d 100644
+--- a/docs/flows/sparks.md
++++ b/docs/flows/sparks.md
+@@ -50,6 +50,55 @@ notification transport, public sharing or compatibility scores were added.
+ 
+ ## Security and lifecycle
+ 
++### Separate couple and connection identities (2026-11-16)
++
++The Matrix bootstrap's `relationship_id` identifies the connection record;
++Sparks' `couple` identifies the CoupleModel record. Those IDs need not match.
++The backend now supplies an additive `couple_id`, and the client uses it when
++binding Sparks, Plan/Challenge cards and Moment replies to the authorized chat.
++Existing room UUID, Matrix room, epoch, participant and session checks remain.
++Matrix storage still uses the original connection ID, preserving device keys.
++
++Deploy the backend response before the rebuilt app. An older server may omit
++`couple_id`: ordinary chat remains compatible, but feature sends require an
++explicit couple binding and never fall back to the connection ID. A foreground
++reauthorization can add this binding without replacing the crypto store.
++No migration is needed. Existing failed Spark drafts can be retried after the
++app update; do not clear app data or recreate the Matrix room to fix this error.
++Both changes are local to `dev-core-architecture`; no related PR exists yet.
++
++Validation for this correction (2026-11-16): frontend base
++`c1abef982b0e3a2b87bf342d08c526bc65c25bd8`, backend base
++`c766f706f41e283c277324a5c1641902cf153652`. Local backend
++`D:/Djangos/SriSu` and frontend `D:/StudioProjects/SriSu` were inspected separately.
++Only aggregate local records were inspected; no answer bodies, tokens or keys
++were logged. The affected open Spark used distinct couple/connection IDs.
++
++- `tools/core_contracts.py --backend D:/Djangos/SriSu --update` and the same
++  command without `--update` passed. Synchronization also picked up the backend's
++  existing Home route inventory; this correction adds no HTTP routes.
++- `gradlew.bat :composeApp:testDebugUnitTest --tests 'com.srisu.srisu.features.chat.*'
++  --tests 'com.srisu.srisu.features.sparks.*' --tests 'com.srisu.srisu.core.CoreContractTest'
++  :composeApp:assembleDebug --max-workers=2`: 202 tests passed and APK built.
++- `gradlew.bat :composeApp:testDebugUnitTest --tests 'com.srisu.srisu.features.plans.*'
++  --tests 'com.srisu.srisu.features.challenges.*' --tests 'com.srisu.srisu.features.moments.*'
++  --max-workers=2 --console=plain`: 95 tests passed.
++- Backend `docker run --rm --network none srisu-backend-app:local python
++  tools/workspace.py test`: 359 tests run, 30 skipped (including PostgreSQL row-lock
++  concurrency). The Windows `.venv` run first failed on absent `firebase_admin`,
++  Windows async socket setup under the network blocker, and Unix mode assertions;
++  all runnable tests passed in the isolated Linux image with locked dependencies.
++- Backend contract/schema and migration checks passed. The rebuilt local web and
++  reconciler images were loaded; Django checks, `migrate --check`, and
++  `matrix_status --require-ready` passed. Both databases and Redis were healthy,
++  and Django, admin CSS and Synapse returned HTTP 200 over the LAN.
++
++No connected phone was available for installation or a new two-partner exchange.
++iOS compilation was not run on Windows; the common Kotlin fix must be rebuilt
++and installed from the Mac checkout. Update both apps in place to preserve drafts
++and keys. PostgreSQL concurrency and push delivery were not run; the optional
++notification worker remained stopped. No Git branch was switched or pushed.
++
+ See [the backend security and contract record](../../../SriSu-backend/docs/sparks.md)
+ for the complete threat model and release gate. E2EE uses the existing Matrix SDK;
+ Django stores only ciphertext. **Release timing is still enforced by Django**, not
+diff --git a/docs/integration/project-map.json b/docs/integration/project-map.json
+index 99eef7a..819b151 100644
+--- a/docs/integration/project-map.json
++++ b/docs/integration/project-map.json
+@@ -36,6 +36,7 @@
+   },
+   "features": {
+     "couple_chat": {
++      "couple_identity": "Matrix bootstrap couple_id binds couple features; relationship_id remains the connection/storage identity. Backend-first additive rollout; no migration or key reset.",
+       "frontend_branch": "dev-core-architecture",
+       "backend_branch": "dev-core-architecture",
+       "contract": "core-1:POST /api/chat/v2/rooms/{uuid}/matrix/session/",
+@@ -71,6 +72,7 @@
+       "status": "implemented-local-android-ios-postgres-http-verified-no-deployment"
+     },
+     "sparks": {
++      "secure_chat_binding": "Compare the explicit bootstrap couple_id with Spark couple, preserving room and epoch checks; fixes encryption refusal when connection and couple IDs differ (2026-11-16).",
+       "frontend_branch": "dev-core-architecture",
+       "frontend_start": "ee9742becd54bd1c30ad76e04e482085662d497b",
+       "backend_branch": "dev-core-architecture",

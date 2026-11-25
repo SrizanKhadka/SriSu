@@ -1,0 +1,431 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://srisu.example/contracts/notification-inbox-1",
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "enum": [
+            "invite.received",
+            "invite.accepted",
+            "sharing.proposed",
+            "sharing.approved",
+            "plan.created",
+            "plan.responded",
+            "plan.cancelled",
+            "spark.started",
+            "spark.revealed",
+            "spark.submitted",
+            "challenge.invited",
+            "challenge.responded",
+            "challenge.completed",
+            "challenge.cancelled",
+            "challenge.progress",
+            "moment.published",
+            "moment.hearted",
+            "moment.appreciated",
+            "moment.replied",
+            "status.changed",
+            "idea.created",
+            "idea.interested",
+            "nickname.changed"
+          ]
+        },
+        "category": {
+          "enum": [
+            "appreciations",
+            "challenge_progress",
+            "challenges",
+            "ideas",
+            "moment_reactions",
+            "moment_replies",
+            "moments",
+            "plans",
+            "questions",
+            "requests",
+            "spark_progress",
+            "status"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "read_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "actor_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        },
+        "avatar": {
+          "type": "boolean"
+        },
+        "thumbnail": {
+          "type": "boolean"
+        },
+        "segments": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 360
+              },
+              "bold": {
+                "type": "boolean"
+              },
+              "user_id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "user_name": {
+                "type": "string",
+                "maxLength": 60
+              }
+            },
+            "required": [
+              "text",
+              "bold"
+            ]
+          }
+        },
+        "actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "actor_real_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "category",
+        "title",
+        "body",
+        "created_at",
+        "read_at",
+        "available"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "const": "notification-inbox-1"
+        },
+        "unread_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "contract",
+        "unread_count"
+      ]
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "const": "notification-inbox-1"
+        },
+        "unread_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 25,
+          "items": {
+            "$ref": "#/$defs/item"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        },
+        "read_token": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "server_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retention_days": {
+          "const": 30
+        }
+      },
+      "required": [
+        "contract",
+        "unread_count",
+        "items",
+        "next_cursor",
+        "read_token",
+        "server_time",
+        "retention_days"
+      ]
+    },
+    "open": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "const": "notification-inbox-1"
+        },
+        "unread_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "destination": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "invitations"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "couple",
+                    "sharing"
+                  ]
+                },
+                "couple_id": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "kind",
+                "couple_id"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "plan"
+                },
+                "couple_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "plan_id": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "kind",
+                "couple_id",
+                "plan_id"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "spark"
+                },
+                "spark_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "kind",
+                "spark_id"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "challenge"
+                },
+                "challenge_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "kind",
+                "challenge_id"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "moment"
+                },
+                "moment_id": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "couple_id": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "kind",
+                "moment_id",
+                "couple_id"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "moment_note"
+                },
+                "note_id": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "kind",
+                "note_id"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "idea"
+                },
+                "idea_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "kind",
+                "idea_id"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "home"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "contract",
+        "unread_count",
+        "available",
+        "destination"
+      ]
+    },
+    "read": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          "required": [
+            "ids"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "through": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "through"
+          ]
+        }
+      ]
+    }
+  }
+}

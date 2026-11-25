@@ -1,0 +1,908 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SriSu Couple Home",
+    "version": "home-1",
+    "description": "Additive daily-question assignment, private expiring statuses, and unscheduled date ideas. Existing Spark answer encryption and Plan consent contracts remain authoritative. No chat plaintext is accepted."
+  },
+  "paths": {
+    "/api/social/sparks/daily/": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in again"
+          },
+          "404": {
+            "description": "Unavailable to this original audience"
+          },
+          "409": {
+            "description": "Revision or operation conflict; refresh"
+          },
+          "429": {
+            "description": "Rate limited; respect Retry-After"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/couple-status/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in again"
+          },
+          "404": {
+            "description": "Unavailable to this original audience"
+          },
+          "409": {
+            "description": "Revision or operation conflict; refresh"
+          },
+          "429": {
+            "description": "Rate limited; respect Retry-After"
+          }
+        },
+        "parameters": [
+          {
+            "name": "couple",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/couple-status/mine/": {
+      "put": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in again"
+          },
+          "404": {
+            "description": "Unavailable to this original audience"
+          },
+          "409": {
+            "description": "Revision or operation conflict; refresh"
+          },
+          "429": {
+            "description": "Rate limited; respect Retry-After"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/date-ideas/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeasResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in again"
+          },
+          "404": {
+            "description": "Unavailable to this original audience"
+          },
+          "409": {
+            "description": "Revision or operation conflict; refresh"
+          },
+          "429": {
+            "description": "Rate limited; respect Retry-After"
+          }
+        },
+        "parameters": [
+          {
+            "name": "couple",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in again"
+          },
+          "404": {
+            "description": "Unavailable to this original audience"
+          },
+          "409": {
+            "description": "Revision or operation conflict; refresh"
+          },
+          "429": {
+            "description": "Rate limited; respect Retry-After"
+          },
+          "201": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdeaInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/social/date-ideas/{id}/": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in again"
+          },
+          "404": {
+            "description": "Unavailable to this original audience"
+          },
+          "409": {
+            "description": "Revision or operation conflict; refresh"
+          },
+          "429": {
+            "description": "Rate limited; respect Retry-After"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/social/date-ideas/{id}/actions/": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized original audience; private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in again"
+          },
+          "404": {
+            "description": "Unavailable to this original audience"
+          },
+          "409": {
+            "description": "Revision or operation conflict; refresh"
+          },
+          "429": {
+            "description": "Rate limited; respect Retry-After"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdeaActionInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Session": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "creator": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "room_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "matrix_room_id": {
+            "type": "string"
+          },
+          "membership_epoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "question_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "deck": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "revealed",
+              "skipped"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revealed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "card_event_id": {
+            "type": "string"
+          },
+          "submitted_by": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Answer"
+            },
+            "maxItems": 0
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "couple",
+          "creator",
+          "room_id",
+          "matrix_room_id",
+          "membership_epoch",
+          "question_id",
+          "question",
+          "deck",
+          "state",
+          "revision",
+          "created_at",
+          "revealed_at",
+          "card_event_id",
+          "submitted_by",
+          "answers"
+        ]
+      },
+      "Daily": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "day": {
+            "type": "string",
+            "format": "date"
+          },
+          "time_zone": {
+            "type": "string"
+          },
+          "carried": {
+            "type": "boolean"
+          },
+          "revealed_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "partner_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revisit": {
+            "type": "boolean"
+          },
+          "partner_activity_kind": {
+            "enum": [
+              "sent",
+              "answered",
+              null
+            ]
+          }
+        },
+        "required": [
+          "session",
+          "day",
+          "time_zone",
+          "carried",
+          "revealed_count",
+          "partner_activity_at",
+          "revisit",
+          "partner_activity_kind"
+        ]
+      },
+      "Envelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "const": "m.megolm.v1.aes-sha2"
+          },
+          "ciphertext": {
+            "type": "string",
+            "minLength": 128,
+            "maxLength": 16384,
+            "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+          },
+          "session_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]{43}$"
+          },
+          "sender_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9+/]{43}$"
+          },
+          "device_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        },
+        "required": [
+          "algorithm",
+          "ciphertext",
+          "session_id"
+        ]
+      },
+      "Answer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sender_matrix_id": {
+            "type": "string"
+          },
+          "envelope": {
+            "$ref": "#/components/schemas/Envelope"
+          }
+        },
+        "required": [
+          "author",
+          "sender_matrix_id",
+          "envelope"
+        ]
+      },
+      "Status": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "text": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "author",
+          "text",
+          "expires_at",
+          "revision"
+        ]
+      },
+      "Statuses": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/Status"
+            }
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "couple",
+          "items",
+          "server_time"
+        ]
+      },
+      "Idea": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "creator": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "preset": {
+            "enum": [
+              "coffee",
+              "walk",
+              "movie"
+            ]
+          },
+          "interested_by": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "state": {
+            "enum": [
+              "open",
+              "withdrawn",
+              "planned"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "plan_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "couple",
+          "creator",
+          "preset",
+          "interested_by",
+          "state",
+          "revision",
+          "created_at",
+          "plan_id"
+        ]
+      },
+      "Ideas": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/Idea"
+            }
+          }
+        },
+        "required": [
+          "couple",
+          "items"
+        ]
+      },
+      "DailyInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "time_zone": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "couple",
+          "time_zone"
+        ]
+      },
+      "StatusInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "text": {
+            "enum": [
+              "Feeling cosy",
+              "Thinking of you",
+              "Could use a hug",
+              "A little busy",
+              ""
+            ]
+          }
+        },
+        "required": [
+          "couple",
+          "request_id",
+          "expected_revision",
+          "text"
+        ]
+      },
+      "IdeaInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "couple": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "preset": {
+            "enum": [
+              "coffee",
+              "walk",
+              "movie"
+            ]
+          }
+        },
+        "required": [
+          "couple",
+          "request_id",
+          "preset"
+        ]
+      },
+      "IdeaActionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "action": {
+            "enum": [
+              "interest",
+              "withdraw",
+              "plan"
+            ]
+          },
+          "values": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "interested": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "interested"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {},
+                "required": []
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "starts_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "time_zone": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "place": {
+                    "type": "string",
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "title",
+                  "starts_at",
+                  "time_zone"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "request_id",
+          "expected_revision",
+          "action",
+          "values"
+        ]
+      },
+      "DailyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Daily"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "StatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Status"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "StatusesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Statuses"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "IdeaResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Idea"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "IdeasResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Ideas"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      }
+    }
+  }
+}

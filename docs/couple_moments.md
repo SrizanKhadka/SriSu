@@ -8,7 +8,7 @@ Work stays on `dev-couple-moments`. Relevant history:
 - `41a0619` added page-number pagination, replacement and photo deletion. It saved changes before checking the combined photo count; returning HTTP 400 inside `atomic` could commit those changes. Object-level creator permissions, expiry and validated image uploads were missing.
 - `05daf44` replaced gender-specific partners with exclusive couple memberships. The new API uses that membership architecture and accepted connections, rather than trusting `is_engaged` or client ownership fields.
 
-The existing route names, moment metadata and list envelope remain. Views delegate validation to DRF serializers and transactional writes to `social/services/moment_service.py`. Existing chat rooms have two-user/couple participant semantics and websocket broadcasting, which do not match sender-plus-two-private-recipients appreciation. Notes therefore use a small separate model and API; there are no public comments, ratings or broadcasts. Existing `SingleConnectionModel.BLOCKED` records are honored in either direction. No reporting API was found.
+The existing route names, moment metadata and list envelope remain. Views delegate validation to DRF serializers and transactional writes to `social/services/moment_service.py`. Notes use a small separate model and API; there are no public comments, ratings or broadcasts. Existing `SingleConnectionModel.BLOCKED` records are honored in either direction. No reporting API was found. Chat is now a separate Matrix E2EE transport and is not reused for Moment notes.
 
 ## Product and authorization defaults
 
@@ -152,7 +152,9 @@ Database and storage cannot commit atomically. Process death or simultaneous sto
 
 Final verification on 2026-09-14: **48 social tests passed on PostgreSQL 17**, including partner replies, private embedded threads, concurrent unique views, concurrent photo writes and migration backfill. Django system checks, migration consistency (`makemigrations --check --dry-run`) and `git diff --check` passed. The earlier 32-test SQLite run passed as well; PostgreSQL was used for the final expanded suite.
 
-Full repository test discovery is blocked by the pre-existing `chat/tests.py`: it imports the undeclared `websockets` dependency and calls a live WebSocket deletion script at import time. That unrelated script was not changed or executed; chat integration behavior is unverified.
+Historical note: full discovery was previously blocked by an import-time legacy
+WebSocket script. That script and transport were removed by the Matrix-only chat
+cutover; current verification uses the maintained workspace suite allowlist.
 
 Commands:
 
@@ -204,3 +206,295 @@ Example additional fields for a partner viewing a moment (other moment fields om
 `total_view_count` is returned in every moment representation, including create/update and list/detail responses. It means **distinct authenticated users who successfully requested moment detail**, including the two partners. A successful detail GET records the viewer and returns the updated total. Repeated GETs by that user count once. Feed requests, photo downloads, HEAD, writes, anonymous, hidden and expired requests do not record a view. The database enforces one view per moment/user and concurrent requests are serialized against the moment row. Viewer identities are not exposed. Viewer-account deletion clears the viewer reference while preserving the total; moment deletion removes its view records. Existing moments start at zero because historical views were not tracked.
 
 Migration `0009_moment_replies_and_views` adds the reply and unique-view tables without changing existing moment or note records. Run `python manage.py migrate` before using this version. No new background job or configuration is needed.
+
+## Home + staged publication (moments-1, 2026-10-22)
+
+Implemented on `codex/couple-chat-rebuild` starting at
+`2a7d1f7d502bbaf3fb11b2330835a0d64bbe3ea5`, paired with frontend
+`dev-core-architecture` starting at `98f17e769bf4d0a43b444919f6f81aac91b76b3b`.
+The historical branch named above describes the original implementation, not the
+current checkout. Figma reference: file `LztysD1YvINX7RwZpnhhTt`, Home page `1:3`.
+
+Apply additive migration `social/0016_couplemomentmodel_revision_and_more` and
+release this backend before the Moments KMP client. No migration of existing
+Moment content or audience is required. No live migration/deployment was performed.
+The new draft tables stage owned uploads; publication still creates the original
+`CoupleMomentModel` and `CoupleMomentPhotoModel` records.
+
+| Method | Path under `/api/social/` | Body / behavior |
+| --- | --- | --- |
+| GET | `couple-moments/home/` | Minimal greeting identity, nullable active couple, two real member summaries and `server_time`; unlinked users get 200 |
+| POST | `moment-drafts/` | `{request_id: UUID, couple: ID}`; creator-owned, same-ID replay 200, new 201 |
+| GET / DELETE | `moment-drafts/{uuid}/` | Recover / discard unpublished owned draft; delete 204 |
+| PUT | `moment-drafts/{uuid}/photos/{uuid}/` | One multipart `photo`; retry same bytes/ID, conflict different content; five under row lock |
+| GET / DELETE | `moment-drafts/{uuid}/photos/{uuid}/` | Guarded staged bytes / idempotent removal and updated draft revision |
+| POST | `moment-drafts/{uuid}/publish/` | `{expected_revision, caption, visibility, photo_ids}`; exact ordered uploaded set, private default; 201 once / 200 replay |
+| GET | `couple-moments/{id}/?record_view=false` | Raw resource; no view side effect; eligible expired reference 410, concealed inaccessible/missing/deleted 404 |
+| POST | `couple-moments/{id}/viewed/` | Empty body, idempotent actual presentation event; never counted for creator |
+| PUT | `couple-moments/{id}/reaction/` | `{reacted: boolean}`, original current partner only; desired-state heart |
+| PATCH | `couple-moments/{id}/caption/` | `{expected_revision, caption}`, creator only; stale 409; publication/expiry unchanged |
+| GET | `couple-moments/{id}/creator-photo/` | Same audience/expiry authorization as Moment |
+
+Existing CRUD/notes endpoints and response shapes remain. Legacy GET without
+`record_view=false` still counts views. Sequence accepts optional `creator`, bound
+to its signed requester/couple cursor; order is ascending `(created_at,id)`.
+Global/Faves retain existing ranking/session cursors. Both return server time.
+Added projection fields: `creator`, photo `width/height` (nullable on legacy rows),
+`revision`, `published_at` (alias of publication `created_at`), `server_time`,
+`has_opened`, `can_reply`, `partner_seen_at`, `reacted`, `partner_reacted`.
+Receipt details are not exposed to visitors. Home never marks a creator's own
+Moment as unseen. Authorize using active original membership **and** user IDs;
+ended membership joins cannot grant replacement partners access.
+
+Uploads are authenticated and decoded outside application transactions. Accept
+non-animated JPEG/PNG/WebP <=10 MiB, <=40 MP and <=12000px per edge. Apply EXIF
+orientation, bound to 2560px, flatten transparency and re-encode JPEG without
+EXIF/GPS/comments. Transactions lock couple then draft/Moment and recheck current
+membership before ownership changes. Storage writes are compensated on failure;
+published files survive draft-row deletion because shared reference guards run
+before cleanup. Legacy writes also stage expensive storage work before locking.
+
+The 24-hour clock begins only after publication with ready media. Publication
+retries must reuse the same UUID and exact caption/audience/order, even after a
+lost response. Deleted/expired publications return 410 on replay and never
+resurrect. Unpublished staging expires after seven days. Published retry
+records retain only IDs, original audience and a one-way payload hash until
+account/couple deletion; they keep no caption or photos. Existing physical
+Moment cleanup remains 30 days after expiry. Guarded media is `private, no-store`;
+visibility expiry does not depend on cleanup. Downloaded copies cannot be recalled.
+
+View hydration is bounded to the requester and original partners; aggregate
+counts remain database counts. Embedded appreciation notes and their embedded
+replies are capped at 50 each; existing separately paginated note/reply endpoints
+remain available for older entries. KMP shows paginated notes for the active
+Moment, with private partner replies, using these existing APIs. There is no new
+inbox or notification service. Historical notes remain server-readable under the
+existing retention policy even though this phase has no separate history inbox.
+
+Matrix replies use the client encryption pipeline with an `external_url` containing
+only `srisu://moments/{id}/couples/{id}`. No server-authored plaintext event, photo,
+or caption is copied into Matrix. The client revalidates reference eligibility on
+open/resume/local changes and clears its label at known expiry. Deleting a Matrix
+reference does not delete the Moment; opening any stale label rechecks the server.
+
+Public sharing is explicit and authenticated, with existing bilateral blocking.
+No reporting API/workflow exists: moderation/reporting is an unresolved release
+requirement, not claimed as implemented. Private Moments are server-readable;
+only the separate Matrix messages are E2EE.
+
+Contracts live in `contracts/core-1/{schema,fixtures,manifest,routes}.json`; the KMP
+copy is pinned by `tools/core_contracts.py`. Tests use synthetic accounts and
+isolated SQLite/PostgreSQL/media. See frontend `docs/flows/moments.md` for the
+cross-repository validation and screenshot index.
+
+## Optional photo framing at publication — 19 November 2026
+
+`POST /api/social/moment-drafts/{uuid}/publish/` additionally accepts `crops`,
+a map from submitted staged-photo UUID to `{x, y, width, height}`. Coordinates
+are finite normalized values in the orientation-corrected staging image, bounded
+inside that image with positive dimensions. Missing entries share the full photo.
+Unknown/foreign IDs and invalid rectangles return 400; staging ownership and
+current couple membership are still checked before reading images.
+
+Crops are included in the publication fingerprint. A successful retry returns
+the same Moment without recropping; changing the crop on a published UUID is a
+409 conflict. Legacy fingerprints with no crop map are unchanged. Pillow creates
+JPEG derivatives at quality 95 with no chroma subsampling, no upscaling and no new
+metadata, outside database locks. Positive pixel rounding matches the client
+preview, with a one-pixel minimum for tiny sources. Final publication rechecks
+revision, ownership and photo IDs under existing couple/draft locks and assigns
+the resulting files/dimensions to ordered Moment photos. Staged originals use
+existing guarded cleanup; failed/duplicate derivatives are compensated. A cleanup
+callback failing after commit cannot delete a now-published derivative. On an
+ambiguous database outage, the existing orphan sweep handles leftover files.
+
+This supports the frontend's Full/Fill/Crop, pan/zoom and per-photo secure draft
+metadata. Crops are only editable before publication. New requests use the same
+API, privacy rules, retention and response shape; no schema migration is needed.
+Deploy this server support before the crop-enabled client. An older strict server
+will reject `crops` rather than silently publish an uncropped image.
+
+PR bases: backend `codex/moment-upload-crop` / `1594c3b`; frontend
+`codex/moment-upload-polish` / `bcb1163`. See frontend `docs/flows/moments.md` for
+UI evidence and verification limitations. Both PRs target `dev-core-architecture`
+per the user's explicit branch decision. Deploy backend support before the client.
+
+Verified locally with the disposable PostgreSQL runner on the integration base: 367 passing tests,
+including concurrent cropped publication, rollback/storage compensation,
+post-commit cleanup failure, exact synthetic crop pixels and partner-only reads.
+Core-1 schema/fixtures validate. This is server integration coverage with synthetic
+accounts. The paired KMP HTTP test also verifies cropped pixels/dimensions,
+photo ordering, duplicate replay, changed-intent conflict, partner receipts and
+unrelated-user denial against a disposable loopback server. No deployed service
+or real couple account is used; migration and core-1 cross-repository checks pass.
+
+## Video Moments — 24 November 2026
+
+Additive client contract; existing `photos` arrays/IDs/order are retained. Each item
+now has `video: null | {id, state, source_bytes, received_bytes, chunk_bytes,
+duration_ms, width, height, error_code}`. For videos, `image` is an authenticated
+JPEG poster. Old clients therefore see a still image; they never receive raw
+uploaded video or a public media URL. This is server-processed private media,
+not Matrix end-to-end encryption.
+
+All routes below are under `/api/social/`. Upload, status and playback handshake
+require the current authenticated user. Draft uploads are owner-only; published
+streams use the existing current audience, blocking and 24-hour expiry rules.
+
+| Route | Method and request | Result |
+| --- | --- | --- |
+| `moment-drafts/{draft}/videos/{video}/` | POST `{source_bytes}`; stable client UUID | Idempotent reservation; mismatch 409 |
+| Same route | GET | Confirmed byte offset and processing state |
+| `.../videos/{video}/chunks/{offset}/` | PUT `application/octet-stream`, Content-Length, sequential 2 MiB chunks (last may be smaller) | Confirmed offset; identical replay accepted, changed bytes 409 |
+| `.../videos/{video}/complete/` | POST `{}` | Queue only after all bytes are present |
+| `.../videos/{video}/retry/` | POST `{}` | Retry transient processing failure, at most three attempts |
+| `moment-videos/{video}/playback/` | POST `{}` | `url`, `cookie_name`, `cookie_value`, `cookie_path`, `expires_in`, `duration_ms` |
+| `moment-video-stream/{video}/{name}` | GET/HEAD, asset cookie or current JWT | HLS playlist/TS segment/poster; byte ranges 206 or invalid range 416 |
+
+States: `uploading → queued → processing → ready`, or `failed`. Publication is
+blocked until every selected video is ready. Source size is capped at 100 MiB;
+verified duration at 60 seconds, at most 4096×4096 / 9 million source pixels,
+one video track and at most four tracks. Accept MP4/MOV and Matroska/WebM that
+FFmpeg can decode. Five mixed items share the existing attachment limit. Existing
+limits of ten pending drafts per owner and seven-day staging expiry still apply.
+Status polling has its own 120/minute allowance; it does not consume the 60/hour
+draft-write budget. Chunks are bounded to 2 MiB and hash checked on retries.
+
+`process_moment_videos --watch` claims jobs with database leases. Encoding runs
+outside database/API transactions with fixed commands, input format/protocol
+allowlists, process timeouts, two CPU threads and temporary files. Output is SDR
+H.264/AAC, at most 30 fps, with two-second HLS segments. The ladder has long-edge
+bounds 640 and 1280 (approximately 360p/720p at 16:9), never upscales, and skips
+the larger rendition for small sources. Posters omit source metadata. Encoded
+files are committed only if the lease, draft and audience are still valid;
+original chunks are then deleted. Stale ten-minute leases are reclaimable.
+
+Playback credentials live for at most 120 seconds and never appear in URLs.
+Every playlist/segment request rechecks active user, current device session
+(where present), relationship membership, block status and expiry. Input chunks
+are not routable. Responses use `private, no-store`; a private object-store/CDN
+must not expose the underlying files. Expired playback after a long pause can
+be refreshed through the viewer's Retry action. Already buffered pixels cannot
+be remotely recalled. Legacy JWTs without device sessions retain their existing
+revocation limitation, bounded here by the short cookie lifetime.
+
+### Deployment order and storage
+
+1. Ship the backend image with FFmpeg/ffprobe and apply **social.0024_moment_video**.
+   It depends on **social.0023_home_couple_space** on `dev-core-architecture`.
+   QA rebased the original local-only `0022` video migration to this current graph.
+   No deployment or live application migration was performed during this task.
+2. Start `moment_video_worker` from Docker Compose alongside the web process.
+   Both local startup wrappers now start it automatically, validate FFmpeg/ffprobe,
+   and include it in the migration stop/restore sequence. It uses the shared
+   `srisu-backend-app:local` image; look for its container rather than a separate
+   image. See [local startup](local-server-startup.md).
+   It shares private storage and the database; its container is limited to two
+   CPUs and 2 GiB. Without a worker, uploads remain queued and the client offers
+   a retry instead of publishing an unplayable item.
+   The local launcher now includes this required service and checks its
+   heartbeat. An already-running stack needs
+   `docker compose up -d --build moment_video_worker`; switching branches alone
+   does not start the new service. See [local startup](local-server-startup.md#video-uploaded-but-stuck-preparing).
+3. Keep the existing scheduled `cleanup_moments --sweep-orphans` job. Unpublished
+   drafts expire after seven days; published media retains the existing purge
+   policy (30 days after expiry). Deletion/expiry immediately denies new reads;
+   failed physical file deletion stays in the cleanup queue.
+4. Release the frontend after these APIs and worker are healthy. Old photo clients
+   remain compatible. A rollback must preserve the schema/assets until the newer
+   client is retired; do not drop video tables on a live deployment.
+
+This baseline deliberately serves authorized segments through Django instead of
+adding public CDN URLs. A signed CDN/origin deployment, load testing, worker
+capacity alerts and real cellular benchmarks are additional rollout work, not
+claims established by local simulator checks. No AV1, video trimming/recording,
+background OS upload service, or new public visibility rules were introduced.
+
+Exact PR source validation: 459 tests passed in the disposable PostgreSQL runner
+with zero skips; migration
+consistency, Django configuration and backend core fixture validation passed.
+Real KMP HTTP upload → FFmpeg worker → publish → partner playback credential
+checks also passed. Native ExoPlayer and AVPlayer consumed the protected HLS
+stream on synthetic Android/iOS simulators. See the frontend
+`docs/flows/moments.md#video-moments--24-november-2026` for exact scope, timing
+caveats, prior contract drift and remaining physical-device/deployment checks.
+
+PR branch: `codex/video-moments`, targeting `dev-core-architecture` from
+`9e2f5b8`. Companion frontend uses the same feature/integration branch names.
+PR descriptions record final commits and CI. Unrelated local work is excluded.
+
+### Stalled preparation and latency follow-up — 24 November 2026
+
+An Android report of “Preparing video 1 of 1” was traced to the server queue,
+not the upload-size limit. The other laptop's `docker compose ps
+moment_video_worker` output contained no running worker. The local startup
+script also omitted this service from its explicit startup list.
+
+- The launcher now includes, quiesces, restores on migration failure, and starts
+  the video worker alongside the API and Matrix reconciler. Preflight checks
+  FFmpeg/ffprobe plus H.264/AAC encoders before any job is claimed or application
+  service stopped. Compose exposes worker health and the launcher waits for a
+  fresh heartbeat. Job timing output contains no user IDs or media paths.
+- The encoder generates both HLS renditions and the poster from one decode pass,
+  with bounded threads and downscaling before HDR tone mapping. Authenticated
+  delivery, bitrate targets, chunk offsets, publication rules and leases remain
+  compatible. No schema or API changes are needed.
+- The shared app shows separate uploaded/waiting and processing states. Queue
+  waiting stops after 30 seconds; active processing waiting stops after 90
+  seconds, including time spent in status requests. These are client wait
+  limits, not job cancellation: the server can finish, the draft stays intact,
+  and Share resumes without uploading confirmed chunks again.
+- Startup regression tests uncovered pre-existing duplicate managed environment
+  keys and `.env` symlink replacement in the Matrix configuration helper. The
+  helper now preserves the symlink target and canonicalizes only managed keys;
+  the actual ignored environment was not changed during verification.
+
+Local benchmark: a synthetic 60-second 1280×720 H.264/AAC clip, 17,356,620 bytes,
+three alternating runs per version on the development Mac. Median wall time was
+4.949s before and 3.731s after (24.6% lower). Median child CPU time was 18.772s
+and 18.991s respectively; this is a latency improvement, not a demonstrated
+CPU-time reduction. All 64 output files matched byte-for-byte for this SDR
+fixture. This is not a benchmark of the other laptop, a Docker CPU quota,
+production queue load, physical-phone codecs, or cellular networking.
+
+Verification: 464 isolated backend tests, zero failures, 35 PostgreSQL-only
+skips; 20 startup tests; configuration/migration/contract checks; Compose schema;
+real FFmpeg checks for silent/small and HDR/portrait videos; real Ktor upload →
+processing → publication → partner-playback integration; 3/3 Android API 35
+native checks; production iOS AVPlayer on the iPhone 17 Pro/iOS 26.5 simulator.
+Both native checks used disposable synthetic accounts/media. Frontend state
+regressions cover absent workers, slow HTTP status requests, preserved drafts,
+and retry without duplicate upload/publication. Current uncommitted changes are
+on `codex/video-moments` in both repositories, based on frontend `c06fc02` and
+backend `1ea9eacd`. Existing Xcode project edits, environment files and private
+media were preserved. No live deployment, migration, push or merge was performed.
+
+### Publication review — 24 November 2026
+
+The merged working snapshot preserves the other laptop's `041fe7c` launcher
+improvements plus encoder-capability preflight and heartbeat readiness. Video
+chunk requests, including replays, are limited per account to 360/minute and
+1,000/hour (each body is capped at 2 MiB); throttling preserves resumable offsets.
+Status polling remains separately limited to 120/minute.
+
+Video metadata now reports the encoded rendition's dimensions/duration; poster
+rows retain their own smaller image dimensions. Leases refresh while copying
+chunks and storing renditions; the single FFmpeg pass has a 180-second deadline,
+below the ten-minute recovery lease. Failures log resource ID, category and
+exception class, excluding exception text, FFmpeg stderr and private media.
+
+Review regressions verify actual poster bytes, on-disk chunk removal, status and
+chunk throttles, and owner deletion with both published and draft references.
+Django already cascades the owner's Moment and its photo before the restricted
+video reference is removed; that deletion test passes without changing the
+schema. The competing-chunk test synchronizes after both storage writes, forcing
+the losing-file cleanup path on PostgreSQL. The FFmpeg subprocess uses a fixed
+argument list without a shell, allowlisted formats and private local filenames.
+
+Verification: 469 isolated tests passed with 35 PostgreSQL-only skips; all 34
+video tests passed in disposable PostgreSQL; 23 launcher tests passed. Migration
+consistency and authoritative contract checks passed. This follow-up adds no
+migration beyond the original video feature's `social.0024_moment_video`.
+Companion PRs are backend #45 and frontend SriZan12/SriSu#36; target both at
+`dev-core-architecture`. Rebuild web/worker images and run the video worker for
+clients using these APIs; merging source does not deploy the other laptop.
