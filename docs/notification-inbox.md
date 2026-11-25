@@ -11,6 +11,7 @@ backend `8585348`. Apple enrollment/APNs remains skipped.
 | --- | --- |
 | Partner invitation / acceptance | Pending invitations / current couple profile |
 | Sharing proposal / approval | Couple sharing settings |
+| Partner nickname set/change | Current couple profile; current nickname revision only |
 | Plan invitation, response, cancellation | Exact plan, including current/history state |
 | Question started, first answer, mutual reveal | Exact Spark; no private answer preview |
 | Challenge invitation, response, progress, completion, cancellation | Exact challenge |
@@ -20,7 +21,7 @@ backend `8585348`. Apple enrollment/APNs remains skipped.
 | Shared date idea / mutual interest | Exact open shared idea |
 
 Chat/Matrix messages, typing, receipts, local reminders and diagnostic messages
-are excluded. All 22 current non-chat policies are eligible; channel/category
+are excluded. All 23 current non-chat policies are eligible; channel/category
 preferences control phone alerts, not this account history.
 
 ## HTTP and consistency
@@ -157,3 +158,18 @@ test. The isolated SQLite run completed 474 tests (35 PostgreSQL-only skips); th
 disposable PostgreSQL run passed all 474 without skips. No backend production
 change or migration was needed in this QA increment. Client state and large-text
 fixes are recorded in frontend `docs/validation/notifications/reference-qa-20261125.md`.
+
+
+### Nickname alerts
+
+`nickname.changed` is an additive `notification-inbox-1` kind in `requests`.
+Initial copy says the actor gave you a nickname; later changes say they changed
+it. Body and literal segments show `You’re now “<nickname>” to them.` Only the
+actor-name segment carries `user_id`; the chosen nickname is literal content and
+must not be substituted by the recipient's personal display-name resolver.
+
+The row and unread count include only the setter's exact active nickname revision.
+Clear, change, block or unlink removes stale rows; valid inbox rows can outlive the
+six-hour push TTL within normal 30-day retention. Open still reauthorizes and routes
+to `{kind:"couple",couple_id}`. Neither the snapshot text nor old nickname values
+are copied into the outbox. See [rollout](notification-rollout.md#nickname-change-alerts).

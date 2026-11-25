@@ -12,6 +12,9 @@ from .previews import name
 def actor_for(event, user):
     from authentication.models import UserModel
     from social.models import CoupleConnectionModel, CoupleMomentNoteModel
+    if event.kind == "nickname.changed":
+        from .domain import nickname_member
+        return nickname_member(event, user).user
     if event.kind == "invite.received":
         invite = CoupleConnectionModel.objects.get(pk=event.resource)
         return UserModel.objects.filter(phone_number=invite.sender_number, is_active=True).first()
@@ -69,7 +72,7 @@ def visuals(event, user, copy):
             subject, separator, details = body.partition(" · ")
             add(subject, True)
             add(separator + details)
-        elif event.kind in ("status.changed", "idea.created", "idea.interested"):
+        elif event.kind in ("status.changed", "idea.created", "idea.interested", "nickname.changed"):
             add(" · " + body)
         elif event.kind in ("moment.appreciated", "moment.replied"):
             add(" · " + body)

@@ -46,7 +46,13 @@ def visible_events(user):
         created_at__gte=timezone.now() - timedelta(days=RETENTION_DAYS)).filter(allowed)
     newer_status = Event.objects.filter(recipient=user, kind="status.changed", resource=OuterRef("resource")).filter(
         Q(created_at__gt=OuterRef("created_at")) | Q(created_at=OuterRef("created_at"), pk__gt=OuterRef("pk")))
-    return rows.annotate(newer_status=Exists(newer_status)).exclude(kind="status.changed", newer_status=True)
+    current_nickname = (CoupleMembershipModel.objects.filter(couple_id=OuterRef("couple_id"),
+        partner_nickname_revision=OuterRef("resource_version"))
+        .exclude(user=user).exclude(partner_nickname="")
+        .annotate(key=Cast("pk", CharField())).filter(key=OuterRef("resource")))
+    return (rows.annotate(newer_status=Exists(newer_status), current_nickname=Exists(current_nickname))
+        .exclude(kind="status.changed", newer_status=True)
+        .exclude(kind="nickname.changed", current_nickname=False))
 
 
 def inbox_destination(event, user):
@@ -56,6 +62,10 @@ def inbox_destination(event, user):
     from social.services.moment_service import eligible_moments
     from .domain import note_destination
     kind = event.kind
+    if kind == "nickname.changed":
+        from .domain import nickname_member
+        nickname_member(event, user)
+        return {"kind": "couple", "couple_id": event.couple_id}
     if kind in NOTE_KINDS:
         return note_destination(event, user)
     if kind == "invite.received":
@@ -118,7 +128,7 @@ def presentation(event, user, *, aliases=None):
         copy = {"title": title, "body": "This update is no longer available."}
         route = None
     return {"id": str(event.pk), "kind": event.kind, "category": POLICIES[event.kind].category,
-        "title": text(copy["title"], 120, strip_markup=False), "body": text(copy["body"]),
+        "title": text(copy["title"], 120, strip_markup=False), "body": text(copy["body"], strip_markup=event.kind != "nickname.changed"),
         "created_at": event.created_at, "read_at": event.inbox_read_at,
         "available": route is not None, **visual}, route
 

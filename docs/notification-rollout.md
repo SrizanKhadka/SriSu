@@ -55,6 +55,7 @@ The actor is excluded except an explicit visitor/couple appreciation exchange.
 | `invite.accepted` | Original inviter / couple | On | Audible, 6 hours |
 | `sharing.proposed` | Other partner / sharing review | On | Audible, 24 hours |
 | `sharing.approved` | Other partner / sharing | On | Quiet, 6 hours |
+| `nickname.changed` | Other partner / couple profile | On (`requests`) | Quiet, 6 hours; exact current nickname revision |
 | `plan.created` | Other partner / Plan | On | Audible, 6 hours or Plan deadline |
 | `plan.responded` | Other partner / Plan | On | Audible, 6 hours or applicable deadline |
 | `plan.cancelled` | Other partner / cancelled Plan | On | Audible, 6 hours |
@@ -220,3 +221,60 @@ Force stop. Apple enrollment/APNs remains skipped.
 
 These are native Android presentation changes, with no new Figma screen or claimed
 live Figma match. Figma remains `LztysD1YvINX7RwZpnhhTt`; no design file is changed.
+
+
+## Nickname change alerts
+
+25 November 2026, `codex/couple-profile-nickname-alerts` (backend base `561a894`).
+The user explicitly approved showing a chosen nickname to the named partner.
+Setting/changing a nonempty nickname with `notify_partner:true` emits
+`nickname.changed` to that partner only. The optional strict JSON boolean defaults
+to false so old editors that promised a private alias never disclose it. Updated
+editors display the disclosure and opt in on save. No alert is backfilled by
+resaving an unchanged legacy value with the flag.
+Unchanged/idempotent saves and clears do not alert; old aliases are not backfilled.
+The revision-specific source key deduplicates retries, including concurrent saves.
+Producer failure rolls back with the nickname write.
+
+The event belongs to `requests`, is quiet, and expires for push after six hours.
+Existing push/activity/category switches, device permission, current session,
+binding version, `notification-catalogue-2` Android gate, and preview privacy
+settings remain authoritative. No new capability or endpoint is introduced; the nickname write accepts the
+optional `notify_partner` boolean.
+The FCM/APNs fallback is only “A nickname for you” / “Your partner chose a nickname
+for you. Open SriSu to see it.” It contains neither person's name nor the selected
+nickname. Authorized preview uses the recipient's display name for the actor and
+shows the chosen nickname in literal body text; platform redaction choices apply.
+
+No private nickname snapshot is written to Event/Delivery, provider payloads or
+logs. Event metadata points to the setter's membership + exact nickname revision,
+with actor ID and set/change action. Each preview/resolve/inbox open checks current
+recipient, active relationship, audience, blocks and exact nonempty revision.
+Superseded/cleared events cannot reveal the old or replacement name; their pending
+pushes are suppressed and inbox rows/counts exclude them. Old OS notifications
+already displayed are not recalled. Inbox access remains independent of push TTL
+and category preferences, but never independent of current relationship access.
+
+No new migration (0025 from the prior nickname release is required). Deploy web and
+worker code before the client; older strict servers reject the new flag rather
+than silently skipping the notification. Older inbox UIs filter unknown kinds until upgraded;
+the existing push envelope parser/couple destination can handle the safe generic
+fallback. iOS gets the shared inbox, while native push remains outside the existing
+Android-only modern catalogue enrollment. Do not claim APNs end-to-end verification.
+
+`notifications.test_nicknames` is in the explicit workspace/PostgreSQL allowlist.
+It covers set/change, exact chosen-value presentation, typed actor spans, generic
+provider payloads, one recipient, private Settings isolation, duplicate/clear,
+rollback, invalid/stale writes, legacy payload privacy/strict opt-in, opt-outs, capability/session/permission gates,
+push expiry, no backfill, block/unlink/relink and malformed metadata. The existing
+PostgreSQL nickname races additionally assert only one event is captured.
+
+
+Backend verification for this increment (25 November 2026): isolated SQLite
+settings + nickname/catalogue/preview/inbox/rollout suites passed **95 tests, four
+PostgreSQL-only skips**. Disposable PostgreSQL 17 settings + nickname suites
+passed **33 tests, no skips**, including competing writes, identical retries and
+unlink races. Migration consistency reported no changes; core schemas and 14
+shared fixtures validated, and `git diff --check` passed. These runs use synthetic
+accounts, disabled external sockets and a mock provider; no live notification was
+sent. Native display/redaction and physical delivery are separate frontend checks.

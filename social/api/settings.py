@@ -85,11 +85,17 @@ class NicknameInput(StrictSerializer):
     expected_nickname_revision = serializers.IntegerField(min_value=1)
     # JSONField deliberately avoids CharField's numeric-to-string coercion.
     nickname = serializers.JSONField(allow_null=True)
+    notify_partner = serializers.JSONField(required=False, default=False)
 
     def to_internal_value(self, data):
         if not isinstance(data, dict):
             raise serializers.ValidationError("Expected an object.")
         return super().to_internal_value(data)
+
+    def validate_notify_partner(self, value):
+        if type(value) is not bool:
+            raise serializers.ValidationError("Choose whether to notify your partner.")
+        return value
 
     def validate_nickname(self, value):
         from social.services.partner_nicknames import normalize_nickname

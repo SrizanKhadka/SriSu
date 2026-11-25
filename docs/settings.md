@@ -44,17 +44,18 @@ Settings/partner flow, not a new Figma export.
 - `GET /api/social/settings/` retains `settings-1` and canonical `partner.name`.
   It adds `partner.nickname` (string or null) and `partner.nickname_revision` (>=1).
   The nickname is the authenticated viewer's label for their current partner;
-  the other partner cannot read it. The linked projection remains two queries.
-- `PUT /api/social/settings/partner-nickname/` accepts exactly `connection_id`,
-  `expected_revision` (connection revision), `expected_nickname_revision`, and
-  `nickname`. Returns the current `settings-1` context. Empty/blank string or null
+  their partner's Settings projection does not expose it. See the nickname-alert
+  addition below for the explicitly shared notification. The linked projection remains two queries.
+- `PUT /api/social/settings/partner-nickname/` accepts only `connection_id`,
+  `expected_revision` (connection revision), `expected_nickname_revision`,
+  `nickname`, and optional `notify_partner` (strict JSON boolean, default false). Returns the current `settings-1` context. Empty/blank string or null
   clears. Names normalize to NFC with collapsed whitespace, up to 40 Unicode
   codepoints. Controls, bidi overrides and invisible-only names are rejected;
   emoji joiners and non-Latin scripts are supported.
 - Different concurrent edits with the same nickname revision produce one success
   and one 409. An identical retry succeeds without incrementing the revision.
-  Personal nickname edits do not change the connection's revision or partner's
-  nickname, notifications, or public/full name. Generic staff membership forms
+  Personal nickname edits do not change the connection's revision, the partner's
+  own nickname preference, or public/full name. Generic staff membership forms
   exclude the private fields; operational database access/backups remain server-held
   data, not end-to-end encryption. Unknown fields return 400;
   unauthenticated calls 401; unrelated connections concealed as 404; pending,
@@ -82,3 +83,40 @@ No production data migration/backfill, dependency changes, or Matrix name change
 Verification covers API permissions/validation/replays, separate viewers, malformed
 membership, unlink/relink, notification identity, and PostgreSQL races; see the
 frontend task validation record for actual run results and native coverage.
+
+
+## Couple-profile editor and partner alerts (25 November 2026)
+
+Branch `codex/couple-profile-nickname-alerts`, backend base `561a894`.
+The existing nickname API is also used by the frontend couple-profile editor;
+there is no second storage location or endpoint. The new editors send
+`notify_partner:true` after displaying the disclosure. Omitted/false preserves the
+old editor’s promise of a personal-only alias. Strict validation rejects strings,
+numbers, null, arrays and objects for this flag. Choosing a nickname in the new editor tells
+that partner the chosen value through a private notification, as explicitly
+requested by the user. It remains the setter's personal display preference:
+the recipient cannot edit it or read it through Settings, and their own name for
+the setter is independent. The editor explains this disclosure before saving.
+
+A successful nonempty set/change with `notify_partner:true` emits exactly one
+`nickname.changed` event in
+the same database transaction. Unchanged/normalized-equivalent saves, idempotent
+retries, clears, failed or rolled-back writes do not notify. Existing aliases are
+not backfilled. The event stores membership ID, nickname revision, actor ID and
+set/change action only; the nickname text remains in the protected membership.
+
+Alerts describe the exact still-current revision. Another change/clear makes an
+older queued preview/tap unavailable and removes it from inbox counts/listing;
+it never relabels an old event with a newer nickname. Unlink/block/current-audience
+checks also apply. Already delivered OS notifications cannot be recalled. No
+historical nickname snapshot is retained in event metadata.
+
+Notification details, rollout and coverage: [nickname alerts](notification-rollout.md#nickname-change-alerts).
+This increment adds no migration beyond `social.0025_private_partner_nickname`.
+Deploy backend/web/notification worker first, then the clients with the profile
+editor, disclosure copy and new inbox kind. The new request flag is rejected by an older strict backend,
+so an outdated server fails the save rather than silently omitting the alert.
+Legacy inbox clients ignore unknown
+kinds; update them to view the new row. Existing generic push routing resolves the
+already-supported couple-profile destination. iOS inbox works through the shared
+API; modern push kinds remain Android-only under the existing delivery policy.

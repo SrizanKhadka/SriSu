@@ -134,6 +134,10 @@ def destination(event, user, sid):
     audience = [m.pk for m in members]
     if audience != event.audience_membership_ids:
         raise NotFound()
+    if event.kind == "nickname.changed":
+        from .domain import nickname_member
+        nickname_member(event, user, members=members)
+        return {"kind": "couple", "couple_id": couple.pk}
     if event.kind.startswith("plan."):
         from .domain import plan_destination
         return plan_destination(event, couple, audience)
