@@ -241,7 +241,7 @@ def accept_connection(
 
 
 @transaction.atomic
-def end_connection(*, connection_id: int, actor: UserModel) -> CoupleConnectionModel:
+def end_connection(*, connection_id: int, actor: UserModel, expected_revision: int | None = None) -> CoupleConnectionModel:
     """End current membership and schedule Matrix room revocation."""
     snapshot = CoupleConnectionModel.objects.filter(pk=connection_id).first()
     if snapshot is None:
@@ -257,6 +257,13 @@ def end_connection(*, connection_id: int, actor: UserModel) -> CoupleConnectionM
         raise RelationshipConflict("The relationship participants changed.")
     if actor.id not in {user.id for user in users}:
         raise RelationshipPermissionDenied("Only a relationship member can end it.")
+    if expected_revision is not None:
+        # A repeated confirmation is safe, but must never end a newer relationship.
+        if (connection.connection_status == CoupleConnectionStatus.BREAKUP
+                and connection.revision == expected_revision + 1):
+            return connection
+        if connection.revision != expected_revision:
+            raise RelationshipConflict("The relationship changed. Reload before ending it.")
     if connection.connection_status != CoupleConnectionStatus.ACCEPTED:
         raise RelationshipConflict("Only an accepted relationship can be ended.")
     ended_at = timezone.now()
