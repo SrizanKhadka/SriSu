@@ -13,6 +13,41 @@ ROOT = '/api/notifications/v1/inbox/'
 
 @override_settings(**SETTINGS)
 class InboxTests(MatrixFixtures, APITestCase):
+    def test_inbox_nickname_has_typed_actor_span_and_retains_canonical_fallback(self):
+        self.plan()
+        context = self.second_client.get('/api/social/settings/').data['data']['partner']
+        payload = {'connection_id':context['connection_id'], 'expected_revision':context['revision'],
+            'expected_nickname_revision':context['nickname_revision'], 'nickname':'Sunshine 🌻'}
+        response = self.second_client.put('/api/social/settings/partner-nickname/',payload,format='json')
+        self.assertEqual(response.status_code,200,response.data)
+        row = next(r for r in self.listing()['items'] if r['kind']=='plan.created')
+        self.assertEqual(row['actor_id'],self.first.pk)
+        self.assertEqual(row['actor_name'],'Sunshine 🌻')
+        self.assertEqual(row['actor_real_name'],self.first.full_name)
+        self.assertEqual(row['segments'][0],{'text':'Sunshine 🌻','bold':True,
+            'user_id':self.first.pk,'user_name':self.first.full_name})
+        self.assertTrue(all('user_id' not in s for s in row['segments'][1:]))
+        # An unrelated invitation sender must not inherit the current partner label.
+        from social.models import CoupleConnectionModel
+        from .services import emit
+        invite = CoupleConnectionModel.objects.create(sender_number=self.third.phone_number,
+            receiver_number=self.second.phone_number, connection_status='PENDING')
+        emit('invite.received',self.second,str(uuid4()),invite.pk)
+        stranger = next(r for r in self.listing()['items'] if r['kind']=='invite.received')
+        self.assertEqual(stranger['actor_id'],self.third.pk)
+        self.assertEqual(stranger['actor_name'],self.third.full_name)
+        self.assertNotIn('Sunshine',str(stranger))
+
+    def test_collective_sentence_is_not_tagged_as_actor_when_nickname_matches_prefix(self):
+        from social.models import CoupleMembershipModel
+        CoupleMembershipModel.objects.filter(user=self.first,couple=self.couple).update(partner_nickname='Your')
+        spark,_=sparks.start(self.first,uuid4(),self.couple.pk,'deep-1-v1')
+        envelope={'algorithm':'m.megolm.v1.aes-sha2','ciphertext':'A'*256,'session_id':'B'*43}
+        sparks.submit(self.first,spark.pk,envelope); sparks.submit(self.second,spark.pk,envelope)
+        row=next(r for r in self.listing(self.first_client)['items'] if r['kind']=='spark.revealed')
+        self.assertEqual(row['title'],'Your answers are ready')
+        self.assertTrue(all('user_id' not in span for span in row['segments']))
+
     def image_file(self, label="synthetic.jpg"):
         from io import BytesIO
         from PIL import Image
@@ -34,7 +69,7 @@ class InboxTests(MatrixFixtures, APITestCase):
         event = Event.objects.get(kind='moment.published')
         item = self.listing()['items'][0]
         self.assertTrue(item['avatar']); self.assertTrue(item['thumbnail'])
-        self.assertEqual(item['segments'][0], {'text':self.first.full_name,'bold':True})
+        self.assertEqual(item['segments'][0], {'text':self.first.full_name,'bold':True,'user_id':self.first.pk,'user_name':self.first.full_name})
         for slot in ('avatar','thumbnail'):
             url = ROOT + f'{event.pk}/media/{slot}/'
             response = self.second_client.get(url)

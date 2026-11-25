@@ -51,6 +51,8 @@ class SettingsContext(PrivateResponseMixin, APIView):
                 "photo": request.build_absolute_uri(person.profile_photo.url) if person.profile_photo else None,
                 "couple_id": membership.couple_id, "connection_id": connection.pk,
                 "revision": connection.revision,
+                "nickname": membership.partner_nickname or None,
+                "nickname_revision": membership.partner_nickname_revision,
                 "connected_days": max(0, (timezone.now() - since).days) if since else None,
             }
         return Response({"data": {"contract": "settings-1", "partner": partner}})
@@ -74,4 +76,32 @@ class SettingsDisconnect(PrivateResponseMixin, APIView):
             raise NotFound()
         except RelationshipConflict:
             raise SettingsConflict()
+        return SettingsContext().get(request)
+
+
+class NicknameInput(StrictSerializer):
+    connection_id = serializers.IntegerField(min_value=1)
+    expected_revision = serializers.IntegerField(min_value=1)
+    expected_nickname_revision = serializers.IntegerField(min_value=1)
+    # JSONField deliberately avoids CharField's numeric-to-string coercion.
+    nickname = serializers.JSONField(allow_null=True)
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("Expected an object.")
+        return super().to_internal_value(data)
+
+    def validate_nickname(self, value):
+        from social.services.partner_nicknames import normalize_nickname
+        return normalize_nickname(value)
+
+
+class SettingsPartnerNickname(PrivateResponseMixin, APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request):
+        from social.services.partner_nicknames import set_partner_nickname
+        value = NicknameInput(data=request.data)
+        value.is_valid(raise_exception=True)
+        set_partner_nickname(request.user, **value.validated_data)
         return SettingsContext().get(request)

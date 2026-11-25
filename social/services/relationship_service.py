@@ -277,7 +277,7 @@ def end_connection(*, connection_id: int, actor: UserModel, expected_revision: i
         CoupleMembershipModel.objects.select_for_update().filter(
             couple=couple,
             ended_at__isnull=True,
-        ).update(ended_at=ended_at)
+        ).update(ended_at=ended_at, partner_nickname="", partner_nickname_revision=F("partner_nickname_revision") + 1)
     if room is not None:
         matrix_mapping = mark_matrix_room_revoke_pending(room)
         schedule_matrix_room_revocation(matrix_mapping)
