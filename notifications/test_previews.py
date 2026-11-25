@@ -33,6 +33,25 @@ class PreviewTests(MatrixFixtures, APITestCase):
         self.assertEqual(result['Cache-Control'],'private, no-store')
         return result.data['data']
 
+    def test_private_nickname_updates_existing_preview_without_entering_push_payload(self):
+        self.post_transaction()
+        original = self.preview('matrix.message')
+        self.assertEqual(original['actor_id'], self.first.pk)
+        context = self.second_client.get('/api/social/settings/').data['data']['partner']
+        payload = {'connection_id':context['connection_id'], 'expected_revision':context['revision'],
+            'expected_nickname_revision':context['nickname_revision'], 'nickname':'Sunshine 🌻'}
+        response = self.second_client.put('/api/social/settings/partner-nickname/',payload,format='json')
+        self.assertEqual(response.status_code,200,response.data)
+        shown = self.preview('matrix.message')
+        self.assertEqual(shown['title'],'Sunshine 🌻')
+        self.assertEqual(shown['actor_name'],'Sunshine 🌻')
+        self.assertEqual(shown['actor_real_name'], self.first.full_name)
+        self.assertNotIn('Sunshine',str(message(Delivery.objects.get(),audible=True).data))
+        self.assertIsNone(self.first_client.get('/api/social/settings/').data['data']['partner']['nickname'])
+        payload.update(nickname='',expected_nickname_revision=response.data['data']['partner']['nickname_revision'])
+        self.assertEqual(self.second_client.put('/api/social/settings/partner-nickname/',payload,format='json').status_code,200)
+        self.assertEqual(self.preview('matrix.message')['title'],self.first.full_name)
+
     def test_every_catalogue_event_has_specific_safe_fallback(self):
         self.assertLessEqual(set(POLICIES)|{'matrix.message'},set(FALLBACKS))
         self.assertEqual(len(set(FALLBACKS[k] for k in POLICIES)),len(POLICIES))

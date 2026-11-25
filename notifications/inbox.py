@@ -102,13 +102,13 @@ def inbox_destination(event, user):
     raise NotFound()
 
 
-def presentation(event, user):
+def presentation(event, user, *, aliases=None):
     from .inbox_presentation import visuals
     route = None
-    visual = {"actor_name": None, "avatar": False, "thumbnail": False, "segments": []}
+    visual = {"actor_id": None, "actor_name": None, "actor_real_name": None, "avatar": False, "thumbnail": False, "segments": []}
     try:
         route = inbox_destination(event, user)
-        copy = display_copy(event, user)
+        copy = display_copy(event, user, aliases=aliases)
         # Historical first-answer copy must not claim it is still the reader's turn.
         if event.kind == "spark.submitted":
             copy["title"] = copy["title"].replace("answered — your turn", "answered your question")
@@ -118,7 +118,7 @@ def presentation(event, user):
         copy = {"title": title, "body": "This update is no longer available."}
         route = None
     return {"id": str(event.pk), "kind": event.kind, "category": POLICIES[event.kind].category,
-        "title": text(copy["title"], 120), "body": text(copy["body"]),
+        "title": text(copy["title"], 120, strip_markup=False), "body": text(copy["body"]),
         "created_at": event.created_at, "read_at": event.inbox_read_at,
         "available": route is not None, **visual}, route
 
@@ -160,8 +160,10 @@ def page(user, *, cursor=None, unread=False):
     batch = list(rows.select_related("couple").order_by("-created_at", "-pk")[:PAGE_SIZE + 1])
     selected = batch[:PAGE_SIZE]
     next_cursor = encode(user, "page", at=selected[-1].created_at.isoformat(), id=str(selected[-1].pk), unread=unread) if len(batch) > PAGE_SIZE else None
+    from social.services.partner_nicknames import aliases_for
+    aliases = aliases_for(user)  # One bounded lookup for the page, not per row.
     # Snapshot boundary prevents Mark all read from swallowing newly arriving events.
-    return {**summary(user), "items": [presentation(e, user)[0] for e in selected],
+    return {**summary(user), "items": [presentation(e, user, aliases=aliases)[0] for e in selected],
         "next_cursor": next_cursor, "read_token": encode(user, "read", through=now.isoformat()),
         "server_time": now, "retention_days": RETENTION_DAYS}
 

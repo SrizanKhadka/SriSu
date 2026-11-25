@@ -37,24 +37,30 @@ def thumbnail_for(event):
 
 def visuals(event, user, copy):
     actor = actor_for(event, user)
-    actor_name = name(actor, "Someone") if actor else None
+    actor_name = copy.get("actor_name") if actor else None
+    actor_real_name = name(actor, "Someone") if actor else None
     title, body = copy["title"], copy["body"]
     segments = []
-    def add(value, bold=False):
+    def add(value, bold=False, person=False):
         if value:
-            segments.append({"text": value, "bold": bold})
+            segment = {"text": value, "bold": bold}
+            if person and actor:
+                segment.update(user_id=actor.pk, user_name=actor_real_name)
+            segments.append(segment)
     if event.kind == "spark.submitted":
         from social.models import SparkSession
         spark = SparkSession.objects.get(pk=event.resource)
-        add(actor_name or "Your partner", True)
+        add(actor_name or "Your partner", True, person=True)
         add(" answered your Spark.")
         if spark.state == "open" and not spark.answers.filter(author=user).exists():
             add(" Answer to see theirs.")
         elif spark.state == "revealed":
             add(" Your answers are ready to reveal.")
     else:
-        if actor_name and title.startswith(actor_name):
-            add(actor_name, True)
+        # Revealed-answer copy is a collective sentence, never an actor label,
+        # even if the user chooses a nickname such as "Your".
+        if event.kind != "spark.revealed" and actor_name and title.startswith(actor_name):
+            add(actor_name, True, person=True)
             add(title[len(actor_name):])
         else:
             add(title, True)
@@ -69,7 +75,7 @@ def visuals(event, user, copy):
             add(" · " + body)
         # Moment captions and Spark questions belong in their destination. Keep
         # the list concise; original title/body stay available to older clients.
-    return {"actor_name": actor_name, "avatar": bool(actor and actor.profile_photo),
+    return {"actor_id": actor.pk if actor else None, "actor_name": actor_name, "actor_real_name": actor_real_name, "avatar": bool(actor and actor.profile_photo),
             "thumbnail": bool(thumbnail_for(event)), "segments": segments}
 
 

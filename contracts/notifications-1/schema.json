@@ -531,6 +531,27 @@
         "matrix_event_id": {
           "type": "string",
           "pattern": "^\\$.{1,254}$"
+        },
+        "actor_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "actor_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        },
+        "actor_real_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
         }
       },
       "required": [

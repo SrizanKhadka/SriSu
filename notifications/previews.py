@@ -38,16 +38,16 @@ FALLBACKS = {
 }
 
 
-def text(value, limit=240):
-    value = strip_tags(str(value or ""))
+def text(value, limit=240, *, strip_markup=True):
+    value = strip_tags(str(value or "")) if strip_markup else str(value or "")
     value = "".join(c if c.isspace() or (unicodedata.category(c) not in {"Cc", "Cs"}
         and c not in "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069") else "" for c in value)
     value = " ".join(value.split())
     return value if len(value) <= limit else value[:limit - 1].rstrip() + "…"
 
 
-def name(user, fallback="Your partner"):
-    return text(getattr(user, "full_name", ""), 60) or fallback
+def name(user, fallback="Your partner", *, aliases=None):
+    return (aliases or {}).get(getattr(user, "pk", None)) or text(getattr(user, "full_name", ""), 60) or fallback
 
 
 def preview(event, user, session_id):
@@ -59,11 +59,14 @@ def preview(event, user, session_id):
     return display_copy(event, user)
 
 
-def display_copy(event, user):
+def display_copy(event, user, *, aliases=None):
     """Private transient copy: caller MUST authorize the current resource first."""
+    from social.services.partner_nicknames import aliases_for
+    aliases = aliases_for(user) if aliases is None else aliases
     title, body = FALLBACKS.get(event.kind, ("SriSu", "Open SriSu to see what's new."))
     partner = event.couple.memberships.filter(ended_at__isnull=True).exclude(user=user).select_related("user").first() if event.couple_id else None
-    actor = name(partner.user if partner else None)
+    actor_user = partner.user if partner else None
+    actor = name(actor_user, aliases=aliases)
     result = {"event_kind": event.kind, "title": title, "body": body}
     kind = event.kind
     if kind == "matrix.message":
@@ -74,7 +77,8 @@ def display_copy(event, user):
         from authentication.models import UserModel
         from social.models import CoupleConnectionModel
         invite = CoupleConnectionModel.objects.get(pk=event.resource)
-        actor = name(UserModel.objects.filter(phone_number=invite.sender_number).first(), "Someone")
+        actor_user = UserModel.objects.filter(phone_number=invite.sender_number).first()
+        actor = name(actor_user, "Someone", aliases=aliases)
         result.update(title=f"{actor} invited you to connect", body="Accept the invitation to start your shared space.")
     elif kind == "invite.accepted":
         result.update(title=f"{actor} accepted your invitation", body="You're connected. Open your shared space.")
@@ -132,10 +136,12 @@ def display_copy(event, user):
         from social.models import CoupleMomentNoteModel
         note = CoupleMomentNoteModel.objects.select_related("sender").get(pk=event.resource)
         if kind == "moment.appreciated":
-            result.update(title=f"{name(note.sender, 'Someone')} appreciated your moment", body=note.message)
+            actor_user = note.sender
+            result.update(title=f"{name(actor_user, 'Someone', aliases=aliases)} appreciated your moment", body=note.message)
         else:
             reply = note.replies.select_related("author").get(pk=event.context["reply_id"])
-            result.update(title=f"{name(reply.author, 'Someone')} replied to your note", body=reply.message)
+            actor_user = reply.author
+            result.update(title=f"{name(actor_user, 'Someone', aliases=aliases)} replied to your note", body=reply.message)
     elif kind == "status.changed":
         from social.models import CoupleStatus
         status = CoupleStatus.objects.get(pk=event.resource)
@@ -145,6 +151,9 @@ def display_copy(event, user):
         idea = DateIdea.objects.get(pk=event.resource)
         result.update(title=f"{actor} " + ("suggested a date" if kind == "idea.created" else "likes your date idea"),
             body={"coffee": "Coffee together", "walk": "A walk together", "movie": "Movie night"}.get(idea.preset, "A date together"))
-    result["title"] = text(result["title"], 120)
+    result.update(actor_id=actor_user.pk if actor_user else None,
+        actor_name=name(actor_user, "Someone", aliases=aliases) if actor_user else None,
+        actor_real_name=name(actor_user, "Someone") if actor_user else None)
+    result["title"] = text(result["title"], 120, strip_markup=False)
     result["body"] = text(result["body"])
     return result

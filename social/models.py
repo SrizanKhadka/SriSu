@@ -144,6 +144,9 @@ class CoupleMembershipModel(models.Model):
     )
     position = models.PositiveSmallIntegerField(choices=Position.choices)
     nickname = models.CharField(max_length=30, null=True, blank=True)
+    # Private to this member: their label for the other member, never shared profile metadata.
+    partner_nickname = models.CharField(max_length=40, blank=True, default="")
+    partner_nickname_revision = models.PositiveBigIntegerField(default=1)
     is_owner = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)

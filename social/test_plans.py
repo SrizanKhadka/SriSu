@@ -169,15 +169,30 @@ class PlanMigrationPreservationTest(TransactionTestCase):
         from django.db.migrations.executor import MigrationExecutor
         before_target=[('social','0019_challenge_catalogue')]
         after_target=[('social','0020_coupleplanmodel_cancelled_at_and_more')]
-        executor=MigrationExecutor(connection);executor.migrate(before_target)
+        executor=MigrationExecutor(connection)
+        latest=executor.loader.graph.leaf_nodes()
+        executor.migrate(before_target)
         try:
-            self.client=APIClient();PlanTests.setUp(self)
-            old=executor.loader.project_state(before_target).apps.get_model('social','CouplePlanModel')
-            row=old.objects.create(couple_id=self.couple.pk,created_by_id=self.one.pk,request_id=uuid4(),title='Preserved synthetic plan',starts_at=self.future,response='yes',response_note='Original note',completed=False,revision=9,audience_membership_ids=list(self.couple.memberships.order_by('id').values_list('id',flat=True)))
+            # Runtime models may contain later fields. Build this migration's
+            # fixture through its historical app registry, not current services.
+            apps=executor.loader.project_state(before_target).apps
+            User=apps.get_model('authentication','UserModel')
+            people=[User.objects.create(phone_number=f'+97798000300{i:02}',full_name=f'Plan partner {i}') for i in range(2)]
+            old_connection=apps.get_model('social','CoupleConnectionModel').objects.create(
+                sender_number=people[0].phone_number,receiver_number=people[1].phone_number,connection_status='ACCEPTED')
+            couple=apps.get_model('social','CoupleModel').objects.create(couple_connection=old_connection)
+            Membership=apps.get_model('social','CoupleMembershipModel')
+            members=[Membership.objects.create(couple=couple,user=user,position=i+1) for i,user in enumerate(people)]
+            old=apps.get_model('social','CouplePlanModel')
+            row=old.objects.create(couple_id=couple.pk,created_by_id=people[0].pk,request_id=uuid4(),
+                title='Preserved synthetic plan',starts_at=timezone.now()+timedelta(days=2),response='yes',
+                response_note='Original note',completed=False,revision=9,audience_membership_ids=[m.pk for m in members])
             fields=['id','couple_id','created_by_id','title','starts_at','response','response_note','completed','revision','request_id','audience_membership_ids']
             expected=old.objects.filter(pk=row.pk).values(*fields).get()
+            executor=MigrationExecutor(connection);executor.migrate(after_target)
+            after=executor.loader.project_state(after_target).apps.get_model('social','CouplePlanModel')
+            self.assertEqual(after.objects.filter(pk=row.pk).values(*fields).get(),expected)
+            migrated=after.objects.get(pk=row.pk)
+            self.assertEqual(migrated.time_zone,'');self.assertEqual(migrated.checklist,[]);self.assertEqual(migrated.pending_change,{})
         finally:
-            MigrationExecutor(connection).migrate(after_target)
-        self.assertEqual(CouplePlanModel.objects.filter(pk=row.pk).values(*fields).get(),expected)
-        migrated=CouplePlanModel.objects.get(pk=row.pk)
-        self.assertEqual(migrated.time_zone,'');self.assertEqual(migrated.checklist,[]);self.assertEqual(migrated.pending_change,{})
+            MigrationExecutor(connection).migrate(latest)

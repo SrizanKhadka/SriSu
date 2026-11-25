@@ -542,6 +542,12 @@
       "path": "/api/social/settings/disconnect/",
       "query": [],
       "public": false
+    },
+    "settings-partner-nickname": {
+      "method": "PUT",
+      "path": "/api/social/settings/partner-nickname/",
+      "query": [],
+      "public": false
     }
   },
   "retired_endpoints": {
