@@ -16,6 +16,7 @@ from social.api.views import (
 )
 
 from social.api.moment_views import MomentNoteView
+from social.api.settings import SettingsContext, SettingsDisconnect
 from social.api.partner_profiles import PartnerProfileDetail
 from social.api.moment_drafts import MomentDraftView
 from social.api.sparks import SparkView
@@ -46,6 +47,8 @@ from social.api.couple_profile_views import (ProfileDetail, ProfileSection, Prof
 from social.api.moment_videos import VideoUpload, VideoChunkUpload, VideoComplete, VideoRetry, VideoPlayback, VideoStream
 
 urlpatterns = [
+    path("settings/", SettingsContext.as_view(), name="settings-context"),
+    path("settings/disconnect/", SettingsDisconnect.as_view(), name="settings-disconnect"),
     path("moment-drafts/<uuid:draft_id>/videos/<uuid:video_id>/", VideoUpload.as_view()),
     path("moment-drafts/<uuid:draft_id>/videos/<uuid:video_id>/chunks/<int:offset>/", VideoChunkUpload.as_view()),
     path("moment-drafts/<uuid:draft_id>/videos/<uuid:video_id>/complete/", VideoComplete.as_view()),

@@ -530,6 +530,18 @@
       "query": [],
       "public": false,
       "client": "native-player"
+    },
+    "settings-context": {
+      "method": "GET",
+      "path": "/api/social/settings/",
+      "query": [],
+      "public": false
+    },
+    "settings-disconnect": {
+      "method": "POST",
+      "path": "/api/social/settings/disconnect/",
+      "query": [],
+      "public": false
     }
   },
   "retired_endpoints": {
