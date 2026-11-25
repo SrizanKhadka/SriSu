@@ -236,11 +236,25 @@ class InboxOpenView(NotificationView):
         return Response({"data": open_item(request.user, event_id)})
 
 
+class InboxMediaRate(UserRateThrottle):
+    scope = "notification_inbox_media"
+    rate = "180/min"
+
+
+class InboxMediaView(NotificationView):
+    # Media reads must not consume the allowance used by open/read actions.
+    throttle_classes = [InboxMediaRate]
+    def get(self, request, event_id, slot):
+        from .inbox_presentation import media
+        return media(request.user, event_id, slot)
+
+
 urlpatterns = [path("v1/installations/", InstallationView.as_view()),
     path("v1/inbox/", InboxView.as_view()),
     path("v1/inbox/summary/", InboxSummaryView.as_view()),
     path("v1/inbox/read/", InboxReadView.as_view()),
     path("v1/inbox/<uuid:event_id>/open/", InboxOpenView.as_view()),
+    path("v1/inbox/<uuid:event_id>/media/<str:slot>/", InboxMediaView.as_view()),
     path("v1/cards/", CardView.as_view()),
     path("v1/preferences/", PreferencesView.as_view()),
     path("v1/deliveries/<uuid:delivery_id>/preview/", PreviewView.as_view()),

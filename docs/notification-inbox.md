@@ -116,3 +116,44 @@ Robolectric Android presentation; Android and iOS simulator Kotlin compilation
 passed. Real Ktor → isolated Django → FFmpeg → publication → partner inbox labeling
 and deduplication passed. These checks use synthetic accounts/media; no real FCM or
 APNs delivery was sent, and the other laptop has not been updated by this task.
+
+## Reference layout support — 25 November 2026
+
+The attached Notifications board replaces the client's earlier derived card list.
+Additive optional fields on each authorized item are `actor_name`, `avatar`,
+`thumbnail` and `segments` (plain text and a bold flag, no HTML). Existing title,
+body, contract ID, pagination, open/read behavior and push payloads are unchanged.
+The optional fields are absent/defaulted safely on older servers/clients.
+
+`GET /api/notifications/v1/inbox/{event_id}/media/avatar/` and `/media/thumbnail/`
+recheck recipient, live device session, current audience and resource access.
+They return at most 160×160 JPEGs, with private/no-store and nosniff, without
+revealing original storage URLs or marking an event read. A separate 180/minute
+media throttle keeps image reads from consuming the action allowance. Missing,
+expired, blocked, unrelated or revoked access returns 404/403/401. No thumbnails
+are persisted. Moment posters are reused for video; Challenge proof media is not
+invented. Actor photos for notes/invites are resolved from their authorized actor,
+not blindly from the currently linked partner.
+
+Spark first-answer copy checks the current reveal state and recipient submission;
+it does not encourage a second answer after mutual reveal. This presentation never
+includes encrypted answer envelopes. Unavailable resources have no actor/media
+metadata. Original notification event capture and FCM fallback copy are untouched.
+
+Deployment: restart the backend web process before installing the matching UI.
+No database migration or worker/configuration change is needed for this increment.
+Existing clients ignore the optional fields. The frontend falls back to original
+copy and a generic avatar if the older API is still running.
+
+Work was performed in the existing `codex/video-moments` folders, frontend base
+`6c85951`, backend base `136f618`; no push/merge/deployment is included. The UI
+verification record is frontend `docs/validation/notifications/reference-ui-20261125.md`.
+Publication uses `codex/notifications-ui` targeting `dev-core-architecture` in both
+repositories; paired PRs record the final implementation commits and CI results.
+
+Follow-up QA on 25 November added blocked/revoked/membership media checks, sender
+avatar attribution, corrupt-media fallback, and a real Ktor-to-Django inbox/media
+test. The isolated SQLite run completed 474 tests (35 PostgreSQL-only skips); the
+disposable PostgreSQL run passed all 474 without skips. No backend production
+change or migration was needed in this QA increment. Client state and large-text
+fixes are recorded in frontend `docs/validation/notifications/reference-qa-20261125.md`.

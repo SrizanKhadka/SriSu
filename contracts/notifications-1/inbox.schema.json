@@ -73,6 +73,40 @@
         },
         "available": {
           "type": "boolean"
+        },
+        "actor_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 60
+        },
+        "avatar": {
+          "type": "boolean"
+        },
+        "thumbnail": {
+          "type": "boolean"
+        },
+        "segments": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 360
+              },
+              "bold": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "text",
+              "bold"
+            ]
+          }
         }
       },
       "required": [
