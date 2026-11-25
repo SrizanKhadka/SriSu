@@ -53,7 +53,7 @@ def aliases_for(user):
 
 
 @transaction.atomic
-def set_partner_nickname(user, *, connection_id, expected_revision, expected_nickname_revision, nickname):
+def set_partner_nickname(user, *, connection_id, expected_revision, expected_nickname_revision, nickname, notify_partner=False):
     nickname = normalize_nickname(nickname)
     snapshot = CoupleConnectionModel.objects.filter(pk=connection_id).first()
     if snapshot is None or user.phone_number not in {snapshot.sender_number, snapshot.receiver_number}:
@@ -81,7 +81,13 @@ def set_partner_nickname(user, *, connection_id, expected_revision, expected_nic
         return own
     if own.partner_nickname_revision != expected_nickname_revision:
         raise NicknameConflict()
+    previous = own.partner_nickname
     own.partner_nickname = nickname
     own.partner_nickname_revision += 1
     own.save(update_fields=["partner_nickname", "partner_nickname_revision"])
+    if notify_partner is True and nickname:
+        from notifications.services import partner_event
+        partner_event("nickname.changed", user, couple, own.pk,
+            f"nickname:{own.pk}:{own.partner_nickname_revision}", version=own.partner_nickname_revision,
+            context={"actor_id": user.pk, "action": "change" if previous else "set"})
     return own

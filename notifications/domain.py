@@ -99,3 +99,23 @@ def extended_destination(event, user, couple, audience):
             raise NotFound()
         return {"kind": "idea", "idea_id": str(idea.pk)}
     raise NotFound()
+
+
+def nickname_member(event, user, *, members=None):
+    """Resolve the exact current alias; never archive chosen names in event metadata."""
+    from django.http import Http404
+    from social.services.moment_publication import current_couple
+    if event.recipient_id != user.pk or event.kind != "nickname.changed":
+        raise NotFound()
+    if members is None:
+        try:
+            _, members = current_couple(user, event.couple_id)
+        except Http404:
+            raise NotFound() from None
+    if [m.pk for m in members] != event.audience_membership_ids:
+        raise NotFound()
+    member = next((m for m in members if str(m.pk) == event.resource and m.user_id != user.pk), None)
+    if (member is None or member.user_id != event.context.get("actor_id")
+            or member.partner_nickname_revision != event.resource_version or not member.partner_nickname):
+        raise NotFound()
+    return member

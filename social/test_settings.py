@@ -286,7 +286,7 @@ class ConcurrentSettingsTests(TransactionTestCase):
                 barrier.wait(timeout=10)
                 try:
                     value = set_partner_nickname(user, connection_id=self.connection.pk,
-                        expected_revision=self.connection.revision, expected_nickname_revision=1, nickname=label)
+                        expected_revision=self.connection.revision, expected_nickname_revision=1, nickname=label, notify_partner=True)
                     return value.partner_nickname_revision
                 except NicknameConflict:
                     return 'conflict'
@@ -295,6 +295,8 @@ class ConcurrentSettingsTests(TransactionTestCase):
         with ThreadPoolExecutor(max_workers=2) as pool:
             result = list(pool.map(change, ['Sun', 'Moon']))
         self.assertCountEqual(result, [2, 'conflict'])
+        from notifications.models import Event
+        self.assertEqual(Event.objects.filter(kind='nickname.changed').count(),1)
         self.assertIn(CoupleMembershipModel.objects.get(user=self.one).partner_nickname, ['Sun','Moon'])
 
     def test_concurrent_duplicate_nickname_writes_share_one_revision(self):
@@ -307,11 +309,13 @@ class ConcurrentSettingsTests(TransactionTestCase):
                 user = UserModel.objects.get(pk=self.one.pk)
                 barrier.wait(timeout=10)
                 return set_partner_nickname(user, connection_id=self.connection.pk,
-                    expected_revision=self.connection.revision, expected_nickname_revision=1, nickname='Sun').partner_nickname_revision
+                    expected_revision=self.connection.revision, expected_nickname_revision=1, nickname='Sun', notify_partner=True).partner_nickname_revision
             finally:
                 connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(list(pool.map(change, range(2))), [2,2])
+        from notifications.models import Event
+        self.assertEqual(Event.objects.filter(kind='nickname.changed').count(),1)
 
     def test_nickname_and_unlink_cannot_leave_private_alias_on_ended_membership(self):
         from social.services.partner_nicknames import set_partner_nickname, NicknameConflict

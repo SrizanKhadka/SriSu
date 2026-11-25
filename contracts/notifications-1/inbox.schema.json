@@ -33,7 +33,8 @@
             "moment.replied",
             "status.changed",
             "idea.created",
-            "idea.interested"
+            "idea.interested",
+            "nickname.changed"
           ]
         },
         "category": {

@@ -24,6 +24,7 @@ POLICIES = {
     "invite.accepted": Policy("requests", 6, True, False),
     "sharing.proposed": Policy("requests", 24, True, False),
     "sharing.approved": Policy("requests"),
+    "nickname.changed": Policy("requests"),
     "plan.created": Policy("plans", 6, True, False),
     "plan.responded": Policy("plans", 6, True, False),
     "plan.cancelled": Policy("plans", 6, True),

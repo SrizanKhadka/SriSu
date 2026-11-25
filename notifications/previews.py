@@ -17,6 +17,7 @@ FALLBACKS = {
     "invite.accepted": ("You're connected", "Your partner accepted your invitation."),
     "sharing.proposed": ("Sharing request", "Your partner proposed a change to what you share."),
     "sharing.approved": ("Sharing approved", "Your partner approved your sharing settings."),
+    "nickname.changed": ("A nickname for you", "Your partner chose a nickname for you. Open SriSu to see it."),
     "plan.created": ("Plan invitation", "Your partner invited you to a plan."),
     "plan.responded": ("Plan response", "Your partner responded to your plan."),
     "plan.cancelled": ("Plan cancelled", "Your partner cancelled a plan."),
@@ -80,6 +81,13 @@ def display_copy(event, user, *, aliases=None):
         actor_user = UserModel.objects.filter(phone_number=invite.sender_number).first()
         actor = name(actor_user, "Someone", aliases=aliases)
         result.update(title=f"{actor} invited you to connect", body="Accept the invitation to start your shared space.")
+    elif kind == "nickname.changed":
+        from .domain import nickname_member
+        member = nickname_member(event, user)
+        actor_user = member.user
+        actor = name(actor_user, aliases=aliases)
+        verb = "changed your nickname" if event.context.get("action") == "change" else "gave you a nickname"
+        result.update(title=f"{actor} {verb}", body=f'You’re now “{member.partner_nickname}” to them.')
     elif kind == "invite.accepted":
         result.update(title=f"{actor} accepted your invitation", body="You're connected. Open your shared space.")
     elif kind.startswith("sharing."):
@@ -155,5 +163,5 @@ def display_copy(event, user, *, aliases=None):
         actor_name=name(actor_user, "Someone", aliases=aliases) if actor_user else None,
         actor_real_name=name(actor_user, "Someone") if actor_user else None)
     result["title"] = text(result["title"], 120, strip_markup=False)
-    result["body"] = text(result["body"])
+    result["body"] = text(result["body"], strip_markup=kind != "nickname.changed")
     return result
