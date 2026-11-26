@@ -1,15 +1,17 @@
 """Moment candidates supply content features to the independent couple scorer."""
 from django.conf import settings
-from django.db.models import CharField, Exists, OuterRef, Prefetch, Subquery, Value
+from django.db.models import CharField, Count, Exists, OuterRef, Prefetch, Q, Subquery, Value
 from django.db.models.functions import Cast, Concat, MD5
 import hashlib
 import json
+from itertools import islice
 
 from authentication.models import UserInterestModel
-from social.models import CoupleMembershipModel, CoupleMomentViewModel, CoupleFaveModel
+from social.models import CoupleMembershipModel, CoupleMomentViewModel, CoupleFaveModel, CouplePrivacyConsentModel
 from social.services.couple_scorer import DEFAULT_WEIGHTS, compose, interest_set, rank_score, normalize
 from social.services.fave_service import available_couples
 from social.services.moment_service import eligible_moments
+from social.services.discovery_identity import public_values, matches_public
 
 
 def discovery_moments(user, as_of):
@@ -37,7 +39,38 @@ def discovery_context(user):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False).encode()).hexdigest()
 
 
-def ranked_couples(user, section, as_of, faved_ids, scope="local", with_context=False):
+def matching_ids(queryset, query="", interest_label=None, limit=None):
+    """Filter before the candidate cap, using bounded, consent-checked batches.
+
+    Unicode matching is identical on SQLite/PostgreSQL. No private match enters
+    the response/session. A no-match search can scan the eligible directory, but
+    never loads all profiles into memory or issues per-couple queries.
+    """
+    if not query and interest_label is None:
+        rows = queryset.values_list("pk", flat=True)
+        return list(rows[:limit] if limit is not None else rows)
+    # Cheap database prefilter removes unpublished proposals before fingerprint work.
+    # It is not the authority: current members and exact values are checked below.
+    section = Q(privacy_proposal__sections__icontains="interests")
+    if interest_label is None:
+        section |= Q(privacy_proposal__sections__icontains="identity")
+    consents = CouplePrivacyConsentModel.objects.filter(couple_id=OuterRef("pk"),
+        proposal_version=OuterRef("privacy_proposal_version")).order_by().values("couple_id").annotate(total=Count("id"))
+    queryset = queryset.filter(section).alias(public_consent_count=Subquery(consents.values("total")[:1])).filter(public_consent_count=2)
+    ids = queryset.values_list("pk", flat=True).iterator(chunk_size=200)
+    matched = []
+    while batch := list(islice(ids, 200)):
+        public = public_values(batch)
+        for pk in batch:
+            if matches_public(public.get(pk, {}), query, interest_label):
+                matched.append(pk)
+                if limit is not None and len(matched) >= limit:
+                    return matched
+    return matched
+
+
+def ranked_couples(user, section, as_of, faved_ids, scope="local", with_context=False,
+                   query="", interest_label=None):
     moments = discovery_moments(user, as_of)
     latest = moments.filter(couple_id=OuterRef("pk")).order_by("-created_at", "-id")
     views = CoupleMomentViewModel.objects.filter(moment_id=OuterRef("pk"), viewer=user)
@@ -45,8 +78,8 @@ def ranked_couples(user, section, as_of, faved_ids, scope="local", with_context=
     candidates = available_couples(user).filter(pk__in=moments.values("couple_id")).annotate(
         latest_at=Subquery(latest.values("created_at")[:1]), has_unopened=Exists(unopened))
     if section == "faves":
-        ids = list(candidates.filter(pk__in=faved_ids).order_by(
-            "-has_unopened", "-latest_at", "pk").values_list("pk", flat=True))
+        ids = matching_ids(candidates.filter(pk__in=faved_ids).order_by(
+            "-has_unopened", "-latest_at", "pk"), query, interest_label)
         return (ids, {}, "saved") if with_context else ids
 
     # Sampling is per distinct couple, independent of upload volume or popularity.
@@ -67,7 +100,7 @@ def ranked_couples(user, section, as_of, faved_ids, scope="local", with_context=
     for tier in tiers:
         if len(chosen) >= limit:
             break
-        chosen.extend(tier.order_by("sample_key", "pk").values_list("pk", flat=True)[:limit-len(chosen)])
+        chosen.extend(matching_ids(tier.order_by("sample_key", "pk"), query, interest_label, limit-len(chosen)))
     candidates = list(candidates.filter(pk__in=chosen).prefetch_related(
         "memberships__user",
         Prefetch("memberships__user__user_interests", queryset=interests, to_attr="discovery_interests")))

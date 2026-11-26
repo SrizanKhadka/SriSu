@@ -151,7 +151,15 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
     @action(detail=True, methods=["get"], url_path="creator-photo")
     def creator_photo(self, request, pk=None):
         from social.api.couple_profile_views import photo_response
-        return photo_response(self.get_object().created_by.profile_photo)
+        moment = self.get_object()
+        if not any(m.user_id == request.user.pk and m.pk in moment.audience_membership_ids
+                   for m in moment.couple.memberships.all()):
+            from social.services.discovery_identity import identities
+            identity = identities(request, [moment.couple_id]).get(moment.couple_id, {})
+            if not any(person["id"] == moment.created_by_id for person in identity.get("members", [])):
+                from django.http import Http404
+                raise Http404
+        return photo_response(moment.created_by.profile_photo)
 
     @action(detail=True, methods=["patch"])
     def caption(self, request, pk=None):

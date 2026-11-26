@@ -216,6 +216,16 @@ def update_section(couple, members, user, section, data):
     elif section == "sharing":
         raw = raw_sections(couple, members, user)
         action = data["action"]
+        if action == "revoke":
+            # The caller holds the couple lock, shared with publication. Withdraw
+            # every previous public Moment, including expired/archive rows. A new
+            # approval cannot silently publish those rows again.
+            from django.db.models import F
+            from social.models import CoupleMomentModel
+            from social.services.public_follow_service import revoke_couple_follows
+            CoupleMomentModel.objects.filter(couple=couple, visibility="public").update(
+                visibility="private", revision=F("revision") + 1)
+            revoke_couple_follows(couple)
         newly_approved = False
         if action == "approve":
             proposal = couple.privacy_proposal or {}

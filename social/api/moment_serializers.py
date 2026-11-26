@@ -89,6 +89,23 @@ class CoupleMomentSerializer(serializers.ModelSerializer):
         return timezone.now().isoformat()
 
     def get_creator(self, obj):
+        request = self.context["request"]
+        if not any(m.user_id == request.user.pk and m.pk in obj.audience_membership_ids
+                   for m in obj.couple.memberships.all()):
+            from social.services.discovery_identity import identities
+            cache = self.context.get("public_moment_identities")
+            if cache is None:
+                # A paginated list may contain many couples. Resolve approval once
+                # for the page, not one identity query group per Moment.
+                rows = self.parent.instance if isinstance(self.parent, serializers.ListSerializer) else [obj]
+                cache = identities(request, {row.couple_id for row in rows})
+                self.context["public_moment_identities"] = cache
+            if obj.couple_id not in cache:
+                cache.update(identities(request, [obj.couple_id]))
+            person = next((p for p in cache.get(obj.couple_id, {}).get("members", [])
+                           if p["id"] == obj.created_by_id), None)
+            return {"id": obj.created_by_id, "name": person["name"] if person else "A SriSu member",
+                    "photo_url": person.get("photo_url") if person else None}
         return {"id": obj.created_by_id, "name": obj.created_by.full_name or obj.created_by.username or "",
             "photo_url": self.context["request"].build_absolute_uri(
                 f"/api/social/couple-moments/{obj.pk}/creator-photo/") if obj.created_by.profile_photo else None}

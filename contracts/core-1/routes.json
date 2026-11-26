@@ -370,7 +370,9 @@
       "query": [
         "section",
         "scope",
-        "page_size"
+        "page_size",
+        "q",
+        "interest_id"
       ],
       "public": false
     },
@@ -379,7 +381,9 @@
       "path": "/api/social/couple-feed/visible/",
       "query": [
         "couples",
-        "section"
+        "section",
+        "q",
+        "interest_id"
       ],
       "public": false
     },
@@ -547,6 +551,33 @@
       "method": "PUT",
       "path": "/api/social/settings/partner-nickname/",
       "query": [],
+      "public": false
+    },
+    "explore-follow-state": {
+      "method": "GET",
+      "path": "/api/social/couple-follows/{id}/",
+      "query": [],
+      "public": false
+    },
+    "explore-follow-add": {
+      "method": "PUT",
+      "path": "/api/social/couple-follows/{id}/",
+      "query": [],
+      "public": false
+    },
+    "explore-follow-remove": {
+      "method": "DELETE",
+      "path": "/api/social/couple-follows/{id}/",
+      "query": [],
+      "public": false
+    },
+    "explore-followers": {
+      "method": "GET",
+      "path": "/api/social/couple-followers/",
+      "query": [
+        "page_size",
+        "cursor"
+      ],
       "public": false
     }
   },

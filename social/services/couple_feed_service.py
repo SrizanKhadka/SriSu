@@ -4,7 +4,7 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import caches
-from django.db.models import Count, Exists, OuterRef, Subquery
+from django.db.models import Count, Exists, OuterRef, Prefetch, Subquery
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -12,10 +12,10 @@ from redis.exceptions import RedisError
 
 from social.api.couple_pagination import SessionChanged, SessionExpired
 from social.api.couple_serializers import MomentPreviewSerializer
-from social.models import CoupleModel, CoupleMomentViewModel, CoupleFaveModel
+from social.models import CoupleModel, CoupleMomentPhotoModel, CoupleMomentViewModel, CoupleFaveModel
 from social.repository.couple_repository import discovery_context, discovery_moments, ranked_couples
 from social.services.fave_service import fave_state, fave_version
-from social.services.discovery_identity import identities
+from social.services.discovery_identity import identities, matches_public
 
 logger = logging.getLogger(__name__)
 CACHE_ERRORS = (RedisError, OSError)
@@ -25,15 +25,15 @@ def session_cache():
     return caches["couple_feed"]
 
 
-def start_session(user, section, size, scope="local"):
+def start_session(user, section, size, scope="local", query="", interest_id=None, interest_label=None):
     as_of = timezone.now()
     faved_ids, fingerprint = fave_state(user)
     context = discovery_context(user) if section == "global" else None
-    ids, reasons, coverage = ranked_couples(user, section, as_of, faved_ids, scope, with_context=True)
+    ids, reasons, coverage = ranked_couples(user, section, as_of, faved_ids, scope, with_context=True, query=query, interest_label=interest_label)
     state = {"user": user.pk, "section": section, "content": "moments", "size": size,
              "as_of": as_of.isoformat(), "fingerprint": fingerprint, "ids": ids,
              "scope": scope, "reasons": reasons, "coverage": coverage,
-             "discovery_context": context,
+             "discovery_context": context, "q": query, "interest_id": interest_id, "interest_label": interest_label,
              "ranking_version": settings.COUPLE_FEED_RANKING_VERSION}
     session_id = uuid.uuid4().hex
     try:
@@ -54,7 +54,7 @@ def load_session(user, session_id):
     return state
 
 
-def cards(request, ids, as_of, faved_ids, section):
+def cards(request, ids, as_of, faved_ids, section, query="", interest_label=None):
     moments = discovery_moments(request.user, as_of)
     if section == "faves":
         moments = moments.filter(couple_id__in=faved_ids)
@@ -64,25 +64,36 @@ def cards(request, ids, as_of, faved_ids, section):
     unopened = per_couple.alias(opened=Exists(views)).filter(opened=False)
     summaries = list(CoupleModel.objects.filter(pk__in=ids).annotate(
         preview_id=Subquery(per_couple.order_by("-created_at", "-id").values("pk")[:1]),
+        second_id=Subquery(per_couple.order_by("-created_at", "-id").values("pk")[1:2]),
+        third_id=Subquery(per_couple.order_by("-created_at", "-id").values("pk")[2:3]),
         active_count=Subquery(counts.values("total")[:1]), has_unopened=Exists(unopened),
     ).filter(preview_id__isnull=False))
     # Rebuild the eligibility query at hydration time, rather than trusting cached IDs.
     previews = {moment.pk: moment for moment in discovery_moments(request.user, as_of).filter(
-        pk__in=[couple.preview_id for couple in summaries]).prefetch_related("photos")}
+        pk__in=[pk for couple in summaries for pk in (couple.preview_id, couple.second_id, couple.third_id) if pk]
+    ).prefetch_related(Prefetch("photos", queryset=CoupleMomentPhotoModel.objects.select_related("video").order_by("order", "id")))}
     result = {}
     public = identities(request, [couple.pk for couple in summaries])
     saved = set(CoupleFaveModel.objects.filter(user=request.user, couple_id__in=ids).values_list("couple_id", flat=True))
     for couple in summaries:
-        preview = previews.get(couple.preview_id)
-        if preview is None or preview.expires_at <= timezone.now():
+        identity = public.get(couple.pk, {"id": couple.pk})
+        if not matches_public(identity, query, interest_label):
             continue
-        data = MomentPreviewSerializer(preview, context={"request": request}).data
-        if preview.expires_at <= timezone.now():
+        values = []
+        for pk in (couple.preview_id, couple.second_id, couple.third_id):
+            preview = previews.get(pk)
+            if preview is not None and preview.expires_at > timezone.now():
+                data = MomentPreviewSerializer(preview, context={"request": request}).data
+                if preview.expires_at > timezone.now():
+                    values.append(data)
+        if not values:
             continue
-        result[couple.pk] = {"couple": public.get(couple.pk, {"id": couple.pk}), "is_faved": couple.pk in saved,
+        result[couple.pk] = {"couple": identity, "is_faved": couple.pk in saved,
             "has_unopened": couple.has_unopened, "active_moment_count": couple.active_count,
-            "preview": data, "moments_url": request.build_absolute_uri(reverse("couple-moment-sequence"))
+            "preview": values[0], "previews": values,
+            "moments_url": request.build_absolute_uri(reverse("couple-moment-sequence"))
             + f"?couple={couple.pk}&mode=unopened"}
+
     return result
 
 
@@ -96,7 +107,8 @@ def serve_page(request, state, position):
     results = []
     while position < len(ids) and len(results) < size:
         batch = ids[position:position + size - len(results)]
-        available = cards(request, batch, parse_datetime(state["as_of"]), faved_ids, state["section"])
+        available = cards(request, batch, parse_datetime(state["as_of"]), faved_ids, state["section"],
+                          state.get("q", ""), state.get("interest_label"))
         results.extend({**available[pk], "reason": state.get("reasons", {}).get(str(pk))}
                        for pk in batch if pk in available)
         position += len(batch)
@@ -105,8 +117,25 @@ def serve_page(request, state, position):
         raise SessionChanged()
     # Earlier cards may have become unavailable while later batches were scanned.
     # Filter once more at delivery; a short page is preferable to stale authorization.
-    live_ids = set(discovery_moments(request.user, parse_datetime(state["as_of"])).filter(
-        pk__in=[card["preview"]["id"] for card in results]).values_list("pk", flat=True))
-    results = [card for card in results if card["preview"]["id"] in live_ids
-               and parse_datetime(card["preview"]["expires_at"]) > timezone.now()]
+    results = revalidate_cards(request, results, parse_datetime(state["as_of"]),
+                               state.get("q", ""), state.get("interest_label"))
+    if fave_state(request.user)[1] != fingerprint:
+        raise SessionChanged()
     return results, position, CoupleFaveModel.objects.filter(user=request.user).exists()
+
+
+def revalidate_cards(request, results, as_of, query="", interest_label=None):
+    """Withdraw each stale preview/identity, retaining a card with another eligible Moment."""
+    public = identities(request, [card["couple"]["id"] for card in results])
+    live_ids = set(discovery_moments(request.user, as_of).filter(
+        pk__in=[preview["id"] for card in results for preview in card["previews"]]).values_list("pk", flat=True))
+    valid = []
+    for card in results:
+        identity = public.get(card["couple"]["id"], {"id": card["couple"]["id"]})
+        if not matches_public(identity, query, interest_label):
+            continue
+        previews = [preview for preview in card["previews"] if preview["id"] in live_ids
+                    and parse_datetime(preview["expires_at"]) > timezone.now()]
+        if previews:
+            valid.append({**card, "couple": identity, "preview": previews[0], "previews": previews})
+    return valid

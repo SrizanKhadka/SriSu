@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--fixture', type=Path, required=True)
     parser.add_argument('--port', type=int, required=True)
     parser.add_argument('--moment-video', action='store_true', help='Seed synthetic video and run its isolated worker')
+    parser.add_argument('--explore', action='store_true', help='Seed synthetic public discovery, private Faves and follow/privacy HTTP fixtures')
     args = parser.parse_args()
     # A test endpoint must never contact an external service.
     original_connect = socket.socket.connect
@@ -94,6 +95,9 @@ def main():
                     pass  # SQLite contention retries; this disposable helper has no external logging.
                 time.sleep(.25)
         threading.Thread(target=worker, daemon=True).start()
+    if args.explore:
+        from explore_integration_fixture import seed_explore
+        seed_explore(payload, first, second, visitor, couple)
     descriptor = os.open(args.fixture, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, 'w') as file: json.dump(payload, file)
     from srisu.asgi import application
