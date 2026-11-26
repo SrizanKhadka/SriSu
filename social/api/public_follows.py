@@ -20,7 +20,7 @@ class PublicFollowInput(StrictSerializer):
     share_identity = serializers.BooleanField()
 
     def validate_share_identity(self, value):
-        if value is not True:
+        if value is not True or self.initial_data.get('share_identity') is not True:
             raise serializers.ValidationError('Confirm sharing your public identity with this couple to follow.')
         return value
 

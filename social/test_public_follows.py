@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from threading import Barrier, Event
 from urllib.parse import urlsplit
+from uuid import uuid4
 from unittest.mock import patch
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -15,7 +16,7 @@ from rest_framework.exceptions import PermissionDenied
 from social.test_couple_feed import FeedFixtures
 from social.models import (CouplePublicFollow, CoupleFaveModel, CouplePrivacyConsentModel,
     CoupleMomentPhotoModel, CoupleMomentModel, SingleConnectionModel, MomentVideo, MomentVideoFile)
-from social.services.couple_profile_sections import audience, digest, profile_for, update_section
+from social.services.couple_profile_sections import audience, digest, profile_for, update_section, ProfileConflict
 from social.services.discovery_identity import identity_values
 from social.services.public_follow_service import follow, FollowConflict
 from social.services.relationship_service import end_connection
@@ -102,6 +103,17 @@ class PublicFollowTests(FollowFixtures, APITestCase):
         self.approve(self.source); self.opt_in()
         self.assertEqual(self.client.put(f'/api/social/couple-follows/{self.source.pk}/', {'share_identity': True}, format='json').status_code, 403)
 
+    def test_follow_rejects_coerced_truthy_values_without_changing_state(self):
+        self.approve(self.source)
+        self.client.force_authenticate(self.actor)
+        for value in (1, 1.0, 'true', 'True', 'yes', 'on', '1', None, [], {}):
+            with self.subTest(value=value):
+                response = self.client.put(self.follow_url, {'share_identity': value}, format='json')
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertFalse(CouplePublicFollow.objects.exists())
+                self.assertEqual(self.client.get(self.follow_url).data['data']['version'], 0)
+        self.assertTrue(self.opt_in()['is_following'])
+
     def test_private_target_cannot_be_followed_by_known_id(self):
         self.approve(self.source)
         self.revoke(self.target, self.recipient)
@@ -153,6 +165,34 @@ class PublicFollowTests(FollowFixtures, APITestCase):
         self.source.couple_connection.save(update_fields=['connection_status'])
         self.assertEqual(self.incoming()['results'], [])
 
+    def test_target_identity_change_hides_incoming_rows_until_approval_is_current(self):
+        self.approve(self.source); self.opt_in()
+        self.recipient.full_name = 'Changed public identity'
+        self.recipient.save(update_fields=['full_name'])
+        self.client.force_authenticate(self.actor)
+        state = self.client.get(self.follow_url).data['data']
+        self.assertFalse(state['is_following'])
+        self.assertEqual(state['reason'], 'unavailable')
+        self.assertEqual(self.incoming()['results'], [])
+        # This is still the same intended recipient audience. Explicit Go private
+        # permanently deletes follows; a profile edit only invalidates projection.
+        self.approve(self.target)
+        self.assertEqual(len(self.incoming()['results']), 1)
+        self.client.force_authenticate(self.actor)
+        self.assertTrue(self.client.get(self.follow_url).data['data']['is_following'])
+
+    def test_profile_unexpected_database_errors_are_not_conflicts(self):
+        for code in (None, '40P01'):
+            failure = OperationalError('synthetic')
+            if code:
+                class DatabaseCause(Exception):
+                    sqlstate = code
+                failure.__cause__ = DatabaseCause()
+            with self.subTest(code=code):
+                with patch('social.services.couple_profile_sections.UserModel.objects.select_for_update', side_effect=failure):
+                    with transaction.atomic(), self.assertRaises(OperationalError):
+                        profile_for(self.actor, self.source.pk, owner=True, lock=True)
+
     def test_go_private_permanently_removes_inbound_and_outbound_follows_not_faves(self):
         self.approve(self.source); self.approve(self.target); self.opt_in()
         self.client.force_authenticate(self.recipient)
@@ -164,6 +204,19 @@ class PublicFollowTests(FollowFixtures, APITestCase):
         self.assertTrue(CoupleFaveModel.objects.exists())
         self.approve(self.target)
         self.assertEqual(self.incoming()['results'], [])
+
+    def test_incoming_list_query_count_is_bounded_across_distinct_source_couples(self):
+        self.approve(self.source); self.opt_in()
+        with CaptureQueriesContext(connection) as one:
+            self.assertEqual(len(self.incoming(page_size=50)['results']), 1)
+        for _ in range(19):
+            source = self.couple()
+            self.approve(source)
+            follow(source.members.order_by('pk').first(), self.target.pk)
+        with CaptureQueriesContext(connection) as many:
+            self.assertEqual(len(self.incoming(page_size=50)['results']), 20)
+        self.assertLessEqual(len(many), len(one) + 2,
+            f'Incoming identities must stay batched: one={len(one)}, twenty={len(many)}')
 
     def test_follower_pagination_is_requester_bound_and_revocation_filtered(self):
         self.approve(self.source); self.opt_in()
@@ -345,12 +398,17 @@ class PublicFollowConcurrencyTests(FollowFixtures, APITransactionTestCase):
                 with transaction.atomic():
                     target, members, _ = profile_for(self.recipient, self.target.pk, owner=True, lock=True)
                     update_section(target, members, self.recipient, 'sharing', {'action': 'revoke', 'expected_revision': '0'*64})
+            except ProfileConflict:
+                return 'retry'
             finally:
                 connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as pool:
             futures = [pool.submit(opt_in), pool.submit(withdraw)]
-            for future in futures:
-                future.result(timeout=15)
+            outcomes = [future.result(timeout=15) for future in futures]
+        if 'retry' in outcomes:
+            with transaction.atomic():
+                target, members, _ = profile_for(self.recipient, self.target.pk, owner=True, lock=True)
+                update_section(target, members, self.recipient, 'sharing', {'action': 'revoke', 'expected_revision': '0'*64})
         self.assertFalse(CouplePublicFollow.objects.exists())
 
 
@@ -365,7 +423,7 @@ class PublicFollowConcurrencyTests(FollowFixtures, APITransactionTestCase):
             try:
                 def observe(execute, sql, params, many, context):
                     result = execute(sql, params, many, context)
-                    if 'FROM "authentication_usermodel"' in sql and 'FOR UPDATE' in sql and not users_locked.is_set():
+                    if 'FROM "authentication_usermodel"' in sql and ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql) and not users_locked.is_set():
                         users_locked.set()
                         self.assertTrue(follow_user_requested.wait(timeout=10))
                     return result
@@ -380,7 +438,7 @@ class PublicFollowConcurrencyTests(FollowFixtures, APITransactionTestCase):
             connections.close_all()
             try:
                 def observe(execute, sql, params, many, context):
-                    if 'FROM "authentication_usermodel"' in sql and 'FOR UPDATE' in sql:
+                    if 'FROM "authentication_usermodel"' in sql and ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql):
                         follow_user_requested.set()
                     return execute(sql, params, many, context)
                 with connections['default'].cursor() as cursor:
@@ -457,7 +515,7 @@ class PublicFollowConcurrencyTests(FollowFixtures, APITransactionTestCase):
     @skipUnlessDBFeature('has_select_for_update_nowait')
     def test_profile_interest_writer_and_follow_do_not_invert_locks(self):
         self.approve(self.source)
-        couple_locked, follow_user_locked = Event(), Event()
+        couple_locked, follow_user_requested = Event(), Event()
 
         def edit_interests():
             connections.close_all()
@@ -469,7 +527,7 @@ class PublicFollowConcurrencyTests(FollowFixtures, APITransactionTestCase):
                     couple, members, _ = profile_for(self.actor, self.source.pk, owner=True, lock=True)
                     revision = revisions(couple, raw_sections(couple, members, self.actor), self.actor)['interests']
                     couple_locked.set()
-                    self.assertTrue(follow_user_locked.wait(timeout=10))
+                    self.assertTrue(follow_user_requested.wait(timeout=10))
                     update_section(couple, members, self.actor, 'interests',
                         {'expected_revision': revision, 'names': ['Walking']})
             finally:
@@ -479,10 +537,9 @@ class PublicFollowConcurrencyTests(FollowFixtures, APITransactionTestCase):
             connections.close_all()
             try:
                 def observe(execute, sql, params, many, context):
-                    result = execute(sql, params, many, context)
-                    if 'FROM "authentication_usermodel"' in sql and 'FOR UPDATE' in sql:
-                        follow_user_locked.set()
-                    return result
+                    if 'FROM "authentication_usermodel"' in sql and ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql):
+                        follow_user_requested.set()
+                    return execute(sql, params, many, context)
                 with connections['default'].cursor() as cursor:
                     cursor.execute("SET lock_timeout = '5s'")
                 with connections['default'].execute_wrapper(observe):
@@ -498,10 +555,330 @@ class PublicFollowConcurrencyTests(FollowFixtures, APITransactionTestCase):
             edited = pool.submit(edit_interests)
             self.assertTrue(couple_locked.wait(timeout=10))
             followed = pool.submit(opt_in)
-            self.assertEqual(followed.result(timeout=15), 'retry')
+            self.assertEqual(followed.result(timeout=15), 'followed')
             edited.result(timeout=15)
         from authentication.models import UserInterestModel
         self.assertEqual(list(UserInterestModel.objects.filter(user=self.actor, removed=False).values_list('name', flat=True)), ['Walking'])
-        self.assertFalse(CouplePublicFollow.objects.exists())
-        follow(self.actor, self.target.pk)
         self.assertEqual(CouplePublicFollow.objects.count(), 1)
+
+
+class PublicProfilePublicationConcurrencyTests(FollowFixtures, APITransactionTestCase):
+    def prepared_publication(self):
+        from social.services.moment_publication import create_draft, upload_photo
+        draft, _ = create_draft(self.actor, uuid4(), self.source.pk)
+        photo_id = uuid4()
+        draft = upload_photo(self.actor, draft.pk, photo_id, self.photo())
+        return draft.pk, {'expected_revision': draft.revision, 'caption': 'Synthetic',
+            'visibility': 'public', 'photo_ids': [photo_id]}
+
+    def withdraw(self):
+        with transaction.atomic():
+            couple, members, _ = profile_for(self.actor, self.source.pk, owner=True, lock=True)
+            update_section(couple, members, self.actor, 'sharing', {'action': 'revoke', 'expected_revision': '0'*64})
+
+    @skipUnlessDBFeature('has_select_for_update_nowait')
+    def test_publishing_first_then_go_private_conflicts_and_retry_withdraws_publication(self):
+        from social.services.moment_publication import publish
+        draft_id, payload = self.prepared_publication()
+        connection_locked, profile_connection_requested = Event(), Event()
+
+        def publishing():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    result = execute(sql, params, many, context)
+                    if 'FROM "social_coupleconnectionmodel"' in sql and 'FOR UPDATE' in sql and not connection_locked.is_set():
+                        connection_locked.set()
+                        self.assertTrue(profile_connection_requested.wait(timeout=10))
+                    return result
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    return publish(self.actor, draft_id, payload)[0].pk
+            finally:
+                connections.close_all()
+
+        def withdrawing():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    if 'FROM "social_coupleconnectionmodel"' in sql and 'FOR UPDATE' in sql:
+                        profile_connection_requested.set()
+                    return execute(sql, params, many, context)
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    try:
+                        self.withdraw()
+                    except ProfileConflict:
+                        return 'retry'
+                    return 'withdrawn'
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            published = pool.submit(publishing)
+            self.assertTrue(connection_locked.wait(timeout=10))
+            withdrawn = pool.submit(withdrawing)
+            moment_id = published.result(timeout=15)
+            self.assertEqual(withdrawn.result(timeout=15), 'retry')
+        self.assertEqual(CoupleMomentModel.objects.get(pk=moment_id).visibility, 'public')
+        self.withdraw()
+        self.assertEqual(CoupleMomentModel.objects.get(pk=moment_id).visibility, 'private')
+        self.assertFalse(CouplePublicFollow.objects.filter(source_membership__couple=self.source).exists())
+
+    @skipUnlessDBFeature('has_select_for_update_nowait')
+    def test_go_private_first_then_new_explicit_publication_is_separate_intent(self):
+        from social.services.moment_publication import publish
+        draft_id, payload = self.prepared_publication()
+        previous = self.moment(self.source)
+        profile_locked, publication_requested = Event(), Event()
+
+        def withdrawing():
+            connections.close_all()
+            try:
+                with transaction.atomic():
+                    couple, members, _ = profile_for(self.actor, self.source.pk, owner=True, lock=True)
+                    profile_locked.set()
+                    self.assertTrue(publication_requested.wait(timeout=10))
+                    update_section(couple, members, self.actor, 'sharing', {'action': 'revoke', 'expected_revision': '0'*64})
+            finally:
+                connections.close_all()
+
+        def publishing():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    if 'FROM "social_coupleconnectionmodel"' in sql and 'FOR UPDATE' in sql:
+                        publication_requested.set()
+                    return execute(sql, params, many, context)
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    return publish(self.actor, draft_id, payload)[0].pk
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            withdrawn = pool.submit(withdrawing)
+            self.assertTrue(profile_locked.wait(timeout=10))
+            published = pool.submit(publishing)
+            withdrawn.result(timeout=15)
+            new_id = published.result(timeout=15)
+        previous.refresh_from_db()
+        self.assertEqual(previous.visibility, 'private')
+        self.assertEqual(CoupleMomentModel.objects.get(pk=new_id).visibility, 'public')
+
+    @skipUnlessDBFeature('has_select_for_update_nowait')
+    def test_disconnect_first_profile_conflicts_then_retry_cannot_mutate_ended_couple(self):
+        from django.http import Http404
+        users_locked, profile_requested = Event(), Event()
+
+        def disconnecting():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    result = execute(sql, params, many, context)
+                    if 'FROM "authentication_usermodel"' in sql and ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql) and not users_locked.is_set():
+                        users_locked.set()
+                        self.assertTrue(profile_requested.wait(timeout=10))
+                    return result
+                with connections['default'].execute_wrapper(observe):
+                    end_connection(connection_id=self.source.couple_connection_id, actor=self.actor)
+            finally:
+                connections.close_all()
+
+        def withdrawing():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    if 'FROM "authentication_usermodel"' in sql and ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql):
+                        # Keep disconnect holding its barriers until NOWAIT returns.
+                        try:
+                            return execute(sql, params, many, context)
+                        finally:
+                            profile_requested.set()
+                    return execute(sql, params, many, context)
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    try:
+                        self.withdraw()
+                    except ProfileConflict:
+                        return 'retry'
+                    return 'withdrawn'
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            ended = pool.submit(disconnecting)
+            self.assertTrue(users_locked.wait(timeout=10))
+            withdrawn = pool.submit(withdrawing)
+            self.assertEqual(withdrawn.result(timeout=15), 'retry')
+            ended.result(timeout=15)
+        with self.assertRaises(Http404):
+            self.withdraw()
+
+    @skipUnlessDBFeature('has_select_for_update_nowait')
+    def test_profile_first_disconnect_waits_without_notification_foreign_key_deadlock(self):
+        profile_locked, disconnect_requested = Event(), Event()
+
+        def updating_profile():
+            connections.close_all()
+            try:
+                from social.services.couple_profile_sections import revisions, raw_sections
+                with transaction.atomic():
+                    couple, members, _ = profile_for(self.spouse, self.source.pk, owner=True, lock=True)
+                    revision = revisions(couple, raw_sections(couple, members, self.spouse), self.spouse)['sharing']
+                    profile_locked.set()
+                    self.assertTrue(disconnect_requested.wait(timeout=10))
+                    # A proposal writes notification FKs to the other partner,
+                    # not only the profile actor (the higher user ID here).
+                    update_section(couple, members, self.spouse, 'sharing', {
+                        'action': 'propose', 'expected_revision': revision, 'sections': ['identity']})
+            finally:
+                connections.close_all()
+
+        def disconnecting():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    if 'FROM "authentication_usermodel"' in sql and ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql):
+                        disconnect_requested.set()
+                    return execute(sql, params, many, context)
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    end_connection(connection_id=self.source.couple_connection_id, actor=self.actor)
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            updated = pool.submit(updating_profile)
+            self.assertTrue(profile_locked.wait(timeout=10))
+            ended = pool.submit(disconnecting)
+            updated.result(timeout=15)
+            ended.result(timeout=15)
+        self.source.couple_connection.refresh_from_db()
+        self.assertEqual(self.source.couple_connection.connection_status, CoupleConnectionStatus.BREAKUP)
+
+    @skipUnlessDBFeature('has_select_for_update_nowait')
+    def test_legacy_member_view_then_go_private_retries_without_viewer_fk_deadlock(self):
+        moment = self.moment(self.source)
+        moment_locked, profile_connection_requested = Event(), Event()
+
+        def viewing():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    result = execute(sql, params, many, context)
+                    if 'FROM "social_couplemomentmodel"' in sql and 'FOR UPDATE' in sql and not moment_locked.is_set():
+                        moment_locked.set()
+                        self.assertTrue(profile_connection_requested.wait(timeout=10))
+                    return result
+                client = APIClient(); client.force_authenticate(self.spouse)
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    return client.get(f'/api/social/couple-moments/{moment.pk}/').status_code
+            finally:
+                connections.close_all()
+
+        def withdrawing():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    if 'FROM "social_coupleconnectionmodel"' in sql and 'FOR UPDATE' in sql:
+                        profile_connection_requested.set()
+                    return execute(sql, params, many, context)
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    try:
+                        self.withdraw()
+                    except ProfileConflict:
+                        return 'retry'
+                    return 'withdrawn'
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            viewed = pool.submit(viewing)
+            self.assertTrue(moment_locked.wait(timeout=10))
+            withdrawn = pool.submit(withdrawing)
+            self.assertEqual(viewed.result(timeout=15), 200)
+            self.assertEqual(withdrawn.result(timeout=15), 'retry')
+        self.withdraw()
+        moment.refresh_from_db()
+        self.assertEqual(moment.visibility, 'private')
+
+    def write_while_disconnecting(self, writer, patch_path):
+        from social.services.moment_service import lock_couple
+        parent_locked, participants_locked = Event(), Event()
+
+        def writing():
+            connections.close_all()
+            try:
+                def hold_parent(couple_id):
+                    result = lock_couple(couple_id)
+                    parent_locked.set()
+                    self.assertTrue(participants_locked.wait(timeout=10))
+                    return result
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with patch(patch_path, side_effect=hold_parent):
+                    return writer()
+            finally:
+                connections.close_all()
+
+        def disconnecting():
+            connections.close_all()
+            try:
+                def observe(execute, sql, params, many, context):
+                    result = execute(sql, params, many, context)
+                    if 'FROM "authentication_usermodel"' in sql and ('FOR UPDATE' in sql or 'FOR NO KEY UPDATE' in sql):
+                        participants_locked.set()
+                    return result
+                with connections['default'].cursor() as cursor:
+                    cursor.execute("SET lock_timeout = '5s'")
+                with connections['default'].execute_wrapper(observe):
+                    end_connection(connection_id=self.source.couple_connection_id, actor=self.actor)
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            written = pool.submit(writing)
+            self.assertTrue(parent_locked.wait(timeout=10))
+            ended = pool.submit(disconnecting)
+            result = written.result(timeout=15)
+            ended.result(timeout=15)
+        self.source.couple_connection.refresh_from_db()
+        self.assertEqual(self.source.couple_connection.connection_status, CoupleConnectionStatus.BREAKUP)
+        return result
+
+    @skipUnlessDBFeature('has_select_for_no_key_update')
+    def test_publication_finishes_before_waiting_disconnect_without_user_fk_deadlock(self):
+        from social.services.moment_publication import publish
+        draft_id, payload = self.prepared_publication()
+        moment_id = self.write_while_disconnecting(
+            lambda: publish(self.actor, draft_id, payload)[0].pk,
+            'social.services.moment_publication.lock_couple')
+        self.assertTrue(CoupleMomentModel.objects.filter(pk=moment_id).exists())
+        self.client.force_authenticate(self.viewer)
+        self.assertEqual(self.client.get(f'/api/social/couple-moments/{moment_id}/?record_view=false').status_code, 404)
+
+    @skipUnlessDBFeature('has_select_for_no_key_update')
+    def test_appreciation_finishes_before_waiting_disconnect_without_recipient_fk_deadlock(self):
+        moment = self.moment(self.source)
+        def write():
+            client = APIClient(); client.force_authenticate(self.viewer)
+            response = client.post(f'/api/social/couple-moments/{moment.pk}/notes/', {'message': 'Synthetic appreciation'}, format='json')
+            self.assertEqual(response.status_code, 201, response.data)
+            return response.data['data']['id']
+        note_id = self.write_while_disconnecting(write, 'social.api.moment_views.lock_couple')
+        from social.models import CoupleMomentNoteModel
+        self.assertTrue(CoupleMomentNoteModel.objects.filter(pk=note_id).exists())
+        self.client.force_authenticate(self.viewer)
+        self.assertEqual(self.client.post(f'/api/social/couple-moments/{moment.pk}/notes/', {'message': 'After disconnect'}, format='json').status_code, 404)
+        self.client.force_authenticate(self.actor)
+        self.assertEqual(self.client.get(f'/api/social/moment-notes/{note_id}/').status_code, 404)

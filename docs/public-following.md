@@ -119,9 +119,9 @@ integration; those need their own verification.
 
 Follow acquires the acting user's row before reading their current membership,
 matching relationship lifecycle's user-before-couple order. It then acquires both
-source and target couple rows in ID order with PostgreSQL `NOWAIT`. An in-progress
-profile interest write can hold a couple before requesting that user's row; the
-nonblocking couple acquisition avoids that inverse wait as well. Only PostgreSQL
+source and target couple rows in ID order with PostgreSQL `NOWAIT`. The
+nonblocking couple acquisition also avoids waiting for another couple writer
+that could need this user's foreign-key lock. Only PostgreSQL
 `lock_not_available` (`55P03`) becomes the existing follow-conflict 409. Other
 database errors remain errors, and the transaction rolls back before any retry or
 snapshot read. SQLite does not establish this locking behavior.
@@ -154,3 +154,80 @@ withdrawal. Its sanitized report is
 `/tmp/srisu-explore-http-locking-report.json`; the server, temporary media and
 credentials were removed after the run. All 17 unrelated local files still match
 their baseline SHA-256 hashes. No application database was migrated or modified.
+
+
+### Adversarial QA and lifecycle concurrency — 26 November 2026
+
+A subsequent QA pass found and reproduced additional material failures using
+coordinated PostgreSQL transactions, rather than relying on races to happen:
+
+- Publishing held connection then couple, while Go private held couple then
+  connection. The two requests could deadlock. Profile mutations now acquire
+  current participant users in ID order, then connection, couple and memberships,
+  all with `NOWAIT` inside a savepoint. The locked audience is checked again,
+  followed by the existing active/member authorization and section revision checks.
+  Only PostgreSQL `55P03` becomes the existing `ProfileConflict` 409; unrelated
+  database errors propagate. The conflict means no withdrawal was committed:
+  reload and retry. The regression explicitly retries and verifies the newly
+  published Moment becomes private. If withdrawal commits first, a later explicit
+  public upload is separate intent; previous public Moments remain private.
+- Legacy Moment GET requests that record a view retained a Moment row before
+  their viewer foreign-key check. This could deadlock with withdrawal holding the
+  participant barriers. That path now obtains the same connection/couple barrier
+  as `POST viewed` before the Moment row. Read-only `record_view=false` is unchanged.
+- Publication and appreciation could deadlock with disconnection: the Moment
+  writer held the connection while deferred creator/notification-recipient foreign
+  keys needed user `KEY SHARE`; disconnect held those users `FOR UPDATE` while
+  waiting for the connection. `end_connection` now takes participant
+  `FOR NO KEY UPDATE` locks. These still exclude concurrent user/relationship
+  mutations and deletion, but permit foreign-key references. Disconnect changes
+  only the non-key `is_engaged` field. Existing connection, couple, membership,
+  revision and actor checks are unchanged. Other lifecycle operations retain
+  their existing lock mode; this is not a generalized lifecycle-policy rewrite.
+- Incoming followers now require the target's current approved public identity
+  as well as each source's. Previously a target name/photo edit made the follower's
+  status unavailable while the target still received that incoming identity row.
+  Rows remain hidden until approval is current. A profile edit keeps the same
+  recipient audience; explicit Go private still deletes follows permanently.
+- Follow confirmation accepts the actual JSON boolean `true` only. Strings and
+  numbers such as `"true"` and `1` are rejected without changing the following
+  version or creating an edge. The current client already sends a boolean.
+
+Eleven new regressions cover these cases, unexpected database errors, and bounded
+incoming-list queries for 1 versus 20 distinct source couples. Existing concurrent
+Follow/profile tests were adjusted for the explicit retryable conflict. Added
+PostgreSQL schedules exercise publication-first and revocation-first ordering,
+both profile/disconnect orders, legacy view recording, publication/disconnect and
+appreciation/disconnect. Post-disconnect requests cannot read the public Moment,
+add appreciation, or access an old recipient note.
+
+Final checks after all fixes:
+
+- **250/250 PostgreSQL tests passed, no skips** across `social.test_couple_feed`,
+  `social.test_public_follows`, `social.test_couple_profile`,
+  `social.test_moment_publication`, `social.test_settings`, `social.test_moments`,
+  `social.test_moment_replies`, `social.tests`, and `chat.test_matrix`, using the
+  disposable PostgreSQL 17 runner with that explicit suite allowlist.
+- `tools/workspace.py test`: **549 total, 498 passed, 51 skipped** in isolated
+  SQLite. PostgreSQL-only cases require the separate run above.
+- `tools/workspace.py migrations`: **No changes detected**. No schema, new API
+  field, dependency or migration was added by these QA fixes.
+- A fresh `tools/check_explore_http.py --spawn --moment-video` run passed **74/74
+  requests**, including real synthetic HLS bytes and post-withdrawal denial.
+- `git diff --check` is clean. All **17 unrelated local files** retain their
+  recorded SHA-256 values. Verification used disposable databases and did not
+  notify real users. Publication is tracked in backend PR #50; it remains unmerged.
+
+Local evidence: `/tmp/srisu-profile-publication-before.log`,
+`/tmp/srisu-profile-legacy-before.log`, and
+`/tmp/srisu-moment-disconnect-before.log` contain the deterministic pre-fix
+PostgreSQL deadlocks; `/tmp/srisu-follow-target-before.log` contains the failing
+consent projection regression. Final logs are
+`/tmp/srisu-global-adversarial-postgres-final.log`,
+`/tmp/srisu-global-adversarial-sqlite-final.log`, and
+`/tmp/srisu-global-adversarial-http-final.log`; the sanitized HTTP report is
+`/tmp/srisu-global-adversarial-http-final-report.json`. Temporary servers, databases,
+media and credentials were removed by their runners. Device UI, native video
+smoothness and large production-directory load are separate verification tracks.
+The previously identified user-facing block/report workflow gap remains outside
+this backend QA repair; existing server block authorization is exercised.

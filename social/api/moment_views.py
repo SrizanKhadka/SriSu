@@ -82,7 +82,9 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         obj = self.get_object()
         if request.method == "GET" and request.query_params.get("record_view") != "false":
-            # Serialize with deletion and recheck expiry after waiting for the lock.
+            # Legacy read-and-record follows the same parent barrier as POST viewed:
+            # never retain a Moment row while Go private waits with user FK locks.
+            lock_couple(obj.couple_id)
             get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
             obj = self.get_object()
             CoupleMomentViewModel.objects.get_or_create(moment=obj, viewer=request.user)

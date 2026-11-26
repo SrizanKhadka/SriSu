@@ -63,8 +63,8 @@ def follow(user, couple_id, expected=None):
     UserModel.objects.select_for_update().get(pk=user.pk)
     source_id = CoupleMembershipModel.objects.filter(user=user).values_list('couple_id', flat=True).first()
     try:
-        # Profile interest edits still lock couple -> user. Never wait for their
-        # couple while holding our user: return the existing retryable conflict.
+        # Other writers can hold a couple before requesting user foreign-key
+        # locks. Never wait for their couple while retaining our user barrier.
         # Sorted locks also serialize publication revocation on either couple.
         with transaction.atomic():
             list(CoupleModel.objects.select_for_update(nowait=True).filter(
@@ -108,6 +108,10 @@ def revoke_couple_follows(couple):
 
 
 def incoming_rows(request, target, members, rows):
+    # Incoming identity disclosure has the same mutual-approval boundary as the
+    # follower snapshot, including target name/photo edits that invalidate consent.
+    if not approved_identity(target, members):
+        return []
     target_audience = audience(members)
     blocked = set()
     for member in members:

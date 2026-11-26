@@ -8,7 +8,7 @@ import json
 from datetime import date
 
 from django.conf import settings
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -43,11 +43,30 @@ def profile_for(user, couple_id=None, *, owner=False, lock=False):
     if not couple_id:
         raise Http404
     if lock:
-        # Same lock order as ordinary profile writes. Membership/connection deletion
-        # cannot pass these row locks during a conditional mutation.
-        candidate = get_object_or_404(CoupleModel.objects.select_for_update(), pk=couple_id)
-        list(CoupleConnectionModel.objects.select_for_update().filter(pk=candidate.couple_connection_id))
-        list(CoupleMembershipModel.objects.select_for_update().filter(couple_id=couple_id, ended_at__isnull=True).order_by("id"))
+        candidate = get_object_or_404(CoupleModel, pk=couple_id)
+        try:
+            with transaction.atomic():
+                # Lifecycle writes lock both users before connection/couple. Lock
+                # both here too: profile notifications can reference either user.
+                # Moment publishing already holds connection/couple before its user
+                # FKs, so never wait for those rows while retaining these barriers.
+                user_ids = list(UserModel.objects.select_for_update(nowait=True).filter(
+                    pk__in=CoupleMembershipModel.objects.filter(couple_id=couple_id).values("user_id")
+                ).order_by("pk").values_list("pk", flat=True))
+                list(CoupleConnectionModel.objects.select_for_update(nowait=True).filter(pk=candidate.couple_connection_id))
+                locked = get_object_or_404(CoupleModel.objects.select_for_update(nowait=True), pk=couple_id)
+                locked_members = list(CoupleMembershipModel.objects.select_for_update(nowait=True).filter(
+                    couple_id=couple_id, ended_at__isnull=True).order_by("id"))
+                if (locked.couple_connection_id != candidate.couple_connection_id
+                        or {m.user_id for m in locked_members} != set(user_ids)):
+                    raise ProfileConflict()
+        except OperationalError as error:
+            cause = error.__cause__
+            if (getattr(cause, "sqlstate", None) or getattr(cause, "pgcode", None)) == "55P03":
+                # The savepoint has released any partial locks before the existing
+                # conflict response. Unexpected database errors must still surface.
+                raise ProfileConflict() from error
+            raise
     blocked = CoupleMembershipModel.objects.filter(user_id__in=blocked_user_ids(user), ended_at__isnull=True).values("couple_id")
     couple = get_object_or_404(active_couples().exclude(pk__in=blocked), pk=couple_id)
     members = list(couple.memberships.filter(ended_at__isnull=True).select_related("user").order_by("position"))
