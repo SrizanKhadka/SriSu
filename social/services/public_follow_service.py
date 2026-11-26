@@ -1,5 +1,5 @@
 """Individual, consent-bound following; never read or mutate private Faves."""
-from django.db import transaction
+from django.db import OperationalError, transaction
 from django.db.models import F, Q
 from rest_framework.exceptions import APIException, PermissionDenied
 from authentication.models import UserModel
@@ -58,11 +58,24 @@ def mutation_version(user, expected):
 
 @transaction.atomic
 def follow(user, couple_id, expected=None):
-    # Lock all involved couples in deterministic order before the user mutation barrier.
-    # Profile revocation uses the same couple lock, so an opt-in cannot race past it.
-    source_id = CoupleMembershipModel.objects.filter(user=user).values_list('couple_id', flat=True).first()
-    list(CoupleModel.objects.select_for_update().filter(pk__in=[i for i in (source_id, couple_id) if i]).order_by('pk'))
+    # Relationship changes lock users before couples. Read current membership only
+    # after this user's barrier, so disconnect/relink cannot leave a stale source.
     UserModel.objects.select_for_update().get(pk=user.pk)
+    source_id = CoupleMembershipModel.objects.filter(user=user).values_list('couple_id', flat=True).first()
+    try:
+        # Profile interest edits still lock couple -> user. Never wait for their
+        # couple while holding our user: return the existing retryable conflict.
+        # Sorted locks also serialize publication revocation on either couple.
+        with transaction.atomic():
+            list(CoupleModel.objects.select_for_update(nowait=True).filter(
+                pk__in=[i for i in (source_id, couple_id) if i]).order_by('pk'))
+    except OperationalError as error:
+        cause = error.__cause__
+        if (getattr(cause, 'sqlstate', None) or getattr(cause, 'pgcode', None)) == '55P03':
+            # Only PostgreSQL lock_not_available is expected contention. The outer
+            # atomic block releases the user barrier before the API can retry/read.
+            raise FollowConflict() from error
+        raise
     state = mutation_version(user, expected)
     source, target, reason = context(user, couple_id)
     if reason:

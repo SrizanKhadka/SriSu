@@ -28,6 +28,8 @@ existing `COUPLE_FEED_ENABLED` feature gate.
 - `PUT` and `DELETE` accept `If-Match: <version>`. A stale value produces 409;
   clients reload the snapshot before offering another write. Each user's writes
   are serialized, including contradictory requests when no edge existed yet.
+  A concurrently locked source/target couple also returns the existing retryable
+  409 rather than waiting while holding the acting user's mutation lock.
 - `GET /api/social/couple-followers/` returns only the requester's current couple's
   incoming list. `data` contains `couple_id`, `results`, `next`, and `previous`.
   Unlinked accounts receive null couple ID and an empty list. Supplying a target
@@ -112,3 +114,43 @@ Separately, from the frontend checkout, `python3 tools/core_integration.py
 loopback server. These HTTP checks do not establish native keyboard behavior,
 video playback smoothness, production PostgreSQL concurrency, SMS or Matrix
 integration; those need their own verification.
+
+### Follow/disconnect lock-order repair — 26 November 2026
+
+Follow acquires the acting user's row before reading their current membership,
+matching relationship lifecycle's user-before-couple order. It then acquires both
+source and target couple rows in ID order with PostgreSQL `NOWAIT`. An in-progress
+profile interest write can hold a couple before requesting that user's row; the
+nonblocking couple acquisition avoids that inverse wait as well. Only PostgreSQL
+`lock_not_available` (`55P03`) becomes the existing follow-conflict 409. Other
+database errors remain errors, and the transaction rolls back before any retry or
+snapshot read. SQLite does not establish this locking behavior.
+
+Target participant users are not locked: following does not mutate them or create
+foreign keys to them. The actor lock protects the follow/version user references;
+the source/target couple locks protect publication/revocation. Context is checked
+after these locks, and incoming projections still validate current membership,
+identity approval, blocks and target audience. Existing follow/unfollow and Go
+private row/version ordering remains unchanged. No API fields or migration change.
+
+Deterministic PostgreSQL regressions coordinate source disconnect, target
+disconnect, and a profile-interest writer with a follow attempt. The source test
+reproduced an actual deadlock before this repair. The existing concurrent
+same-version and Go private tests remain part of the verification suite.
+
+Verification for this repair: the five selected suites (`social.test_couple_feed`,
+`social.test_public_follows`, `social.test_couple_profile`,
+`social.test_moment_publication`, `social.test_settings`) passed **153 tests** on a
+disposable PostgreSQL cluster, with no skips. The cluster was stopped and removed.
+The pre-fix single source-disconnect test failed with a real PostgreSQL deadlock;
+its coordinated schedule now succeeds. Evidence logs remain local at
+`/tmp/srisu-follow-disconnect-before.log` and
+`/tmp/srisu-follow-locking-postgres-final.log`.
+
+The focused SQLite suite passed 14 tests with 5 PostgreSQL-only skips (19 total).
+A fresh disposable `tools/check_explore_http.py --spawn --moment-video` run also
+passed all 74 HTTP requests, including genuine synthetic HLS authorization and
+withdrawal. Its sanitized report is
+`/tmp/srisu-explore-http-locking-report.json`; the server, temporary media and
+credentials were removed after the run. All 17 unrelated local files still match
+their baseline SHA-256 hashes. No application database was migrated or modified.
