@@ -52,6 +52,7 @@ def _participants(
     *,
     lock: bool,
     require_active: bool = True,
+    no_key: bool = False,
 ) -> list[UserModel]:
     queryset = UserModel.objects.filter(
         phone_number__in=[connection.sender_number, connection.receiver_number],
@@ -59,7 +60,7 @@ def _participants(
     if require_active:
         queryset = queryset.filter(is_active=True)
     if lock:
-        queryset = queryset.select_for_update()
+        queryset = queryset.select_for_update(no_key=no_key)
     users = list(queryset)
     if len(users) != 2 or users[0].id == users[1].id:
         raise RelationshipConflict("Both active users are required for this relationship.")
@@ -248,7 +249,11 @@ def end_connection(*, connection_id: int, actor: UserModel, expected_revision: i
         raise RelationshipConflict("Connection does not exist.")
     if actor.phone_number not in {snapshot.sender_number, snapshot.receiver_number}:
         raise RelationshipPermissionDenied("Only a relationship member can end it.")
-    users = _participants(snapshot, lock=True, require_active=False)
+    # Keep relationship/user mutations mutually exclusive, but allow deferred
+    # Moment/notification foreign-key checks to reference these users. Those
+    # writers may already own the connection we acquire next. This operation
+    # changes only is_engaged, never a referenced user key.
+    users = _participants(snapshot, lock=True, require_active=False, no_key=True)
     connection = CoupleConnectionModel.objects.select_for_update().get(pk=connection_id)
     if (
         connection.sender_number != snapshot.sender_number

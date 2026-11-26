@@ -677,3 +677,182 @@ class ConditionalFaveConcurrencyTests(FeedFixtures, APITransactionTestCase):
         self.assertEqual(fave_version(self.viewer), 1)
         winner = next(value for value in result if value != 'conflict')
         self.assertEqual(CoupleFaveModel.objects.filter(user=self.viewer, couple=target).exists(), winner)
+
+
+class DiscoverSearchTests(FeedFixtures, APITestCase):
+    def publish_sections(self, couple, sections=("identity", "interests")):
+        from social.models import CouplePrivacyConsentModel
+        from social.services.couple_profile_sections import audience, digest, raw_sections
+        members = list(couple.memberships.select_related("user").order_by("position"))
+        raw = raw_sections(couple, members, self.viewer)
+        couple.privacy_proposal_version += 1
+        couple.privacy_proposal = {"sections": list(sections), "audience": audience(members),
+            "fingerprints": {key: digest(raw[key]) for key in sections}}
+        couple.save(update_fields=["privacy_proposal", "privacy_proposal_version"])
+        couple.privacy_consents.all().delete()
+        for member in members:
+            CouplePrivacyConsentModel.objects.create(couple=couple, user=member.user,
+                proposal_version=couple.privacy_proposal_version)
+
+    def named_couple(self, name="Alex", interest=None, publish=True):
+        couple = self.couple()
+        for position, member in enumerate(couple.memberships.select_related("user")):
+            member.user.full_name = name if position == 0 else "Sam"
+            member.user.save(update_fields=["full_name"])
+            if interest:
+                UserInterestModel.objects.create(user=member.user, name=interest.name, interest=interest)
+        self.moment(couple)
+        if publish:
+            self.publish_sections(couple)
+        return couple
+
+    def test_search_only_matches_current_consented_names_and_shared_interests(self):
+        hiking = InterestModel.objects.create(name="Trail Walking")
+        target = self.named_couple(interest=hiking)
+        hidden = self.named_couple("Private Alex", hiking, publish=False)
+        response = self.get_data(q="  ＡＬＥＸ  sam ", interest_id=hiking.pk)
+        self.assertEqual(response["q"], "alex sam")
+        self.assertEqual(response["interest_id"], hiking.pk)
+        self.assertEqual([row["couple"]["id"] for row in response["results"]], [target.pk])
+        public = response["results"][0]["couple"]
+        self.assertEqual(public["shared_interests"], ["Trail Walking"])
+        self.assertEqual([p["name"] for p in public["members"]], ["Alex", "Sam"])
+        self.assertNotIn("photo", public["members"][0])
+        self.assertNotIn("phone_number", public["members"][0])
+        self.assertEqual(len(self.get_data(q="trail")["results"]), 1)
+        for query in ("Private Alex", "Public moment", self.viewer.phone_number, "%"):
+            self.assertEqual(self.get_data(q=query)["results"], [])
+        hidden_member = hidden.memberships.first()
+        hidden_member.partner_nickname = "Private alias"
+        hidden_member.save(update_fields=["partner_nickname"])
+        self.assertEqual(self.get_data(q="Private alias")["results"], [])
+
+    def test_individual_interest_and_stale_consent_never_become_search_filters(self):
+        interest = InterestModel.objects.create(name="Sketching")
+        target = self.named_couple()
+        member = target.memberships.first()
+        UserInterestModel.objects.create(user=member.user, name=interest.name, interest=interest)
+        self.publish_sections(target)
+        self.assertEqual(self.get_data(interest_id=interest.pk)["results"], [])
+        other = target.memberships.exclude(pk=member.pk).first()
+        UserInterestModel.objects.create(user=other.user, name=interest.name, interest=interest)
+        self.assertEqual(self.get_data(interest_id=interest.pk)["results"], [])
+        self.publish_sections(target)
+        self.assertEqual(len(self.get_data(interest_id=interest.pk)["results"]), 1)
+        UserInterestModel.objects.filter(user=member.user).update(removed=True)
+        self.assertEqual(self.get_data(interest_id=interest.pk)["results"], [])
+
+    def test_name_edits_revoke_search_and_visible_results_without_reapproving(self):
+        target = self.named_couple()
+        self.assertEqual(len(self.get_data(q="Alex")["results"]), 1)
+        member = target.memberships.first()
+        member.user.full_name = "Unapproved replacement"
+        member.user.save(update_fields=["full_name"])
+        for query in ("Alex", "replacement"):
+            self.assertEqual(self.get_data(q=query)["results"], [])
+            self.assertEqual(self.get_data(reverse("couple-feed-check"), couples=str(target.pk), q=query)["results"], [])
+        self.assertNotIn("members", self.get_data()["results"][0]["couple"])
+
+    def test_query_interest_are_validated_bound_and_omitted_cursor_values_inherit(self):
+        interest = InterestModel.objects.create(name="Puzzles")
+        for _ in range(3):
+            self.named_couple(interest=interest)
+        first = self.get_data(q="Alex", interest_id=interest.pk, page_size=1)
+        self.assertIsNotNone(first["next"])
+        second = self.get_data(first["next"])
+        self.assertEqual((second["q"], second["interest_id"]), ("alex", interest.pk))
+        self.assertNotEqual(first["results"][0]["couple"]["id"], second["results"][0]["couple"]["id"])
+        for suffix in ("&q=Sam", "&q=", "&interest_id=999999"):
+            self.assertEqual(self.client.get(first["next"] + suffix).status_code, 400)
+        for invalid in ({"q":"x"*81}, {"q":"a\x00b"}, {"interest_id":"-1"},
+                        {"interest_id":"wrong"}, {"interest_id":999999}):
+            self.assertEqual(self.client.get(self.feed_url, invalid).status_code, 400)
+        self.assertEqual(self.client.get(self.feed_url + "?q=Alex&q=Sam").status_code, 400)
+        interest.name = "Renamed puzzles"
+        interest.save(update_fields=["name"])
+        self.assertEqual(self.client.get(first["next"]).status_code, 409)
+
+    @override_settings(COUPLE_FEED_CANDIDATE_LIMIT=1)
+    def test_search_matches_are_selected_before_global_candidate_limit(self):
+        for _ in range(4):
+            self.named_couple("Different")
+        target = self.named_couple("Unique searchable")
+        result = self.get_data(q="unique")
+        self.assertEqual([row["couple"]["id"] for row in result["results"]], [target.pk])
+        self.assertEqual(self.get_data(q="nothing matching")["empty_reason"], "no_results")
+
+    def test_faves_filter_is_strict_and_library_total_is_private_not_page_length(self):
+        one = self.named_couple("Matching")
+        two = self.named_couple("Different")
+        unsaved = self.named_couple("Matching")
+        self.client.put(self.fave_url(one))
+        self.client.put(self.fave_url(two))
+        result = self.get_data(section="faves", q="Matching")
+        self.assertEqual([row["couple"]["id"] for row in result["results"]], [one.pk])
+        self.assertNotIn(unsaved.pk, [row["couple"]["id"] for row in result["results"]])
+        library = self.get_data(self.library_url, page_size=1)
+        self.assertEqual(library["total_count"], 2)
+        self.assertEqual(len(library["results"]), 1)
+        self.assertEqual(self.get_data(library["next"])["total_count"], 2)
+        self.client.force_authenticate(self.user())
+        self.assertEqual(self.get_data(self.library_url)["total_count"], 0)
+
+    def test_consent_withdrawal_during_hydration_removes_filtered_result(self):
+        target = self.named_couple()
+        from social.services.couple_feed_service import cards
+        def withdraw(*args, **kwargs):
+            values = cards(*args, **kwargs)
+            target.privacy_consents.all().delete()
+            return values
+        with patch("social.services.couple_feed_service.cards", side_effect=withdraw):
+            self.assertEqual(self.get_data(q="Alex")["results"], [])
+        self.publish_sections(target)
+        with patch("social.api.couple_views.cards", side_effect=withdraw):
+            self.assertEqual(self.get_data(reverse("couple-feed-check"), couples=str(target.pk), q="Alex")["results"], [])
+
+    def test_three_distinct_previews_preserve_latest_and_filter_each_expiry(self):
+        target = self.couple()
+        moments = [self.moment(target, hours=hours) for hours in (4, 3, 2, 1)]
+        self.moment(target, visibility="private")
+        self.moment(target, hours=25)
+        result = self.get_data()["results"][0]
+        self.assertEqual([m["id"] for m in result["previews"]], [m.pk for m in reversed(moments[1:])])
+        self.assertEqual(result["preview"], result["previews"][0])
+        from social.services.couple_feed_service import cards
+        def expire_latest(*args, **kwargs):
+            values = cards(*args, **kwargs)
+            CoupleMomentModel.objects.filter(pk=moments[-1].pk).update(expires_at=timezone.now())
+            return values
+        with patch("social.api.couple_views.cards", side_effect=expire_latest):
+            result = self.get_data(reverse("couple-feed-check"), couples=str(target.pk))["results"][0]
+        self.assertEqual(result["preview"]["id"], moments[-2].pk)
+        self.assertNotIn(moments[-1].pk, [m["id"] for m in result["previews"]])
+
+    def add_video_moments(self):
+        from social.models import CoupleMomentPhotoModel, MomentVideo
+        target = self.couple()
+        for hours in (3, 2, 1):
+            moment = self.moment(target, hours=hours)
+            video = MomentVideo.objects.create(owner=moment.created_by, source_bytes=1024, received_bytes=1024,
+                duration_ms=2000, width=640, height=360, state="ready")
+            CoupleMomentPhotoModel.objects.create(moment=moment, image="synthetic/poster.jpg", video=video,
+                width=640, height=360, order=0)
+            if hours == 1:
+                CoupleMomentPhotoModel.objects.create(moment=moment, image="synthetic/photo.jpg", width=640, height=360, order=1)
+        return target
+
+    def test_video_card_query_count_is_bounded_and_poster_media_kind_are_real(self):
+        self.add_video_moments()
+        with CaptureQueriesContext(connection) as small:
+            first = self.get_data()
+        for _ in range(9):
+            self.add_video_moments()
+        with CaptureQueriesContext(connection) as large:
+            result = self.get_data()
+        self.assertEqual(len(small), len(large))
+        self.assertEqual(len(result["results"]), 10)
+        previews = first["results"][0]["previews"]
+        self.assertEqual([p["media_kind"] for p in previews], ["mixed", "video", "video"])
+        self.assertEqual(previews[0]["poster_url"], previews[0]["photos"][0]["image"])
+        self.assertTrue(previews[0]["poster_url"].startswith("http://testserver/api/social/couple-moments/"))
+        self.assertFalse(CoupleMomentViewModel.objects.exists())

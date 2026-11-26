@@ -711,3 +711,6 @@ class MomentVideoFile(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["video", "name"], name="unique_moment_video_file")]
+
+# Explicit public following is separate from private CoupleFaveModel.
+from social.models_public_follows import CouplePublicFollow, CoupleFollowVersion

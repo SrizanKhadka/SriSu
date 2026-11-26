@@ -336,7 +336,9 @@ class CoupleProfileConcurrencyTests(ProfileFixtures, APITransactionTestCase):
                 user = UserModel.objects.select_for_update().get(pk=self.first.pk)
                 future = pool.submit(save_couple)
                 self.assertTrue(lock_attempted.wait(timeout=10))
-                self.assertFalse(future.done())
+                # A busy user now returns the existing conflict immediately;
+                # never retain a couple lock while waiting for this profile save.
+                self.assertEqual(future.result(timeout=10), 409)
                 update_user_interests(user, [{"name": "New profile choice"}])
             self.assertEqual(future.result(timeout=10), 409)
         self.assertEqual(list(UserInterestModel.objects.filter(user=self.first, removed=False).values_list('name', flat=True)), ['New profile choice'])

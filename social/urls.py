@@ -46,7 +46,11 @@ from social.api.couple_profile_views import (ProfileDetail, ProfileSection, Prof
 
 from social.api.moment_videos import VideoUpload, VideoChunkUpload, VideoComplete, VideoRetry, VideoPlayback, VideoStream
 
+from social.api.public_follows import CoupleFollowDetail, CoupleFollowerList
+
 urlpatterns = [
+    path("couple-follows/<str:couple_id>/", CoupleFollowDetail.as_view(), name="couple-follow-detail"),
+    path("couple-followers/", CoupleFollowerList.as_view(), name="couple-followers"),
     path("settings/", SettingsContext.as_view(), name="settings-context"),
     path("settings/disconnect/", SettingsDisconnect.as_view(), name="settings-disconnect"),
     path("settings/partner-nickname/", SettingsPartnerNickname.as_view(), name="settings-partner-nickname"),

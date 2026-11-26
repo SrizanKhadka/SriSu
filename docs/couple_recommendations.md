@@ -304,3 +304,64 @@ eligible couple IDs and content freshness, while retaining common active-couple/
 Faves rules. Challenges define their own audience, lifecycle, preview, media readiness, and
 content ordering; they do not automatically inherit moment expiry. Add that concrete query
 and serializer when the product is defined. No generic content registry/table is needed now.
+
+
+## Discover search and preview additions (Figma Together 1:7)
+
+The Discover composition (`311:8955`) and personal saved list (`311:9758`) use the
+existing authenticated endpoints. This additive release preserves `preview`,
+`display_name`, `avatars`, chronological viewer sequences and old-client requests.
+Deploy the backend before the new client; this feed change itself has no migration.
+Public-follow / Go private changes have separate persistence and consent rules.
+
+### Request and response additions
+
+- Feed and visible revalidation accept optional `q` and `interest_id`. Search is
+  NFKC/casefold/whitespace normalized, at most 80 normalized Unicode code points;
+  duplicate parameters, invalid controls and unknown catalogue IDs return 400.
+  The interest catalogue remains `GET /api/auth/interests/`.
+- `q` token matching uses only currently approved public identity names and
+  publicly approved **shared** interest labels. It never searches private names,
+  phone numbers, aliases, captions, biography, or one partner's private interests.
+  Every query token must match; the selected catalogue interest is an additional
+  AND condition. There is no implicit search of only the current client page.
+- `q` and `interest_id` are echoed in the feed/visible `data`. Both are frozen in
+  the feed session and inherited when following `next`; explicit changes return
+  400. A renamed selected catalogue entry returns 409 and needs a fresh search.
+  Consent/identity/interest changes are checked again during hydration and final
+  delivery. New matching couples enter on refresh, not halfway through a cursor.
+- `empty_reason=no_results` distinguishes a filtered no-match response from the
+  existing no-Faves/no-active-Moments states. Faves filters remain strictly saved.
+- `couple.members` is an optional array of `{id,name,photo_url}`. It and existing
+  identity fields appear only with both current members' exact identity approval.
+  `couple.shared_interests` is an optional string array; it requires its separate
+  current interest approval and contains only the intersection, never private
+  individual selections. Revoked/missing fields are omitted, not stale cached data.
+- Cards add `previews`, at most three **distinct** eligible Moments newest first.
+  Existing `preview` equals `previews[0]`. Each uses the existing photo/video data
+  plus `media_kind` (`photo`, `video`, `mixed`, `text`) and nullable `poster_url`.
+  Posters use existing authenticated photo endpoints; no public storage URL or
+  playback credential is exposed. A text-only Moment has no synthetic photo.
+- Every preview is reauthorized and expiry-checked before response. If the newest
+  becomes unavailable, another eligible preview can retain the card. All displayed
+  posters must still respect their individual `expires_at` values on the client.
+- Saved-library pages add authoritative `total_count`: the authenticated user's
+  complete private saved list, including unavailable/no-content entries. It is not
+  a follower count, the loaded-page length, or any other person's save history.
+
+### Performance and verification boundaries
+
+The three preview IDs are selected by bounded correlated subqueries, then hydrated
+in one bulk query; photos join their video metadata in a single prefetch. Search
+filters before the Global 500-candidate cap. Consent candidates are prefiltered in
+the database and verified in batches of 200; no per-card profile/video requests are
+issued. A no-match query may still scan the eligible published directory. This is
+not an indexed full-text search engine; measure growing-directory p95 latency
+before increasing release scale. Existing request/new-session throttles apply.
+
+`DiscoverSearchTests` covers private/stale identity and interest exclusion, Unicode
+normalization, cursor immutability/catalogue changes, filtering before the cap,
+private totals, last-stage consent withdrawal, distinct preview expiry and fixed
+mixed-video query counts. Existing feed tests continue to cover sessions, blocks,
+relationship changes, throttling and concurrent Faves writes. Device scroll/network
+performance must be reported separately from these isolated backend tests.

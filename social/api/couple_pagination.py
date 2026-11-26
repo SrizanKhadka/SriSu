@@ -67,3 +67,34 @@ def keyset(queryset, state, ascending=False):
     lookup = "gt" if ascending else "lt"
     return queryset.filter(Q(**{f"created_at__{lookup}": timestamp}) |
                            Q(created_at=timestamp, **{f"pk__{lookup}": state["last_id"]}))
+
+
+def discovery_filters(request, state=None):
+    """Validated public search; all parameters are immutable within a feed session."""
+    import unicodedata
+    from authentication.models import InterestModel
+    from social.services.couple_scorer import normalize
+
+    for field in ("q", "interest_id"):
+        if len(request.query_params.getlist(field)) > 1:
+            raise ValidationError({field: "Provide this parameter only once."})
+    raw = request.query_params.get("q", state.get("q", "") if state else "")
+    if len(raw) > 320 or any(unicodedata.category(char) in {"Cc", "Cs"} and not char.isspace() for char in raw):
+        raise ValidationError({"q": "Use up to 80 characters without control characters."})
+    query = " ".join(normalize(raw).split())
+    if len(query) > 80:
+        raise ValidationError({"q": "Use up to 80 characters."})
+    raw_interest = request.query_params.get("interest_id")
+    interest_id = (positive_int(raw_interest, "interest_id") if raw_interest is not None
+                   else state.get("interest_id") if state else None)
+    if state and (query != state.get("q", "") or interest_id != state.get("interest_id")):
+        raise ValidationError({"q": "Cannot change search or interest during pagination. Start a new search."})
+    label = None
+    if interest_id is not None:
+        label = InterestModel.objects.filter(pk=interest_id).values_list("name", flat=True).first()
+        if label is None:
+            raise ValidationError({"interest_id": "Choose an available catalogue interest."})
+        label = normalize(label)
+        if state and label != state.get("interest_label"):
+            raise SessionChanged("The interest catalogue changed. Refresh your search.")
+    return query, interest_id, label

@@ -14,11 +14,11 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from social.api.couple_pagination import decode_cursor, keyset, next_url, page_size, positive_int, SessionChanged
+from social.api.couple_pagination import decode_cursor, keyset, next_url, page_size, positive_int, SessionChanged, discovery_filters
 from social.api.moment_serializers import CoupleMomentSerializer
 from social.api.moment_views import PrivateResponseMixin
 from social.models import CoupleFaveModel, CoupleMomentViewModel
-from social.services.couple_feed_service import load_session, serve_page, start_session, cards
+from social.services.couple_feed_service import load_session, serve_page, start_session, cards, revalidate_cards
 from social.services.fave_service import add_fave, available_couples, remove_fave, fave_version
 from social.services.discovery_identity import identities
 from authentication.models import UserModel
@@ -128,9 +128,10 @@ class CoupleFaveList(CoupleAPI):
                 row["couple"] = public.get(row["couple_id"], {"id": row["couple_id"]})
         link = next_url(request, "faves", {"as_of": as_of.isoformat(), "size": size,
             "last_at": rows[-1].created_at.isoformat(), "last_id": rows[-1].pk}) if more else None
+        total_count = CoupleFaveModel.objects.filter(user=request.user).count()
         if fave_version(request.user) != version:
             raise SessionChanged()
-        return envelope(results, link, fave_version=version, server_time=timezone.now())
+        return envelope(results, link, fave_version=version, total_count=total_count, server_time=timezone.now())
 
 
 class CoupleFeedView(CoupleAPI):
@@ -143,11 +144,12 @@ class CoupleFeedView(CoupleAPI):
         section = selection(request, state, "section", "global", {"global", "faves"})
         selection(request, state, "content", "moments", {"moments"})
         scope = selection(request, state, "scope", "local", {"local", "broad"})
+        query, interest_id, interest_label = discovery_filters(request, state)
         size = page_size(request, state)
         if state:
             session_id, position = cursor["session"], cursor["position"]
         else:
-            session_id, state = start_session(request.user, section, size, scope)
+            session_id, state = start_session(request.user, section, size, scope, query, interest_id, interest_label)
             position = 0
         results, position, has_faves = serve_page(request, state, position)
         logger.info("couple_feed section=%s candidates=%d returned=%d elapsed_ms=%.1f version=%s cache=%s",
@@ -159,10 +161,13 @@ class CoupleFeedView(CoupleAPI):
         if not results:
             empty_reason = ("no_faves" if not has_faves else "no_active_fave_moments") \
                 if section == "faves" else "no_active_moments"
+            if query or interest_id is not None:
+                empty_reason = "no_results"
         return envelope(results, link, section=section, content_type="moments", as_of=state["as_of"],
                         ranking_version=state["ranking_version"], empty_reason=empty_reason,
                         pagination_available=session_id is not None, server_time=timezone.now(),
-                        scope=scope, coverage=state.get("coverage"), fave_version=int(state["fingerprint"].split(":")[0]))
+                        scope=scope, coverage=state.get("coverage"), q=query, interest_id=interest_id,
+                        fave_version=int(state["fingerprint"].split(":")[0]))
 
 
 class CoupleFeedCheck(CoupleAPI):
@@ -176,16 +181,15 @@ class CoupleFeedCheck(CoupleAPI):
             raise ValidationError({"couples": "Check at most 50 couples."})
         ids = list(dict.fromkeys(positive_int(v, "couples") for v in raw))
         section = selection(request, None, "section", "global", {"global", "faves"})
+        query, interest_id, interest_label = discovery_filters(request)
         saved = CoupleFaveModel.objects.filter(user=request.user).values_list("couple_id", flat=True)
-        results = cards(request, ids, timezone.now(), saved, section)
-        live = set(eligible_moments(request.user).filter(visibility="public",
-            pk__in=[row["preview"]["id"] for row in results.values()]).values_list("pk", flat=True))
-        rows = [results[pk] for pk in ids if pk in results
-                and results[pk]["preview"]["id"] in live
-                and parse_datetime(results[pk]["preview"]["expires_at"]) > timezone.now()]
+        now = timezone.now()
+        results = cards(request, ids, now, saved, section, query, interest_label)
+        rows = revalidate_cards(request, [results[pk] for pk in ids if pk in results], now, query, interest_label)
         if fave_version(request.user) != version:
             raise SessionChanged()
-        return envelope(rows, server_time=timezone.now(), fave_version=version)
+        return envelope(rows, server_time=timezone.now(), fave_version=version, q=query, interest_id=interest_id)
+
 
 
 class CoupleMomentSequence(CoupleAPI):
@@ -215,9 +219,12 @@ class CoupleMomentSequence(CoupleAPI):
         # Eligibility is checked again after related data has been loaded.
         allowed = set(eligible_moments(request.user).filter(pk__in=[row.pk for row in rows]).values_list("pk", flat=True))
         results = []
+        # One request-scoped consent projection for the sequence, rather than an
+        # identity query group per Moment. No identity cache crosses requests.
+        serializer_context = {"request": request}
         for row in rows:
             if row.pk in allowed and row.expires_at > timezone.now():
-                data = CoupleMomentSerializer(row, context={"request": request}).data
+                data = CoupleMomentSerializer(row, context=serializer_context).data
                 if row.expires_at > timezone.now():
                     results.append({**data, "has_opened": row.has_opened})
         link = next_url(request, "moment-sequence", {"couple": couple_id, "mode": mode, "creator": creator,

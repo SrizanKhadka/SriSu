@@ -82,7 +82,9 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         obj = self.get_object()
         if request.method == "GET" and request.query_params.get("record_view") != "false":
-            # Serialize with deletion and recheck expiry after waiting for the lock.
+            # Legacy read-and-record follows the same parent barrier as POST viewed:
+            # never retain a Moment row while Go private waits with user FK locks.
+            lock_couple(obj.couple_id)
             get_object_or_404(CoupleMomentModel.objects.select_for_update(), pk=obj.pk)
             obj = self.get_object()
             CoupleMomentViewModel.objects.get_or_create(moment=obj, viewer=request.user)
@@ -151,7 +153,15 @@ class CoupleMomentView(PrivateResponseMixin, ModelViewSet):
     @action(detail=True, methods=["get"], url_path="creator-photo")
     def creator_photo(self, request, pk=None):
         from social.api.couple_profile_views import photo_response
-        return photo_response(self.get_object().created_by.profile_photo)
+        moment = self.get_object()
+        if not any(m.user_id == request.user.pk and m.pk in moment.audience_membership_ids
+                   for m in moment.couple.memberships.all()):
+            from social.services.discovery_identity import identities
+            identity = identities(request, [moment.couple_id]).get(moment.couple_id, {})
+            if not any(person["id"] == moment.created_by_id for person in identity.get("members", [])):
+                from django.http import Http404
+                raise Http404
+        return photo_response(moment.created_by.profile_photo)
 
     @action(detail=True, methods=["patch"])
     def caption(self, request, pk=None):
